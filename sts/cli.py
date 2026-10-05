@@ -1,9 +1,10 @@
-"""人机 CLI：铁甲战士初始牌组 vs Cultist。
+"""人机 CLI：铁甲战士初始牌组 vs 当前注册的任意遭遇。
 
 用法：
     uv run python -m sts.cli [--seed N]
 
 交互：输入手牌编号出牌（唯一敌人时攻击牌自动指向它），e 结束回合，q 认输。
+选卡界面（CARD_SELECT）按提示输入候选编号（多选逗号分隔，空行跳过可选段）。
 """
 
 from __future__ import annotations
@@ -11,7 +12,7 @@ from __future__ import annotations
 import argparse
 
 from sts.combat import BattleContext
-from sts.combat.types import MonsterStatus, PlayerStatus
+from sts.combat.types import InputState, MonsterStatus, PlayerStatus
 
 STATUS_ZH = {
     PlayerStatus.STRENGTH: "力量",
@@ -53,7 +54,7 @@ def _render(bc: BattleContext) -> None:
     print(f"回合 {bc.turn}")
     print("-" * 56)
     for enemy in bc.monsters.monsters:
-        if not enemy.alive:
+        if not enemy.alive or enemy.is_escaping:
             continue
         print(f"  {enemy.display_name}  HP {enemy.hp}/{enemy.max_hp}  格挡 {enemy.block}")
         powers = _render_powers(enemy.statuses)
@@ -62,7 +63,7 @@ def _render(bc: BattleContext) -> None:
         print(f"    意图: {_render_intent(bc, enemy)}")
     p = bc.player
     print("-" * 56)
-    print(f"你 (Ironclad)  HP {p.hp}/{p.max_hp}  格挡 {p.block}  能量 {p.energy}/3")
+    print(f"你 (Ironclad)  HP {p.hp}/{p.max_hp}  格挡 {p.block}  能量 {p.energy}/3  金币 {p.gold}")
     powers = _render_powers(p.statuses)
     if powers:
         print(f"  [已生效] {powers}")
@@ -71,6 +72,35 @@ def _render(bc: BattleContext) -> None:
         card = inst.card
         print(f"  [{i}] {card.zh}({card.name})  [{card.ctype}/{inst.cost}费]  {card.text}")
     print("-" * 56)
+
+
+def _handle_card_select(bc: BattleContext) -> None:
+    """CARD_SELECT 挂起时提示选卡（多选逗号分隔；可空选时空行跳过）。"""
+    info = bc.card_select_info
+    assert info is not None
+    print(f"选卡：{info.prompt or '请选择卡牌'}")
+    for i, inst in enumerate(info.candidates):
+        print(f"  [{i}] {inst.card.zh}({inst.card.name})  {inst.card.text}")
+    tip = "回车跳过" if info.can_pick_zero else "至少选 1 张"
+    try:
+        line = input(f"> 候选编号（逗号分隔，{tip}）: ").strip()
+    except EOFError:
+        print("(输入结束，选第 1 张)")
+        bc.choose_cards([0])
+        return
+    if not line:
+        if info.can_pick_zero:
+            bc.choose_cards([])
+        else:
+            print("  本次不可跳过，自动选第 1 张。")
+            bc.choose_cards([0])
+        return
+    try:
+        indices = [int(x) for x in line.replace("，", ",").split(",") if x.strip()]
+        bc.choose_cards(indices)
+    except (ValueError, IndexError) as e:
+        print(f"  选择无效（{e}），自动选第 1 张。")
+        bc.choose_cards([0])
 
 
 def _flush_log(bc: BattleContext, printed: list[int]) -> None:
@@ -92,6 +122,10 @@ def main() -> None:
 
     while not bc.over:
         _render(bc)
+        if bc.input_state == InputState.CARD_SELECT:
+            _handle_card_select(bc)
+            _flush_log(bc, printed)
+            continue
         try:
             line = input("> 出牌编号 / e=结束回合 / q=认输: ").strip()
         except EOFError:

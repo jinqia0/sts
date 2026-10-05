@@ -60,8 +60,9 @@ class CardQueueItem:
     """卡牌队列项（对齐 lightspeed CardQueueItem，字段裁剪到当前场景）。
 
     普通出牌：card + target；结束回合：is_end_turn=True 的哨兵项。
-    trigger_on_use=False 的项是诅咒/状态卡的自动结算（如 Burn），
-    走 useNoTriggerCard 路径——本场景暂无，保留字段供扩展。
+    trigger_on_use=False 的项是诅咒/状态卡的自动结算（如 Burn/Regret），
+    走 use_no_trigger_card 路径。X 费卡在 play_card 时把当时能量快照进
+    energy_on_use（对齐 lightspeed energyOnUse），动作执行时读取。
     """
 
     card: CardInstance | None = None
@@ -72,10 +73,30 @@ class CardQueueItem:
     trigger_on_use: bool = True
     random_target: bool = False
     autoplay: bool = False
+    energy_on_use: int = -1  # X 费：出牌时刻的能量快照（-1 表示非 X 费）
 
     @staticmethod
     def end_turn_item() -> CardQueueItem:
         return CardQueueItem(is_end_turn=True)
+
+
+@dataclass
+class CardSelectInfo:
+    """选卡界面的挂起状态（对齐 lightspeed CardSelectInfo + CARD_SELECT）。
+
+    open_card_select：候选恰好 1 张且必选时直接执行不进选卡状态（对齐
+    lightspeed 单候选直执）；候选为空时以空选择直接执行；否则置
+    InputState.CARD_SELECT 挂起，等外部（CLI/环境/测试）调
+    BattleContext.choose_cards 完成选择。on_choose(bc, chosen) 在选择
+    完成时执行效果（入队原子动作）。
+    """
+
+    candidates: list[CardInstance]
+    on_choose: Callable  # (bc, chosen: list[CardInstance]) -> None
+    pick_count: int = 1
+    can_pick_zero: bool = False
+    can_pick_any_number: bool = False
+    prompt: str = ""
 
 
 class CardQueue:

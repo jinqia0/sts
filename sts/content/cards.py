@@ -22,13 +22,21 @@ class CardDef:
     name: str
     zh: str
     cost: int
-    ctype: str  # "Attack" | "Skill" | "Power" | "Status"
+    ctype: str  # "Attack" | "Skill" | "Power" | "Status" | "Curse"
     text: str
     needs_target: bool
     exhausts: bool
     play: "type(None) | callable"  # (bc, item) -> None，入队原子动作
     unplayable: bool = False  # 状态/诅咒卡不可打出（Wound 等）
     upgraded_cost: int | None = None  # 升级版改费（Body Slam+：1→0），None 表示不变
+    # ---- 全量内容迁移新增字段（2026-10-05 批次 0）----
+    x_cost: bool = False  # X 费（Whirlwind）：打出消耗所有能量
+    ethereal: bool = False  # 虚无（Carnage/Clumsy/Dazed）：回合末在手则消耗
+    innate: bool = False  # 固有（Brutality+/Dramatic Entrance）：战斗开始必在手
+    no_trigger_effect: "callable | None" = None  # 回合末自动结算（Burn/Regret 等），(bc, item) -> None
+    no_trigger_exhausts: bool = False  # 自动结算后进消耗堆而非弃牌堆（Pride）
+    on_play_other_lose_hp: int = 0  # 打出其他牌时每张失去的 HP（诅咒 Pain）
+    lose_energy_when_drawn: int = 0  # 被抽到时失去的能量（状态卡 Void）
 
 
 def _strike_play(bc: BattleContext, item: CardQueueItem) -> None:

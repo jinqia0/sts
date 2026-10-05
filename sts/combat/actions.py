@@ -18,6 +18,7 @@ from sts.combat.types import InputState, MonsterStatus
 
 if TYPE_CHECKING:
     from sts.combat.battle import BattleContext
+    from sts.combat.card_manager import CardInstance
     from sts.combat.types import IntEnum
     from sts.content.cards import CardDef
 
@@ -58,6 +59,48 @@ class Actions:
         return Action(run)
 
     @staticmethod
+    def damage_all_enemy(damage: int) -> Action:
+        """对所有敌人非攻击 HP 损失（Combust/火息/Mercury Hourglass；不吃攻击管线）。"""
+
+        def run(bc: BattleContext) -> None:
+            for m in bc.monsters.monsters:
+                if not m.is_dead_or_escaped():
+                    m.damage(bc, damage)
+            bc.check_combat()
+
+        return Action(run)
+
+    @staticmethod
+    def damage_random_enemy(damage: int) -> Action:
+        """随机存活敌人受非攻击 HP 损失（Juggernaut；misc 流）。"""
+
+        def run(bc: BattleContext) -> None:
+            alive = [m for m in bc.monsters.monsters if m.is_targetable()]
+            if alive:
+                m = alive[bc.rngs.misc.int_inclusive(0, len(alive) - 1)]
+                m.damage(bc, damage)
+                bc.check_combat()
+
+        return Action(run)
+
+    @staticmethod
+    def attack_random_enemy(damage: int, count: int) -> Action:
+        """随机目标多段攻击（Sword Boomerang；每段独立走攻击管线+随机目标）。"""
+
+        def run(bc: BattleContext) -> None:
+            for _ in range(count):
+                alive = [m for m in bc.monsters.monsters if m.is_targetable()]
+                if not alive:
+                    return
+                idx = alive[bc.rngs.misc.int_inclusive(0, len(alive) - 1)].idx
+                m = bc.monsters.monsters[idx]
+                dmg = bc.calculate_card_damage(bc.cur_card_queue_item, idx, damage)
+                m.attacked(bc, dmg)
+            bc.check_combat()
+
+        return Action(run)
+
+    @staticmethod
     def attack_player(enemy_idx: int, damage: int) -> Action:
         def run(bc: BattleContext) -> None:
             bc.player.attacked(bc, enemy_idx, damage)
@@ -72,9 +115,9 @@ class Actions:
         return Action(run)
 
     @staticmethod
-    def player_lose_hp(hp: int) -> Action:
+    def player_lose_hp(hp: int, self_inflicted: bool = False) -> Action:
         def run(bc: BattleContext) -> None:
-            bc.player.lose_hp(bc, hp)
+            bc.player.lose_hp(bc, hp, self_inflicted=self_inflicted)
 
         return Action(run)
 
@@ -110,7 +153,50 @@ class Actions:
 
     @staticmethod
     def gain_block(amount: int) -> Action:
-        return Action(lambda bc: setattr(bc.player, "block", bc.player.block + amount))
+        # 统一走 Player.gain_block：NO_BLOCK 拦截 + Juggernaut 触发
+        return Action(lambda bc: bc.player.gain_block(bc, amount))
+
+    @staticmethod
+    def exhaust_hand_card(inst: "CardInstance") -> Action:
+        """把手中的指定实例送入消耗堆（True Grit/Second Wind 等；走统一消耗钩子）。"""
+
+        def run(bc: BattleContext) -> None:
+            try:
+                bc.cards.hand.remove(inst)
+            except ValueError:
+                return
+            bc.cards.move_to_exhaust_pile(inst)
+            bc.on_card_exhausted(inst)
+
+        return Action(run)
+
+    @staticmethod
+    def make_temp_card_in_hand(card: "CardDef", upgraded: bool = False) -> Action:
+        return Action(lambda bc: bc.cards.create_temp_card_in_hand(card, upgraded))
+
+    @staticmethod
+    def steal_gold(idx: int, amount: int) -> Action:
+        """怪物偷金（Looter）：玩家金币减少（至多偷到玩家现有的），存进 misc_info。"""
+
+        def run(bc: BattleContext) -> None:
+            m = bc.monsters.monsters[idx]
+            stolen = min(amount, bc.player.gold)
+            if stolen > 0:
+                bc.player.gold -= stolen
+                m.misc_info += stolen
+                m.statuses.add(MonsterStatus.THIEVERY, 1)
+                bc.log.append(f"{m.display_name} 偷走了 {stolen} 金币！")
+
+        return Action(run)
+
+    @staticmethod
+    def monster_escape(idx: int) -> Action:
+        def run(bc: BattleContext) -> None:
+            m = bc.monsters.monsters[idx]
+            if not m.is_dead_or_escaped():
+                m.escape(bc)
+
+        return Action(run)
 
     @staticmethod
     def draw_cards(amount: int) -> Action:

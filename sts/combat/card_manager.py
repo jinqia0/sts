@@ -23,10 +23,11 @@ class CardInstance:
     upgraded: bool = False
     unique_id: int = -1
     cost_for_turn: int = -1  # -1 表示未设置（用 card.cost）
+    misc_data: int = 0  # 实例计数槽（对齐 lightspeed specialData：Rampage 叠伤/Searing Blow 升级数/Blood for Blood 减费）
 
     @property
     def cost(self) -> int:
-        # 临时改费（如 Madness）优先；升级改费（如 Body Slam+）再次；
+        # 临时改费（如 Madness/Corruption）优先；升级改费（如 Body Slam+）再次；
         # 否则回退模板费用
         if self.cost_for_turn >= 0:
             return self.cost_for_turn
@@ -81,7 +82,7 @@ class CardManager:
         self.draw_pile.extend(self.discard_pile)
         self.discard_pile.clear()
 
-    # ---- 临时牌（对齐 createTempCardInDiscard / createTempCardInDrawPile）----
+    # ---- 临时牌（对齐 createTempCardInDiscard / InDrawPile / InHand）----
     def create_temp_card_in_discard(self, card: CardDef, upgraded: bool = False) -> None:
         """临时牌进弃牌堆（Anger 副本）。战斗内与普通弃牌无异；
         本项目仅模拟战斗内，不做战斗结束回收。"""
@@ -94,6 +95,30 @@ class CardManager:
         inst = self.instantiate(card)
         inst.upgraded = upgraded
         self.draw_pile.insert(idx, inst)
+
+    def create_temp_card_in_hand(self, card: CardDef, upgraded: bool = False) -> None:
+        """临时牌入手（Power Through 的伤口 / Infernal Blade 的随机攻击）。"""
+        if len(self.hand) >= MAX_HAND_SIZE:
+            return  # 手牌满：生成牌直接消失（对齐本体手牌上限）
+        inst = self.instantiate(card)
+        inst.upgraded = upgraded
+        self.hand.append(inst)
+
+    def append_to_draw_top(self, inst: CardInstance) -> None:
+        """把实例放到抽牌堆顶（Headbutt/Warcry 的置顶效果）。
+
+        抽牌从列表尾弹出，堆顶 = 列表尾。来源堆的移除由调用方负责。
+        """
+        self.draw_pile.append(inst)
+
+    def move_innate_to_top(self) -> None:
+        """战斗开始洗牌后：把固有（Innate）牌按原相对顺序放到抽牌堆顶
+        （对齐 lightspeed CardManager::init 的 innate 处理）。"""
+        innate = [c for c in self.draw_pile if c.card.innate]
+        if not innate:
+            return
+        rest = [c for c in self.draw_pile if not c.card.innate]
+        self.draw_pile[:] = rest + innate  # 堆顶 = 尾部，多张固有按原顺序被抽到
 
     def reset_attributes_at_end_of_turn(self) -> None:
         """回合结束时清空卡牌的临时属性（本回合费用等）。"""

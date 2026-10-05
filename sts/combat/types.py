@@ -42,7 +42,17 @@ class CardType(Enum):
 
 
 class PlayerStatus(IntEnum):
-    """玩家侧状态（当前在范围内的子集，加卡时扩枚举）。"""
+    """玩家侧状态（当前在范围内的子集，加卡时扩枚举）。
+
+    衰减语义分组（结算位置见 entities.Player）：
+    - debuff 回合末衰减：VULNERABLE/WEAK/FRAIL/NO_BLOCK/INTANGIBLE
+      （just_applied 首轮跳过）
+    - 回合末清除/结算：LOSE_STRENGTH/NO_DRAW/ENTANGLED/DOUBLE_TAP/
+      METALLICIZE（得格挡）/COMBUST/THE_BOMB（倒数）
+    - 回合开始清除：FLAME_BARRIER（仅本回合反伤）
+    - Power 永续：METALLICIZE/BARRICADE/CORRUPTION/DEMON_FORM/BRUTALITY/
+      JUGGERNAUT/RUPTURE/EVOLVE/FIRE_BREATHING/FEEL_NO_PAIN/DARK_EMBRACE
+    """
 
     STRENGTH = 0
     DEXTERITY = 1
@@ -58,6 +68,26 @@ class PlayerStatus(IntEnum):
     # Flex 的临时力量（回合末扣回）与 Battle Trance 的禁抽（回合末移除）
     LOSE_STRENGTH = 10
     NO_DRAW = 11
+    # ---- 全量内容迁移新增（Power 族 + 特殊 debuff，2026-10-05 批次 0）----
+    ENTANGLED = 12  # 本回合不能打出卡牌（红奴役者；回合末解除）
+    BARRICADE = 13  # 格挡回合开始不清零
+    CORRUPTION = 14  # 技能牌 0 费且打出即消耗
+    DEMON_FORM = 15  # 回合开始（抽牌后）+层数力量（层数=每回合增量）
+    BRUTALITY = 16  # 回合开始（抽牌后）失去 1 HP×层 并抽 1×层
+    JUGGERNAUT = 17  # 每次获得格挡 → 随机敌人受 5×层 伤
+    RUPTURE = 18  # 自伤失去 HP 时 +层力量
+    COMBUST = 19  # 回合末失去 1×层 HP，对所有敌人造成 5×层 伤
+    EVOLVE = 20  # 抽到状态牌时抽 1×层
+    FIRE_BREATHING = 21  # 抽到状态/诅咒牌时对所有敌人 4×层 伤
+    FEEL_NO_PAIN = 22  # 卡牌被消耗时获得 3×层 格挡
+    DARK_EMBRACE = 23  # 卡牌被消耗时抽 1×层
+    FLAME_BARRIER = 24  # 本回合受攻击时对攻击者反弹 层 伤（回合开始移除）
+    DOUBLE_TAP = 25  # 本回合下一张攻击牌结算两次（触发后移除）
+    INTANGIBLE = 26  # 受到的伤害降为 1（回合末衰减）
+    NO_BLOCK = 27  # 无法获得格挡（回合末衰减）
+    THE_BOMB = 28  # 3 回合后对所有敌人造成 special["the_bomb"] 伤（回合末倒数）
+    PEN_NIB = 29  # 下一张攻击牌伤害翻倍（PEN_NIB 遗物触发段，一次性）
+    THORNS = 30  # 反伤：受到攻击时对攻击者反弹层数伤害（Bronze Scales 等）
 
 
 class MonsterStatus(IntEnum):
@@ -74,6 +104,14 @@ class MonsterStatus(IntEnum):
     ARTIFACT = 8
     # SPORE_CLOUD：死亡时给玩家 2 层易伤（Fungi Beast；结算见 entities.Monster.die）
     SPORE_CLOUD = 9
+    # ---- Act 1 全量迁移新增（2026-10-05 批次 0）----
+    ENRAGE = 10  # 玩家每打出一张技能牌，+层 力量（Gremlin Nob）
+    MODE_SHIFT = 11  # 受到伤害累积计数，归零切换模式（The Guardian，计数存 misc_info）
+    SHARP_HIDE = 12  # 玩家每打出攻击牌反伤 局（The Guardian 防御模式）
+    THIEVERY = 13  # 偷金（Looter；偷到的金币存 misc_info，死亡时返还）
+    ASLEEP = 14  # 沉睡（Lagavulin；受击唤醒，唤醒时移除 METALLICIZE）
+    POISON = 15  # 中毒：回合开始失去层数 HP、层数-1（预留，Act 1 无来源）
+    THORNS = 16  # 反伤（预留，Act 1 怪无来源）
 
 
 class Statuses:
