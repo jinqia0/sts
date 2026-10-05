@@ -88,14 +88,15 @@ class PlayerStatus(IntEnum):
     THE_BOMB = 28  # 3 回合后对所有敌人造成 special["the_bomb"] 伤（回合末倒数）
     PEN_NIB = 29  # 下一张攻击牌伤害翻倍（PEN_NIB 遗物触发段，一次性）
     THORNS = 30  # 反伤：受到攻击时对攻击者反弹层数伤害（Bronze Scales 等）
-    MAYHEM = 31  # 每回合开始自动打出抽牌堆顶牌 ×层（无色卡 Mayhem）
-    MAGNETISM = 32  # 每回合开始随机无色牌入手 ×层（无色卡 Magnetism；生成逻辑在内容层闭包）
-    SADISTIC = 33  # 敌人被施加 debuff 时受 层 伤（无色卡 Sadistic Nature；lightspeed 未实现触发段，仅状态落地）
     # ---- 遗物批次 1 新增（2026-10-05，尾部追加不改旧值）----
     PLATED_ARMOR = 31  # 重甲：回合末按层数获得格挡；受到未被格挡吸收的攻击伤害时 -1 层（Thread and Needle）
     NEXT_TURN_BLOCK = 32  # 下回合格挡：回合开始按层数获得格挡后移除，可叠加（Self-Forming Clay）
     FOCUS = 33  # 专长（Defect 充能球加成；无充能球体系，预留——Data Disk 装载）
     MANTRA = 34  # 真言（Damaru 每回合 +1；无观者姿态体系，预留）
+    # ---- 批次 4 新增（无色卡族，接 FOCUS/MANTRA 之后顺延）----
+    MAYHEM = 35  # 每回合开始自动打出抽牌堆顶牌 ×层（无色卡 Mayhem）
+    MAGNETISM = 36  # 每回合开始随机无色牌入手 ×层（无色卡 Magnetism；生成逻辑经 special 闭包注入）
+    SADISTIC = 37  # 敌人被施加 debuff 时受 层 伤（无色卡 Sadistic Nature；lightspeed 未实现触发段，仅状态落地）
 
 
 class MonsterStatus(IntEnum):
