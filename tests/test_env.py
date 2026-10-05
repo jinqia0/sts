@@ -137,7 +137,8 @@ def test_mask_all_false_after_battle_over():
     bc.cards.hand.append(bc.cards.instantiate(STRIKE))
     obs, reward, terminated, truncated, info = env.step(HAND_SLOT_BASE)
     assert terminated and not truncated
-    assert reward == 1.0 and info["won"]
+    assert info["won"]
+    assert abs(reward - bc.player.hp / bc.player.max_hp) < 1e-9  # 战损口径：终局 HP/max
     assert not env.action_masks().any()
     with pytest.raises(AssertionError):
         env.step(ACTION_END_TURN)
@@ -246,8 +247,11 @@ def test_random_rollouts_complete_and_deterministic():
         for o in seq1:
             assert o.dtype == np.int32
             assert (o >= 0).all() and (o <= MAXIMA).all()
-        # 结束时 info 与奖励口径一致
-        assert (info1["outcome"] == "PLAYER_VICTORY") == (r1[-1] == 1.0)
+        # 结束时 info 与奖励口径一致（战损口径：胜=终局HP/max_hp，败=0）
+        if info1["outcome"] == "PLAYER_VICTORY":
+            assert 0 < r1[-1] <= 1.0
+        else:
+            assert r1[-1] == 0.0
 
 
 # ---- 截断保险丝 ----
@@ -261,3 +265,51 @@ def test_truncation_at_turn_limit():
     obs, reward, terminated, truncated, info = env.step(ACTION_END_TURN)
     assert truncated and not terminated
     assert reward == 0.0
+
+
+# ---- 随机遭遇模式（encounter="random"）----
+
+
+def test_random_encounter_samples_from_pool():
+    """random 模式：遭遇均来自弱怪池，多种子下覆盖多种遭遇。"""
+    from sts.env import WEAK_POOL
+
+    env = StsBattleEnv(encounter="random")
+    seen = set()
+    for s in range(30):
+        _obs, info = env.reset(seed=s)
+        assert info["encounter"] in WEAK_POOL
+        seen.add(info["encounter"])
+    assert len(seen) >= 3  # 30 局至少抽到 3 种（概率 < 1e-4 的偶然才不满足）
+
+
+def test_random_encounter_deterministic():
+    """同种子 → 同遭遇 + 同轨迹（复现性）。"""
+    env = StsBattleEnv(encounter="random")
+    obs1, info1 = env.reset(seed=21)
+    enc1 = info1["encounter"]
+    import numpy as np
+
+    traj1 = [obs1.copy()]
+    for _ in range(4):
+        mask = env.action_masks()
+        obs1, *_ = env.step(int(np.flatnonzero(mask)[0]))
+        traj1.append(obs1.copy())
+
+    obs2, info2 = env.reset(seed=21)
+    traj2 = [obs2.copy()]
+    for _ in range(4):
+        mask = env.action_masks()
+        obs2, *_ = env.step(int(np.flatnonzero(mask)[0]))
+        traj2.append(obs2.copy())
+
+    assert info2["encounter"] == enc1
+    assert all((a == b).all() for a, b in zip(traj1, traj2))
+
+
+def test_fixed_encounter_unaffected():
+    """random 模式不影响指定遭遇的旧行为（回归保护）。"""
+    env = StsBattleEnv()  # 默认 cultist
+    for s in (1, 2, 3):
+        _obs, info = env.reset(seed=s)
+        assert info["encounter"] == "cultist"

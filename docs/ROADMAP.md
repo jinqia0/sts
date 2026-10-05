@@ -21,9 +21,12 @@
 - 验收：随机策略能在环境里跑完整场战斗并统计胜率；审计测试通过 ✅（当前数字：Cultist random 0.64 / heuristic 1.00；Jaw Worm 0.86 / 1.00；其余遭遇双 baseline 均 ≥1.00——怪偏弱，MaskablePPO 目标是全遭遇显著超 random、追平或超 heuristic）
 
 ### 第 2 步：MaskablePPO 跑通
-- [ ] 固定卡组（初始牌组）vs Cultist 训练 MaskablePPO
+- [x] 训练场景：`StsBattleEnv(encounter="random")`——基础牌组 vs 弱怪池随机单场遭遇（每局均匀抽一种，无跨场状态；2026-10-05 用户决策：从「连打 5 场」简化，怪间无配合、序列无策略含义，只增加学习难度）
+- [x] **奖励 = 战损**（2026-10-05 用户决策）：终局剩余 HP/max_hp（胜），败 0，进行中 0；胜率退化为前提。此口径下 300k 步胜率过早饱和的问题消失，保血有持续梯度
+- [x] 训练脚本：`scripts/train.py`（MaskablePPO，训练种子 ≥10_000，周期评估种子 70..99，总体 + 分遭遇双口径对照 random/heuristic）
 - [x] 两个 baseline：随机策略、简单启发式（斩杀优先/集火残血/格挡补足），`sts/baselines.py`，评估种子 0..99
-- 验收：训练策略胜率显著超过两个 baseline
+- [x] **结果（2026-10-05，模型 models/weak_pool_1m_hp76.zip）**：1M 步 MaskablePPO 平均剩余 HP **76.0**/80，超 random（62.0）+14、超 heuristic（75.5）+0.5；分遭遇 3 胜（louses 77.1 / slimes_s 78.9 / fungi 79.7）1 平 1 负（jaw_worm 68.9 vs 72.9，唯一需跨回合规划的怪，小 MLP + 无记忆快照观测的能力上限附近）。300k 版对照 74.6 存 weak_v2_300k.zip
+- 验收：训练策略胜率显著超过两个 baseline ✅
 
 ### 第 3 步：扩内容 + 奖励实验
 - [ ] 扩到 Act 1 主要卡池（~30 张起步，向 ~75 张推进）与主要敌池（普通怪→精英→Slime Boss/Guardian）

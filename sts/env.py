@@ -51,6 +51,10 @@ N_TARGET_SLOTS = 5
 # 上层 curriculum 若要更短上限可自行包装 TimeLimit）
 TURN_LIMIT = 100
 
+# 弱怪池：encounter="random" 时每局从中均匀抽一种（单场随机遭遇，
+# 各怪被采样次数相同——比连打序列的样本分布更干净）
+WEAK_POOL = ("cultist", "jaw_worm", "louses", "slimes_s", "fungi_beast")
+
 # ---- 卡牌词表（卡名 → 稳定索引）----
 # 扩卡时只向后追加，已分配的索引永不重排（否则旧 checkpoint 的
 # 观测语义漂移）。词表固定 128 维，当前 3 张卡只用前几个索引，
@@ -143,7 +147,8 @@ def _count_into(obs: np.ndarray, base: int, insts) -> None:
 class StsBattleEnv(gym.Env):
     """单场战斗的 Gymnasium 环境：BattleContext 的薄封装。
 
-    - 奖励稀疏：胜 +1 / 负 -1 / 进行中 0（回合上限截断时胜负未定，记 0）
+    - 奖励 = 终局剩余 HP / max_hp（胜利），败/截断 0，进行中 0——
+      战损是唯一目标，胜率退化为前提（2026-10-05 用户决策）
     - terminated = 战斗结束；truncated = 回合数超 TURN_LIMIT（防死循环）
     - 训练/评估策略必须经 action_masks() 过滤动作：非法动作在 step
       中直接断言失败，不允许走非法路径把错误延迟到奖励端
@@ -152,7 +157,7 @@ class StsBattleEnv(gym.Env):
     metadata = {"render_modes": []}
 
     def __init__(self, encounter: str = "cultist") -> None:
-        self.encounter = encounter
+        self.encounter = encounter  # 单一遭遇名或 "random"（弱怪池随机）
         self.action_space = spaces.Discrete(N_ACTIONS)
         self.observation_space = spaces.Box(
             low=0,
@@ -163,6 +168,7 @@ class StsBattleEnv(gym.Env):
         # 引擎上下文：对策略/测试公开（heuristic baseline 读白名单信息）
         self.bc: BattleContext | None = None
         self.battle_seed: int | None = None
+        self.current_encounter: str = self.encounter
 
     # ---- Gymnasium API ----
 
@@ -175,7 +181,13 @@ class StsBattleEnv(gym.Env):
             # gymnasium 规范：由环境 np_random 派生战斗种子——
             # reset(seed=s) 两次得到同一场战斗；不传 seed 则每场不同
             self.battle_seed = int(self.np_random.integers(0, 2**31 - 1))
-        self.bc = BattleContext(seed=self.battle_seed, encounter=self.encounter)
+        # 遭遇选择："random" 每局从弱怪池抽一种（np_random 派生，
+        # 同种子可复现）；否则用构造时指定的单一遭遇
+        if self.encounter == "random":
+            self.current_encounter = WEAK_POOL[int(self.np_random.integers(0, len(WEAK_POOL)))]
+        else:
+            self.current_encounter = self.encounter
+        self.bc = BattleContext(seed=self.battle_seed, encounter=self.current_encounter)
         return self._get_obs(), self._get_info()
 
     def step(self, action):
@@ -207,7 +219,15 @@ class StsBattleEnv(gym.Env):
                 bc.end_turn()
         terminated = bc.over
         truncated = (not terminated) and bc.turn > TURN_LIMIT
-        reward = 1.0 if bc.won else (-1.0 if bc.outcome == Outcome.PLAYER_LOSS else 0.0)
+        # 奖励（2026-10-05 用户决策：战损为唯一目标）：
+        #   终局 = 剩余 HP / max_hp（胜利）/ 0（败）；进行中恒 0
+        #   胜率不再是目标——保不住血自然会输，战损低与获胜在这套
+        #   奖励下天然一致。范围 [0,1]，无每步 shaping（HP 变化进
+        #   奖励易被「拖回合回血类」歧向利用，DESIGN.md §5 风险）
+        if terminated:
+            reward = bc.player.hp / bc.player.max_hp if bc.won else 0.0
+        else:
+            reward = 0.0
         return self._get_obs(), reward, terminated, truncated, self._get_info()
 
     def action_masks(self) -> np.ndarray:
@@ -313,4 +333,5 @@ class StsBattleEnv(gym.Env):
             "won": bc.won,
             "outcome": bc.outcome.name,
             "battle_seed": self.battle_seed,
+            "encounter": self.current_encounter,
         }
