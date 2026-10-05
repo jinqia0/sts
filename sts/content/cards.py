@@ -42,6 +42,8 @@ class CardDef:
     lose_energy_when_drawn: int = 0  # 被抽到时失去的能量（状态卡 Void）
     play_condition: "callable | None" = None  # 打出条件（Clash）：(bc, inst) -> bool，False 则 play_card 拒绝
     cost_delta_on_damage: int = 0  # 玩家每次失去 HP 时该实例的永久费用增减（Blood for Blood：-1）
+    multiple_upgrades: bool = False  # 可无限升级（Searing Blow：misc_data 计升级次数）
+    on_exhaust_effect: "callable | None" = None  # 被消耗时触发（Sentinel：+2 能量），引擎 on_card_exhausted 已接线
     # ---- 中等档迁移新增（批次 2）----
     innate_when_upgraded: bool = False  # 仅升级版固有（Brutality+；引擎 move_innate_to_top 需接线读此位，见批次 2 报告）
     on_exhaust_effect: "callable | None" = None  # 被消耗时触发 (bc, inst) -> None（Sentinel +能量；引擎 on_card_exhausted 已接线读取，内容层 _exhaust_from_hand 的显式调用以效果侧守卫防双重）

@@ -43,6 +43,17 @@ class CardInstance:
         base = self.cost
         self.cost_override = max(0, base + delta)
 
+    def upgrade(self) -> bool:
+        """升级本实例（对齐 Armaments/打造类路径）：置 upgraded=True 并推进
+        实例计数（Searing Blow 类用 misc_data 记升级次数）。已升级则 no-op
+        返回 False（Searing Blow 是唯一可反复升级的卡，由其内容层处理计数）。"""
+        if self.upgraded:
+            return False
+        self.upgraded = True
+        if self.card.multiple_upgrades:
+            self.misc_data += 1
+        return True
+
     def __repr__(self) -> str:
         u = "+" if self.upgraded else ""
         return f"{self.card.name}{u}(#{self.unique_id})"
