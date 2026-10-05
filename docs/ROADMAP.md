@@ -35,11 +35,11 @@
 **内容全量迁移（2026-10-05 启动，批次化推进，计划文件见 `~/.claude/plans/lightspeed-pure-harbor.md`）**：
 
 - [x] **批次 0 引擎能力地基**：X 费（energy_on_use 快照）/ CARD_SELECT 选卡状态机（单候选直执）/ Ethereal / Innate / 诅咒状态卡回合末自动结算（no_trigger 路径）/ 六类触发钩子（消耗/抽牌/格挡/自伤/受击/出牌）/ 怪物逃跑+战斗中原位分裂+掉血改意图 / THIEVERY 偷金 / ENTANGLED / POISON / 遗物框架 sts/combat/relics.py（~20 钩子位 + ~35 个已实现遗物）——157 个测试全绿
-- [~] **批次 1 简单内容**（并行进行中）：20 张简单铁甲卡（Clash/Bludgeon/Reaper 等）、9 种简单怪（双史莱姆 M/奴役者/小鬼帮/哨卫）、遗物逐个核对+测试（test_relics.py）
-- [ ] **批次 2 中等内容**：14 个 Power 状态族卡（Barricade/Corruption/Demon Form 等）+ 消耗/虚无/生成族卡、中等怪（Mad Gremlin/Gremlin Nob/Lagavulin/Guardian/Hexaghost）、出牌/回合类遗物
-- [ ] **批次 3 困难内容**：Whirlwind（X 费）+ 选卡六件（Armaments/Headbutt 等）、分裂怪（L 级史莱姆/Slime Boss）、Looter 偷金逃跑、RNG 遗物
-- [ ] **批次 4 无色/诅咒/状态卡全量 + 遭遇注册表收尾**（Act 1 全遭遇 + 随机策略全量冒烟）
-- [ ] **批次 5（另行规划）**：env 观测全词表接线 + 训练侧更新（现有模型届时作废）
+- [x] **批次 1 简单内容**（2026-10-05）：20 张简单铁甲卡 + 9 种简单怪（双史莱姆 M/奴役者/小鬼帮/哨卫）+ 7 遭遇 + 遗物全量核对（21 处修正）——294 全绿
+- [x] **批次 2 中等内容**（2026-10-05）：30 张中等卡（Power 状态族 14/消耗族/虚无/实例计数/生成）+ 精英 Boss 6 怪（Gremlin Nob/Lagavulin/Guardian/Hexaghost/Mad Gremlin/Taskmaster）——352 全绿
+- [x] **批次 3 困难内容**（2026-10-05）：Whirlwind（X 费）+ 选卡六件（Armaments/Headbutt/Dual Wield 等）+ 分裂怪（L 级史莱姆/Slime Boss）+ Looter/Mugger + RNG 遗物 6 个——425 全绿
+- [x] **批次 4 无色/诅咒/状态卡全量**（2026-10-05）：无色 34 张 + 诅咒 14 张正式化（curses_cards.py）+ RUPTURE 引擎补位 + SADISTIC/PANACHE/SHACKLED 三处接线——545 全绿；**终验：随机策略 21 遭遇×8 种子全跑通无死循环**。铁甲 Act 1 全内容迁移完成（~130 卡 + 27 怪 + ~55 遗物 + 21 遭遇）
+- [ ] **批次 5（另行规划）**：env 观测全词表接线 + 训练侧更新（现有模型届时作废）。已知待办：CARD_INDEX/MONSTER_INDEX 全词表、unplayable 牌的 action mask 缺口（Wound/Burn/Dazed 被 mask 误标合法，靠 env 兜底）、CARD_SELECT/X 费的动作空间表达、ScenarioSpec.deck 卡组采样
 - 决策点：Gremlin 帮逃跑（lightspeed 未实现、真实游戏有）→ 按分布级保真补齐；Normality 诅咒限制（lightspeed 未实现）→ 跳过并注释
 
 原有子项：
