@@ -196,6 +196,18 @@ class Player(Combatant):
             # 移除（Player.cpp:631-634，GainBlock 动作走 gainBlock 入口）
             bc.add_to_bot(Actions.gain_block(s.get(PlayerStatus.NEXT_TURN_BLOCK)))
             s.remove(PlayerStatus.NEXT_TURN_BLOCK)
+        if s.has(PlayerStatus.MAYHEM):
+            # Mayhem：回合开始自动打出抽牌堆顶 ×层（Player.cpp:625-629）
+            for _ in range(s.get(PlayerStatus.MAYHEM)):
+                bc.add_to_bot(Actions.play_top_card(exhaust=False))
+        if s.has(PlayerStatus.MAGNETISM):
+            # Magnetism：回合开始随机无色牌入手 ×层（Player.cpp:621-623；
+            # C++ 该分支为注释掉的 CREATE_RANDOM_CARD_IN_HAND_COLORLESS——
+            # 生成逻辑由内容层 play 时提供的 special 闭包执行）
+            fn = bc.player.special.get("magnetism_gen")
+            if fn is not None:
+                for _ in range(s.get(PlayerStatus.MAGNETISM)):
+                    bc.add_to_bot(fn())
 
     def apply_start_of_turn_post_draw_powers(self, bc: BattleContext) -> None:
         """玩家回合开始、抽牌之后（对齐 applyStartOfTurnPostDrawPowers）：
