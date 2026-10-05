@@ -84,3 +84,45 @@ def test_reward_mode_from_scenario_and_override():
 
 def test_weak_pool_matches_env_constant():
     assert SCENARIOS["weak"].pool == WEAK_POOL
+
+
+# ---- EXP-03 消融：species_shuffle ----
+
+
+def test_species_shuffle_cuts_information():
+    """shuffle 模式：种类位与真种类解耦（两局同遭遇、同怪，
+    点亮的位置（经乱序映射后）与词表位置无必然一致），且可复现。"""
+    from sts.env import MONSTER_INDEX, _E_SPECIES, MONSTER_VOCAB_SIZE, _N_ENEMY_FEAT, O_ENEMY
+
+    env = StsBattleEnv(scenario="weak_shuffled")
+    obs, info = env.reset(seed=7)
+    # 找到本局每个存活怪点亮的词表位置
+    b = O_ENEMY
+    seg = obs[b + _E_SPECIES : b + _E_SPECIES + MONSTER_VOCAB_SIZE]
+    assert seg.sum() >= 1  # 仍有 one-hot（维度不变），但位置经映射
+    # 同种子复现
+    obs2, info2 = env.reset(seed=7)
+    assert info2["encounter"] == info["encounter"]
+    assert (obs == obs2).all()
+    # 多局之间映射确实在变（至少大多局不同；同遇全同的映射概率 1/5040）
+    seen_maps = set()
+    for s in range(12):
+        _o, _i = env.reset(seed=100 + s)
+        b = O_ENEMY
+        seg = env._get_obs()[b + _E_SPECIES : b + _E_SPECIES + MONSTER_VOCAB_SIZE]
+        seen_maps.add(int(np.flatnonzero(seg)[0]))
+    assert len(seen_maps) >= 3  # 12 局至少 3 种不同映射（偶然同映射难免）
+
+
+def test_weak_scenario_unaffected_by_shuffle_default():
+    """默认场景（weak）不受 species_shuffle 字段影响：ID 正确。"""
+    from sts.env import MONSTER_INDEX, _E_SPECIES, MONSTER_VOCAB_SIZE, _N_ENEMY_FEAT, O_ENEMY
+
+    env = StsBattleEnv(scenario="weak")
+    obs, _ = env.reset(seed=1)
+    b = O_ENEMY
+    seg = obs[b + _E_SPECIES : b + _E_SPECIES + MONSTER_VOCAB_SIZE]
+    assert seg.sum() == 1
+    lit = int(np.flatnonzero(seg)[0])
+    name = env.bc.monsters.monsters[0].name
+    assert lit == MONSTER_INDEX[name]  # 真 ID（非乱序）

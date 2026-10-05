@@ -36,6 +36,7 @@ class ScenarioSpec:
     pool: tuple[str, ...]  # 遭遇池（每局均匀抽一种）
     reward: str = REWARD_DAMAGE  # 见模块注释
     description: str = ""
+    species_shuffle: bool = False  # 消融：种类 ID 每局乱序（EXP-03）
     # 未来扩展（现在留默认值，加字段不破坏旧配置）：
     # deck: 卡组分布采样（Phase 2 卡组泛化）
 
@@ -47,9 +48,18 @@ WEAK = ScenarioSpec(
     description="弱怪池单场：基础牌组，战损口径（EXP-01/02）",
 )
 
+WEAK_SHUFFLED = ScenarioSpec(
+    name="weak_shuffled",
+    pool=WEAK.pool,
+    reward=REWARD_DAMAGE,
+    description="EXP-03 消融：同 weak，但种类 one-hot 每局乱序（切断种类信息）",
+    species_shuffle=True,
+)
+
 
 SCENARIOS: dict[str, ScenarioSpec] = {
     "weak": WEAK,
+    "weak_shuffled": WEAK_SHUFFLED,
 }
 
 

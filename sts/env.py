@@ -187,6 +187,7 @@ class StsBattleEnv(gym.Env):
         encounter: str | None = None,
         scenario: str | ScenarioSpec | None = None,
         reward: str | None = None,
+        species_shuffle: bool = False,
     ) -> None:
         """构造环境。
 
@@ -195,11 +196,16 @@ class StsBattleEnv(gym.Env):
         - encounter：单一遭遇名，或 "random"（等价于默认弱怪池场景，
           保留为轻量测试入口）；与 scenario 二选一，都传以 scenario 为准
         - reward：显式覆盖奖励口径（A/B 实验用），默认取场景配置
+        - species_shuffle：消融实验开关——每局 reset 时把种类词表重洗
+          （种类 one-hot 变成与真种类无关的每局随机噪声，切断全部
+          种类信息；同种子可复现）
         """
         if scenario is not None:
             self.scenario = get_scenario(scenario)
             self.encounter = "random"
             self.pool: tuple[str, ...] = self.scenario.pool
+            if self.scenario.species_shuffle:
+                species_shuffle = True
         else:
             self.scenario = get_scenario(None) if encounter in (None, "random") else None
             self.encounter = "cultist" if encounter is None else encounter
@@ -207,6 +213,9 @@ class StsBattleEnv(gym.Env):
         self.reward_mode = reward if reward is not None else (
             self.scenario.reward if self.scenario is not None else REWARD_DAMAGE
         )
+        self.species_shuffle = species_shuffle
+        # 消融模式：种类 ID → 乱序 ID 的局内映射（reset 时重洗）
+        self._species_map: dict[str, int] | None = None
         self.action_space = spaces.Discrete(N_ACTIONS)
         self.observation_space = spaces.Box(
             low=0,
@@ -235,6 +244,12 @@ class StsBattleEnv(gym.Env):
             self.current_encounter = self.pool[int(self.np_random.integers(0, len(self.pool)))]
         else:
             self.current_encounter = self.encounter
+        # 消融模式：每局重洗种类映射（词表值域内随机置换，np_random
+        # 派生 → 同种子可复现）。真实 ID 与观测位完全解耦
+        if self.species_shuffle:
+            shuffled = list(MONSTER_INDEX.values())
+            self.np_random.shuffle(shuffled)
+            self._species_map = dict(zip(MONSTER_INDEX, shuffled))
         self.bc = BattleContext(seed=self.battle_seed, encounter=self.current_encounter)
         return self._get_obs(), self._get_info()
 
@@ -366,8 +381,10 @@ class StsBattleEnv(gym.Env):
                 obs[b + _E_STATUS + k] = min(m.statuses.get(s), CAP_STATUS)
             # 怪物种类 one-hot（玩家可见：名字/立绘）。Monster 子类的
             # name 属性即词表 key。未收录的怪该段全零，模型按特征兜底
-            # ——扩怪时把名字加进 MONSTER_INDEX 即可
-            spec = monster_index(m.name)
+            # ——扩怪时把名字加进 MONSTER_INDEX 即可。
+            # 消融模式（species_shuffle）：查的是局内乱序映射——观测
+            # 位与真种类完全无关
+            spec = (self._species_map or MONSTER_INDEX).get(m.name)
             if spec is not None:
                 obs[b + _E_SPECIES + spec] = 1
 
