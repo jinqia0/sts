@@ -41,7 +41,7 @@ from sts.combat.card_manager import CardManager
 from sts.combat.entities import Monster, MonsterGroup, Player
 from sts.combat.queue import ActionQueue, CardQueue, CardQueueItem, CardSelectInfo
 from sts.combat.relics import RelicContainer
-from sts.combat.types import InputState, MonsterStatus, Outcome, PlayerStatus, Stance
+from sts.combat.types import InputState, MonsterStatus, Orb, Outcome, PlayerStatus, Stance
 from sts.rng import RngStreams
 
 ENERGY_PER_TURN = 3
@@ -554,6 +554,9 @@ class BattleContext:
         p.cards_played_last_turn = p.cards_played_this_turn
         p.attacks_played_last_turn = p.attacks_played_this_turn
         self.relics.on_end_turn(self)
+        # 充能球回合结束被动（LIGHTNING 伤/DARK 存层；对齐 C++ 空壳位的
+        # 预期位置 callEndTurnActions 的 TriggerEndOfTurnOrbsAction）
+        self.player.trigger_orb_passives(self, start=False)
         p.apply_end_of_turn_powers(self)
         # Well-Laid Plans（Silent）：回合末选 1 张手牌保留
         if p.special.get("wlp"):
@@ -595,6 +598,8 @@ class BattleContext:
         if self.player.stance == Stance.DIVINITY:
             self.player.change_stance(self, Stance.NEUTRAL)
         self.relics.on_turn_start(self)
+        # 充能球回合开始被动（FROST 格挡；LOOP 额外触发 orbs[0]）
+        self.player.trigger_orb_passives(self, start=True)
         self.restore_retained_cards()  # 保留牌在玩家状态结算后、抽牌前还手
         self.player.apply_start_of_turn_powers(self)
         # ---- 回合开始的 Silent 状态（PHANTASMAL_KILLER 在此翻 DOUBLE_DAMAGE，

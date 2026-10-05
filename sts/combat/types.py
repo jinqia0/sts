@@ -43,6 +43,22 @@ class CardType(Enum):
     CURSE = "Curse"
 
 
+class Orb(IntEnum):
+    """Defect 充能球（对齐 PlayerStatusEffects.h:139-145 的 Orb 枚举；
+    lightspeed 无实现，效果按 Java 原版）。
+
+    LIGHTNING：evoke 对随机敌人 (3+FOCUS) 伤；passive 回合结束对随机敌人同伤
+    FROST：evoke 得 (2+FOCUS) 格挡；passive 回合开始得同格挡
+    DARK：passive 回合结束 +6 存层；evoke 对 HP 最低敌人 (6×层+FOCUS) 伤
+    PLASMA：evoke +2 能量（不吃 FOCUS）
+    """
+
+    LIGHTNING = 0
+    FROST = 1
+    DARK = 2
+    PLASMA = 3
+
+
 class Stance(Enum):
     """观者姿态（对齐 lightspeed PlayerStatusEffects.h:125-130 的 Stance 枚举）。
 
@@ -136,6 +152,11 @@ class PlayerStatus(IntEnum):
     LIKE_WATER = 55  # 如水：回合结束时若处于平静获得 3×层 格挡（BattleContext.cpp:2072-2074）
     DEVOTION = 56  # 奉献：回合开始获得 层 真言
     WRATH_NEXT_TURN = 57  # 下回合开始进入愤怒（Simmering Fury/Blasphemy? 预留）
+    # ---- Defect 玩家状态（批次 F；lightspeed PlayerStatusEffects.h:139-145 有枚举无实现，按 Java 原版自建）----
+    REBOUND = 58  # 本回合首张打出的攻击牌额外结算一次（Defect Rebound）
+    LOOP = 59  # 回合开始时第一个充能球的被动效果额外触发 ×层（Defect Loop）
+    ELECTRO = 60  # 闪电球被动/唤起改为全体（Defect Electrodynamics）
+    STATIC_DISCHARGE = 61  # 受到攻击时引导 1 个闪电球（Defect Static Discharge）
 
 
 class MonsterStatus(IntEnum):

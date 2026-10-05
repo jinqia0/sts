@@ -14,7 +14,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from sts.combat.actions import Actions
-from sts.combat.types import MonsterStatus, Outcome, PlayerStatus, Stance, Statuses
+from sts.combat.types import MonsterStatus, Orb, Outcome, PlayerStatus, Stance, Statuses
 
 if TYPE_CHECKING:
     from sts.combat.battle import BattleContext
@@ -49,7 +49,67 @@ class Player(Combatant):
         self.attacks_played_last_turn = 0
         self.energy_per_turn_bonus = 0  # 每回合额外能量（Berserk）
         self.stance = Stance.NEUTRAL  # 观者姿态（对齐 Player.h:43）
+        # ---- Defect 充能球（lightspeed Player.cpp:109-119 全 todo，按 Java 原版自建）----
+        self.orbs: list[Orb] = []  # 有序：orbs[0] 最老（先被 evoke）
+        self.orb_slots = 3  # 槽位上限（Capacitor ±/Runic Capacitor +2）
+        self.dark_stacks = 0  # 暗球存层（passive 每回合 +6）
         self.special: dict[str, int] = {}  # 特殊计数槽（对齐 lightspeed bomb/combust 等）
+
+    # ---- Defect 充能球（按 Java 原版自建；lightspeed 空壳）----
+    def channel_orb(self, bc: BattleContext, orb: Orb) -> None:
+        """引导一个充能球：满槽时先唤起最老的球再入槽。"""
+        if len(self.orbs) >= self.orb_slots:
+            self.evoke_orb(bc)
+        self.orbs.append(orb)
+
+    def evoke_orb(self, bc: BattleContext) -> None:
+        """唤起最老的充能球（按 Java Orb 类效果）：
+        LIGHTNING→随机敌 (3+FOCUS) 伤（ELECTRO 全体）/ FROST→(2+FOCUS) 格挡 /
+        DARK→最低血敌 (6×存层+FOCUS) 伤 / PLASMA→+2 能量。"""
+        if not self.orbs:
+            return
+        orb = self.orbs.pop(0)
+        focus = self.statuses.get(PlayerStatus.FOCUS)
+        if orb == Orb.LIGHTNING:
+            dmg = max(0, 3 + focus)
+            if self.statuses.has(PlayerStatus.ELECTRO):
+                bc.add_to_bot(Actions.damage_all_enemy(dmg))
+            else:
+                bc.add_to_bot(Actions.damage_random_enemy(dmg))
+        elif orb == Orb.FROST:
+            bc.add_to_bot(Actions.gain_block(max(0, 2 + focus)))
+        elif orb == Orb.DARK:
+            dmg = max(0, 6 * self.dark_stacks + focus)
+            targets = [m for m in bc.monsters.monsters if m.is_targetable()]
+            if targets:
+                m = min(targets, key=lambda m: m.hp)
+                bc.add_to_bot(Actions.damage_enemy(m.idx, dmg))
+            self.dark_stacks = 0
+        elif orb == Orb.PLASMA:
+            bc.add_to_bot(Actions.gain_energy(2))
+
+    def trigger_orb_passives(self, bc: BattleContext, start: bool) -> None:
+        """充能球被动：回合开始（FROST 得格挡）与回合结束（LIGHTNING 伤/
+        DARK +6 存层）。LOOP：回合开始时 orbs[0] 的被动额外触发 ×层。"""
+        focus = self.statuses.get(PlayerStatus.FOCUS)
+        if start:
+            for orb in self.orbs:
+                if orb == Orb.FROST:
+                    bc.add_to_bot(Actions.gain_block(max(0, 2 + focus)))
+            if self.orbs and self.statuses.has(PlayerStatus.LOOP):
+                for _ in range(self.statuses.get(PlayerStatus.LOOP)):
+                    if self.orbs[0] == Orb.FROST:
+                        bc.add_to_bot(Actions.gain_block(max(0, 2 + focus)))
+        else:
+            for orb in self.orbs:
+                if orb == Orb.LIGHTNING:
+                    dmg = max(0, 3 + focus)
+                    if self.statuses.has(PlayerStatus.ELECTRO):
+                        bc.add_to_bot(Actions.damage_all_enemy(dmg))
+                    else:
+                        bc.add_to_bot(Actions.damage_random_enemy(dmg))
+                elif orb == Orb.DARK:
+                    self.dark_stacks += 6
 
     # ---- 观者姿态（对齐 Stance 枚举 + ChangeStance；C++ 该动作为空壳，
     # 进入钩子链按 wiki 自建）----
@@ -96,6 +156,9 @@ class Player(Combatant):
         #（对齐 Player.cpp:225-233，THORNS 先、FLAME_BARRIER 后）
         if self.statuses.has(PlayerStatus.THORNS):
             bc.add_to_top(Actions.damage_enemy(enemy_idx, self.statuses.get(PlayerStatus.THORNS)))
+        # STATIC_DISCHARGE（Defect Static Discharge）：受到攻击时引导闪电球
+        if self.statuses.has(PlayerStatus.STATIC_DISCHARGE):
+            bc.add_to_bot(Actions.channel_orb(Orb.LIGHTNING))
         if self.statuses.has(PlayerStatus.FLAME_BARRIER):
             bc.add_to_top(Actions.damage_enemy(enemy_idx, self.statuses.get(PlayerStatus.FLAME_BARRIER)))
         if damage > 0:

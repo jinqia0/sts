@@ -14,7 +14,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from sts.combat.queue import Action, CardQueueItem
-from sts.combat.types import InputState, MonsterStatus, PlayerStatus, Stance
+from sts.combat.types import InputState, MonsterStatus, Orb, PlayerStatus, Stance
 
 if TYPE_CHECKING:
     from sts.combat.battle import BattleContext
@@ -275,6 +275,27 @@ class Actions:
     @staticmethod
     def empty_deck_shuffle() -> Action:
         return Action(lambda bc: bc.on_shuffle())
+
+    # ---- Defect 充能球 ----
+    @staticmethod
+    def channel_orb(orb: Orb) -> Action:
+        return Action(lambda bc: bc.player.channel_orb(bc, orb))
+
+    @staticmethod
+    def evoke_orb() -> Action:
+        return Action(lambda bc: bc.player.evoke_orb(bc))
+
+    @staticmethod
+    def evoke_all_orbs() -> Action:
+        def run(bc: BattleContext) -> None:
+            while bc.player.orbs:
+                bc.player.evoke_orb(bc)
+
+        return Action(run)
+
+    @staticmethod
+    def modify_orb_slots(delta: int) -> Action:
+        return Action(lambda bc: setattr(bc.player, "orb_slots", max(0, bc.player.orb_slots + delta)))
 
     # ---- 观者姿态 ----
     @staticmethod
