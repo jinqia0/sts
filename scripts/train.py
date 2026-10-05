@@ -52,9 +52,9 @@ def run_eval_episode(env: StsBattleEnv, policy, seed: int) -> dict:
     return {"reward": total, "won": bool(info["won"]), "hp": info["hp_remaining"], "encounter": info["encounter"]}
 
 
-def evaluate(policy, seeds=EVAL_SEEDS, verbose_name: str | None = None) -> dict:
+def evaluate(policy, seeds=EVAL_SEEDS, verbose_name: str | None = None, scenario="weak") -> dict:
     """固定种子集上评估，返回总体 + 分遭遇统计。"""
-    env = StsBattleEnv(encounter="random")
+    env = StsBattleEnv(scenario=scenario)
     eps = [run_eval_episode(env, policy, s) for s in seeds]
     per_enc: dict[str, list[dict]] = defaultdict(list)
     for e in eps:
@@ -129,10 +129,10 @@ class _PeriodicEvalCallback:
         self.cb = _Cb()
 
 
-def make_model():
+def make_model(scenario: str):
     from sb3_contrib import MaskablePPO
 
-    env = StsBattleEnv(encounter="random")
+    env = StsBattleEnv(scenario=scenario)
     return MaskablePPO(
         "MlpPolicy",
         env,
@@ -148,13 +148,17 @@ def make_model():
     )
 
 
-def train(total_steps: int, eval_every: int) -> None:
+def train(total_steps: int, eval_every: int, scenario: str, out: str) -> None:
+    from sts.scenarios import get_scenario
+
+    spec = get_scenario(scenario)
     MODEL_DIR.mkdir(exist_ok=True)
-    model = make_model()
-    print(f"开始训练：{total_steps} 步（训练种子 {TRAIN_SEED}，评估种子 70..99）")
-    periodic = _PeriodicEvalCallback(eval_every, StsBattleEnv(encounter="random"))
+    model = make_model(scenario)
+    print(f"开始训练：场景 [{spec.name}] {spec.description}")
+    print(f"{total_steps} 步（训练种子 {TRAIN_SEED}，评估种子 70..99，奖励 {spec.reward}）")
+    periodic = _PeriodicEvalCallback(eval_every, StsBattleEnv(scenario=scenario))
     model.learn(total_timesteps=total_steps, callback=periodic.cb)
-    model_path = MODEL_DIR / "weak_v1.zip"
+    model_path = MODEL_DIR / f"{out}.zip"
     model.save(model_path)
     print(f"\n模型已保存：{model_path}")
 
@@ -164,8 +168,8 @@ def train(total_steps: int, eval_every: int) -> None:
             print(f"    {t:>8d}  hp={rec['hp']:.1f}  reward={rec['reward']:.3f}  win={rec['win_rate']:.2f}")
 
     print("\n==== 最终对比（评估种子 70..99，分遭遇）====")
-    evaluate(random_policy, verbose_name="random")
-    evaluate(heuristic_policy, verbose_name="heuristic")
+    evaluate(random_policy, verbose_name="random", scenario=scenario)
+    evaluate(heuristic_policy, verbose_name="heuristic", scenario=scenario)
 
     from sb3_contrib import MaskablePPO
 
@@ -175,20 +179,23 @@ def train(total_steps: int, eval_every: int) -> None:
         a, _ = m.predict(env._get_obs(), deterministic=True, action_masks=env.action_masks())
         return int(a)
 
-    evaluate(ppo_policy, verbose_name="MaskablePPO")
+    evaluate(ppo_policy, verbose_name="MaskablePPO", scenario=scenario)
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="弱怪池随机遭遇 MaskablePPO 训练")
+    parser = argparse.ArgumentParser(description="多场景 MaskablePPO 训练（场景见 sts/scenarios.py）")
+    parser.add_argument("--scenario", default="weak", help="场景名（sts/scenarios.py 注册表，默认 weak）")
     parser.add_argument("--steps", type=int, default=300_000)
     parser.add_argument("--eval-every", type=int, default=50_000)
+    parser.add_argument("--out", default=None, help="模型文件名（不含 .zip；默认 <scenario>_v1）")
     parser.add_argument("--eval-only", type=str, default=None, help="只评估已保存的模型路径")
     args = parser.parse_args()
+    out = args.out or f"{args.scenario}_v1"
 
     if args.eval_only:
-        print(f"==== 评估 {args.eval_only}（种子 70..99）====")
-        evaluate(random_policy, verbose_name="random")
-        evaluate(heuristic_policy, verbose_name="heuristic")
+        print(f"==== 评估 {args.eval_only}（场景 {args.scenario}，种子 70..99）====")
+        evaluate(random_policy, verbose_name="random", scenario=args.scenario)
+        evaluate(heuristic_policy, verbose_name="heuristic", scenario=args.scenario)
 
         from sb3_contrib import MaskablePPO
 
@@ -198,10 +205,10 @@ def main() -> None:
             a, _ = m.predict(env._get_obs(), deterministic=True, action_masks=env.action_masks())
             return int(a)
 
-        evaluate(ppo_policy, verbose_name="MaskablePPO")
+        evaluate(ppo_policy, verbose_name="MaskablePPO", scenario=args.scenario)
         return
 
-    train(args.steps, args.eval_every)
+    train(args.steps, args.eval_every, args.scenario, out)
 
 
 if __name__ == "__main__":

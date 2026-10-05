@@ -39,6 +39,7 @@ from gymnasium import spaces
 
 from sts.combat.battle import ENERGY_PER_TURN, BattleContext
 from sts.combat.types import InputState, MonsterStatus, Outcome, PlayerStatus
+from sts.scenarios import REWARD_DAMAGE, REWARD_SPARSE_PM1, ScenarioSpec, get_scenario
 
 # ---- 动作编码 ----
 N_ACTIONS = 61
@@ -181,8 +182,31 @@ class StsBattleEnv(gym.Env):
 
     metadata = {"render_modes": []}
 
-    def __init__(self, encounter: str = "cultist") -> None:
-        self.encounter = encounter  # 单一遭遇名或 "random"（弱怪池随机）
+    def __init__(
+        self,
+        encounter: str | None = None,
+        scenario: str | ScenarioSpec | None = None,
+        reward: str | None = None,
+    ) -> None:
+        """构造环境。
+
+        - scenario（推荐）：场景名或 ScenarioSpec（sts/scenarios.py 注册表），
+          怪池与奖励口径都由配置决定——训练/评估场景的正确入口
+        - encounter：单一遭遇名，或 "random"（等价于默认弱怪池场景，
+          保留为轻量测试入口）；与 scenario 二选一，都传以 scenario 为准
+        - reward：显式覆盖奖励口径（A/B 实验用），默认取场景配置
+        """
+        if scenario is not None:
+            self.scenario = get_scenario(scenario)
+            self.encounter = "random"
+            self.pool: tuple[str, ...] = self.scenario.pool
+        else:
+            self.scenario = get_scenario(None) if encounter in (None, "random") else None
+            self.encounter = "cultist" if encounter is None else encounter
+            self.pool = WEAK_POOL if self.encounter == "random" else (self.encounter,)
+        self.reward_mode = reward if reward is not None else (
+            self.scenario.reward if self.scenario is not None else REWARD_DAMAGE
+        )
         self.action_space = spaces.Discrete(N_ACTIONS)
         self.observation_space = spaces.Box(
             low=0,
@@ -206,10 +230,9 @@ class StsBattleEnv(gym.Env):
             # gymnasium 规范：由环境 np_random 派生战斗种子——
             # reset(seed=s) 两次得到同一场战斗；不传 seed 则每场不同
             self.battle_seed = int(self.np_random.integers(0, 2**31 - 1))
-        # 遭遇选择："random" 每局从弱怪池抽一种（np_random 派生，
-        # 同种子可复现）；否则用构造时指定的单一遭遇
+        # 遭遇选择：从配置的怪池抽一种（np_random 派生，同种子可复现）
         if self.encounter == "random":
-            self.current_encounter = WEAK_POOL[int(self.np_random.integers(0, len(WEAK_POOL)))]
+            self.current_encounter = self.pool[int(self.np_random.integers(0, len(self.pool)))]
         else:
             self.current_encounter = self.encounter
         self.bc = BattleContext(seed=self.battle_seed, encounter=self.current_encounter)
@@ -244,15 +267,18 @@ class StsBattleEnv(gym.Env):
                 bc.end_turn()
         terminated = bc.over
         truncated = (not terminated) and bc.turn > TURN_LIMIT
-        # 奖励（2026-10-05 用户决策：战损为唯一目标）：
-        #   终局 = 剩余 HP / max_hp（胜利）/ 0（败）；进行中恒 0
-        #   胜率不再是目标——保不住血自然会输，战损低与获胜在这套
-        #   奖励下天然一致。范围 [0,1]，无每步 shaping（HP 变化进
-        #   奖励易被「拖回合回血类」歧向利用，DESIGN.md §5 风险）
-        if terminated:
-            reward = bc.player.hp / bc.player.max_hp if bc.won else 0.0
-        else:
+        # 奖励口径由场景配置决定（scenarios.py，可被构造参数覆盖）：
+        # - damage（默认，2026-10-05 用户决策：战损为唯一目标）：
+        #   终局 = 剩余 HP / max_hp（胜）/ 0（败）；进行中恒 0。
+        #   保不住血自然会输，战损低与获胜天然一致；无每步 shaping
+        # - sparse_pm1：胜 +1 / 负 -1（EXP-01 首版对照口径，保留供
+        #   奖励对比实验）
+        if not terminated:
             reward = 0.0
+        elif self.reward_mode == REWARD_SPARSE_PM1:
+            reward = 1.0 if bc.won else (-1.0 if bc.outcome == Outcome.PLAYER_LOSS else 0.0)
+        else:  # REWARD_DAMAGE
+            reward = bc.player.hp / bc.player.max_hp if bc.won else 0.0
         return self._get_obs(), reward, terminated, truncated, self._get_info()
 
     def action_masks(self) -> np.ndarray:
