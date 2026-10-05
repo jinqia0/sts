@@ -13,8 +13,9 @@
 已移植：Cultist、Jaw Worm、Red/Green Louse、Acid/Spike Slime (S)、Fungi Beast、
 Acid/Spike Slime (M)、Blue/Red Slaver、Sneaky/Fat/Shield Gremlin、Gremlin Wizard、
 Sentry（批次 1）；Mad Gremlin、Gremlin Nob、Lagavulin、The Guardian、Hexaghost、
-Taskmaster（批次 2）。A0 数值直取（`ascN ? x : y` 的 y），但伤害/状态量的
-进阶分支保留（读 bc.ascension，A0 时自动落回非进阶值）。
+Taskmaster（批次 2）；Acid/Spike Slime (L)、Slime Boss、Looter、Mugger（批次 3）。
+A0 数值直取（`ascN ? x : y` 的 y），但伤害/状态量的进阶分支保留
+（读 bc.ascension，A0 时自动落回非进阶值）。
 
 源码与任务描述/wiki 的出入（以 C++ 为准）：
 - Red Louse 的副招是 Grow（力量+3），不是 Spit Web；Green Louse 才是
@@ -31,8 +32,13 @@ Taskmaster（批次 2）。A0 数值直取（`ascN ? x : y` 的 y），但伤害
 - Red Slaver 的 usedEntangle（misc_info）：本体/wiki 为"整场一次"，
   但 lightspeed 从不置位（疑似漏写，会导致重复缠绕）——此处按本体
   语义在 Entangle 落地时置 1。
-- Gremlin 帮第 3 回合逃跑（Fat/Sneaky 等）：lightspeed 的
-  doesEscapeNext 为死代码，本批不实现（留批次 3 决策）。
+- Gremlin 帮逃跑（批次 3 定案：不实现）。lightspeed 的 doesEscapeNext
+  从不置位（死代码，仅 Fat/Mad/Sneaky 的 takeTurn 残留分支，Shield/Wizard
+  连分支都没有）；本体 wiki（Gremlins / Act 1 页）记载各小鬼招式无限循环、
+  全站无任何小鬼逃跑条目，更新史仅剩"Weekly Patch 6：死掉的小鬼不再
+  喊逃跑台词"一条 flavor 修正——StS1 小鬼帮没有逃跑机制。
+  "3 回合后逃跑"的印象应源自 StS2（Gremlin Merc / Thieving Hopper 的
+  Escape Artist 力量）。
 
 批次 2 与本体/wiki 的出入（数值一律以 C++ 为准，行为差异按批次 1 的
 Red Slaver 先例择本体语义并逐处注明）：
@@ -46,6 +52,21 @@ Red Slaver 先例择本体语义并逐处注明）：
   效果，lightspeed 未实现）；Sear 伤害恒 6、无进阶加成（同 lightspeed）。
 - 回合计数映射：C++ bc.turn 0 基（首回合=0），本项目 1 基（首回合=1），
   涉及回合计数的条件统一 +1（Lagavulin 自然醒 2→3、灼伤升级 8→9）。
+
+批次 3 与本体/wiki 的出入（数值一律以 C++ 为准，行为差异择本体/wiki
+语义并逐处注明）：
+- 大史莱姆/Slime Boss 分裂体的 max_hp = 父体**当前** HP（C++
+  initSpawnedMonster 同时写 curHp/maxHp；wiki 只说"继承当前 HP"）。
+  分布级后果：分裂体自身的半血再分裂阈值 = 父体当前 HP 的一半。
+- Slime Boss 的 Preparing 无任何效果（C++ 该分支只 setMove(Slam)，
+  无格挡/自 buff）；Goop Spray 的塞牌走 actFunc 立即结算（非入队）。
+- Looter/Mugger 的逃跑链后 MUG 不再回归（C++ setMove 链），
+  Looter 第 1 回合、Mugger 前 2 回合固定打劫；C++ 各分支为对话消息
+  额外消耗的 aiRng roll（randomBoolean(0.6)/random(2)）不移植
+  （RNG 轨迹对齐超出本项目范围，不影响分布）。
+- C++ largeSlimeSplit 的 monsterCount 封顶 min(count+1, 4) 与
+  "槽位覆写"语义：分裂第二体落在 idx+1 时覆写该槽（可达内容中仅
+  Boss 分裂后的死亡占位槽），不后移存活怪——见 _large_slime_split。
 """
 
 from __future__ import annotations
@@ -1389,4 +1410,442 @@ class Taskmaster(Monster):
         for _ in range(n_wounds):
             bc.add_to_bot(Actions.make_temp_card_in_discard(WOUND))
         bc.add_to_bot(Actions.no_op_roll_move())
+        self.turns_taken += 1
+
+
+# ====================================================================
+# 批次 3：困难档 Act 1 怪物（Acid/Spike Slime L、Slime Boss、Looter、
+# Mugger）。数值/分段逐行对齐 MonsterSpecific.cpp，wiki 交叉校验
+# （差异见模块头注释）。
+# ====================================================================
+
+
+def _large_slime_split(bc: BattleContext, slime: "Monster", medium_cls: type[Monster]) -> None:
+    """大史莱姆分裂（对齐 Monster.cpp largeSlimeSplit，MonsterSpecific.cpp:3342-3367）。
+
+    自身槽 + 下一槽各生成 1 只 M 级史莱姆，两者 curHp=maxHp=大史莱姆当前
+    HP（initSpawnedMonster 双字段同写，见模块头注释）。生成怪立即 roll
+    意图（initSpawnedMonster 的 rollMove；本引擎走 roll_spawned_move）。
+    monster_turn_idx 额外 +1：配合 do_monster_turn 尾部的 +1，合计跳过
+    新落在 idx+1 槽位的分裂体本回合的行动（对齐 C++ split 内
+    bc.monsterTurnIdx++ + doMonsterTurn 的 ++；extraRollMoveOnTurn 槽位
+    标记只是下回合的 aiRng 空转——RNG 轨迹对齐，不移植）。
+
+    槽位语义对齐 C++ arr[idx+1] = 覆写：下一槽若已有占位（可达内容中
+    仅 Slime Boss 分裂后槽 1 的死亡占位），原位覆写不后移；否则等价追加。
+    存活数用 spawn 钩子的 +1/+1 再对本体的 -1 凑出 C++ 的净 +1
+    （C++ 直接 monstersAlive++，隐式移除父体）。
+    """
+    group = bc.monsters
+    hp = slime.hp
+    m1 = medium_cls(slime.idx, hp, hp)
+    m2 = medium_cls(slime.idx + 1, hp, hp)
+    group.spawn_replace(bc, slime.idx, m1)
+    if slime.idx + 1 < group.monster_count:
+        placeholder = group.monsters[slime.idx + 1]
+        assert placeholder.is_dead_or_escaped(), "分裂覆写槽必须是死亡占位（C++ 覆写语义）"
+        group.spawn_replace(bc, slime.idx + 1, m2)
+    else:
+        group.spawn_insert(bc, slime.idx + 1, m2)
+    slime.hp = 0  # 本体退场：不走 die()（无死亡触发），存活数下方 -1 对齐 C++ 隐式移除
+    group.alive_count -= 1
+    m1.roll_spawned_move(bc)
+    m2.roll_spawned_move(bc)
+    bc.monster_turn_idx += 1
+    bc.log.append(f"{slime.display_name} 分裂了！")
+
+
+class AcidSlimeL(Monster):
+    """酸液史莱姆（大）：腐蚀唾液 / 舔舐（2 层虚弱）/ 冲撞；半血强改分裂。
+
+    wiki/C++ A0：HP 65-69（A7 起 68-72）。HP 掉到 ≤maxHp/2 时 onHpLost
+    强改当前意图为 SPLIT（Monster.cpp:497-518 的 ACID_SLIME_L 分支，
+    每次漏格挡掉血都重判）；SPLIT 执行时原槽 + 下一槽生成 2 只 M 级
+    （继承当前 HP，见 _large_slime_split）。roll 分段（A0）：
+      roll < 30：腐蚀唾液已连续两回合 → 内层 50% 冲撞 / 50% 舔舐；
+                 否则腐蚀唾液
+      roll < 70：上回合冲撞 → 内层 40% 腐蚀唾液 / 60% 舔舐；否则冲撞
+      roll ≥ 70：舔舐已连续两回合 → 内层 40% 腐蚀唾液 / 60% 冲撞；
+                 否则舔舐
+    A17 起分段 40/70，第二段改判冲撞连续两回合、第三段只判上回合舔舐
+    （对齐 C++ START ASCENSION 17 段）。数值：腐蚀唾液 11 伤 + 塞
+    2 张黏液（A2 起 12 伤）；舔舐 2 层虚弱；冲撞 16 伤（A2 起 18）。
+    """
+
+    name = "Acid Slime (L)"
+    zh = "酸液史莱姆（大）"
+    hp_range = (65, 69)
+    hp_range_high = (68, 72)
+
+    CORROSIVE_SPIT = MoveDef("Corrosive Spit", "腐蚀唾液", "attack", base_damage=11)  # 另塞 2 张黏液
+    LICK = MoveDef("Lick", "舔舐", "debuff", intent_text="施加 2 层虚弱")
+    TACKLE = MoveDef("Tackle", "冲撞", "attack", base_damage=16)
+    SPLIT = MoveDef("Split", "分裂", "unknown", intent_text="分裂为两只酸液史莱姆（中）")
+
+    def __init__(self, idx: int, hp: int, max_hp: int):
+        super().__init__(idx, hp, max_hp, "酸液史莱姆（大）(Acid Slime (L))")
+
+    @classmethod
+    def create(cls, bc: BattleContext, idx: int) -> "AcidSlimeL":
+        hp = _roll_hp(bc, cls)
+        return cls(idx, hp, hp)
+
+    def on_hp_lost(self, bc: BattleContext, amount: int) -> None:
+        # 对齐 Monster.cpp onHpLost：HP ≤ maxHp/2 强改意图为 SPLIT
+        if self.hp <= self.max_hp // 2:
+            self.set_move(self.SPLIT)
+
+    def get_move_for_roll(self, bc: BattleContext, roll: int) -> MoveDef:
+        if bc.ascension >= 17:
+            if roll < 40:
+                if _last_two(self, "Corrosive Spit"):
+                    return self.TACKLE if _ai_boolean(bc, 0.6) else self.LICK
+                return self.CORROSIVE_SPIT
+            if roll < 70:
+                if _last_two(self, "Tackle"):
+                    return self.CORROSIVE_SPIT if _ai_boolean(bc, 0.6) else self.LICK
+                return self.TACKLE
+            if _last(self, "Lick"):
+                return self.CORROSIVE_SPIT if _ai_boolean(bc, 0.4) else self.TACKLE
+            return self.LICK
+        if roll < 30:
+            if _last_two(self, "Corrosive Spit"):
+                return self.TACKLE if _ai_boolean(bc, 0.5) else self.LICK
+            return self.CORROSIVE_SPIT
+        if roll < 70:
+            if _last(self, "Tackle"):
+                return self.CORROSIVE_SPIT if _ai_boolean(bc, 0.4) else self.LICK
+            return self.TACKLE
+        if _last_two(self, "Lick"):
+            return self.CORROSIVE_SPIT if _ai_boolean(bc, 0.4) else self.TACKLE
+        return self.LICK
+
+    def take_turn(self, bc: BattleContext) -> None:
+        move = self.move_history[0]
+        match move.name:
+            case "Corrosive Spit":
+                dmg = bc.calculate_monster_damage(self, 12 if bc.ascension >= 2 else 11)
+                bc.log.append(f"{self.display_name} 使用 腐蚀唾液(Corrosive Spit)。")
+                bc.add_to_bot(Actions.attack_player(self.idx, dmg))
+                for _ in range(2):
+                    bc.add_to_bot(Actions.make_temp_card_in_discard(SLIMED))
+                bc.add_to_bot(Actions.roll_move(self.idx))
+            case "Lick":
+                bc.log.append(f"{self.display_name} 使用 舔舐(Lick)。")
+                bc.add_to_bot(Actions.debuff_player(PlayerStatus.WEAK, 2, True))
+                bc.add_to_bot(Actions.roll_move(self.idx))
+            case "Tackle":
+                dmg = bc.calculate_monster_damage(self, 18 if bc.ascension >= 2 else 16)
+                bc.log.append(f"{self.display_name} 使用 冲撞(Tackle)。")
+                bc.add_to_bot(Actions.attack_player(self.idx, dmg))
+                bc.add_to_bot(Actions.roll_move(self.idx))
+            case "Split":
+                _large_slime_split(bc, self, AcidSlimeM)
+            case _:
+                raise AssertionError(f"未知招式 {move}")
+        self.turns_taken += 1
+
+
+class SpikeSlimeL(Monster):
+    """尖刺史莱姆（大）：烈焰冲撞 / 舔舐（2 层脆弱）；半血强改分裂。
+
+    wiki/C++ A0：HP 64-70（A7 起 67-73）。onHpLost 半血强改 SPLIT 同
+    酸史（大）。roll 分段（对齐 C++ SPIKE_SLIME_L）：
+      roll < 30：烈焰冲撞已连续两回合 → 舔舐；否则烈焰冲撞
+      roll ≥ 30：舔舐已连续两回合（A17 起上回合出过即算）→ 烈焰冲撞；
+                  否则舔舐
+    数值：烈焰冲撞 16 伤 + 塞 2 张黏液（A2 起 18 伤）；舔舐 2 层脆弱
+    （A17 起 3 层，isSourceMonster → justApplied）。
+    """
+
+    name = "Spike Slime (L)"
+    zh = "尖刺史莱姆（大）"
+    hp_range = (64, 70)
+    hp_range_high = (67, 73)
+
+    FLAME_TACKLE = MoveDef("Flame Tackle", "烈焰冲撞", "attack", base_damage=16)  # 另塞 2 张黏液
+    LICK = MoveDef("Lick", "舔舐", "debuff", intent_text="施加 2 层脆弱")
+    SPLIT = MoveDef("Split", "分裂", "unknown", intent_text="分裂为两只尖刺史莱姆（中）")
+
+    def __init__(self, idx: int, hp: int, max_hp: int):
+        super().__init__(idx, hp, max_hp, "尖刺史莱姆（大）(Spike Slime (L))")
+
+    @classmethod
+    def create(cls, bc: BattleContext, idx: int) -> "SpikeSlimeL":
+        hp = _roll_hp(bc, cls)
+        return cls(idx, hp, hp)
+
+    def on_hp_lost(self, bc: BattleContext, amount: int) -> None:
+        # 对齐 Monster.cpp onHpLost：HP ≤ maxHp/2 强改意图为 SPLIT
+        if self.hp <= self.max_hp // 2:
+            self.set_move(self.SPLIT)
+
+    def get_move_for_roll(self, bc: BattleContext, roll: int) -> MoveDef:
+        if roll < 30:
+            if _last_two(self, "Flame Tackle"):
+                return self.LICK
+            return self.FLAME_TACKLE
+        if _last_two(self, "Lick") or (bc.ascension >= 17 and _last(self, "Lick")):
+            return self.FLAME_TACKLE
+        return self.LICK
+
+    def take_turn(self, bc: BattleContext) -> None:
+        move = self.move_history[0]
+        match move.name:
+            case "Flame Tackle":
+                dmg = bc.calculate_monster_damage(self, 18 if bc.ascension >= 2 else 16)
+                bc.log.append(f"{self.display_name} 使用 烈焰冲撞(Flame Tackle)。")
+                bc.add_to_bot(Actions.attack_player(self.idx, dmg))
+                for _ in range(2):
+                    bc.add_to_bot(Actions.make_temp_card_in_discard(SLIMED))
+                bc.add_to_bot(Actions.roll_move(self.idx))
+            case "Lick":
+                bc.log.append(f"{self.display_name} 使用 舔舐(Lick)。")
+                bc.add_to_bot(Actions.debuff_player(PlayerStatus.FRAIL, 3 if bc.ascension >= 17 else 2, True))
+                bc.add_to_bot(Actions.roll_move(self.idx))
+            case "Split":
+                _large_slime_split(bc, self, SpikeSlimeM)
+            case _:
+                raise AssertionError(f"未知招式 {move}")
+        self.turns_taken += 1
+
+
+def _slime_boss_split(bc: BattleContext, boss: "SlimeBoss") -> None:
+    """Slime Boss 分裂（对齐 Monster.cpp slimeBossSplit，MonsterSpecific.cpp:3369-3391）。
+
+    整组替换：槽 0 = 尖刺史莱姆（大）、槽 2 = 酸液史莱姆（大），两 L 的
+    curHp=maxHp=Boss 当前 HP；槽 1 为死亡占位（C++ arr[1] 是默认构造的
+    INVALID 怪且 monsterCount=3 使回合循环跳过它——此处用 Boss 本体
+    hp=0 作等价占位，不走 die()，无遗物死亡触发）。分裂后
+    monster_turn_idx=3（do_monster_turn 再 +1 即 ≥ monsterCount），
+    本回合敌方阶段立即收束；两 L 下回合起按槽 0/2 行动。两只 L 的
+    半血阈值 = 继承 HP 的一半，之后仍可各自再分裂成 M 级
+    （第二体的槽位覆写语义见 _large_slime_split）。
+    """
+    hp = boss.hp
+    spike = SpikeSlimeL(0, hp, hp)
+    acid = AcidSlimeL(2, hp, hp)
+    group = bc.monsters
+    boss.hp = 0  # 本体退场，留作槽 1 死亡占位
+    group.monsters = [spike, boss, acid]
+    group.alive_count = 2
+    spike.roll_spawned_move(bc)
+    acid.roll_spawned_move(bc)
+    bc.relics.on_monster_spawned(bc, spike)
+    bc.relics.on_monster_spawned(bc, acid)
+    bc.monster_turn_idx = 3
+    bc.log.append(f"{boss.display_name} 分裂了！")
+
+
+class SlimeBoss(Monster):
+    """史莱姆老大（Boss）：黏液喷射 → 蓄势 → 猛击 循环；半血强改分裂。
+
+    wiki/C++ A0：HP 140（A9 起 150）。序列（对齐 C++ setMove 链，全
+    set_move 无 roll；rollMove 仅首回合调用一次）：
+      黏液喷射：塞 3 张黏液进弃牌堆（A19 起 5 张；actFunc 立即结算）；
+      蓄势：无任何效果（无格挡/自 buff，对齐 C++ 空分支）；
+      猛击：35 伤（A4 起 38）→ 回黏液喷射。
+    HP ≤ maxHp/2 时 onHpLost 强改 SPLIT（Monster.cpp:507-512）：槽 0
+    生成尖刺史莱姆（大）、槽 2 生成酸液史莱姆（大），两 L 继承 Boss
+    当前 HP（curHp=maxHp），整组替换、槽 1 死亡占位（见
+    _slime_boss_split）。注意猛击分支先入队攻击再 set_move(黏液喷射)
+    ——若玩家反伤把 Boss 打到半血，结算期的 onHpLost 会覆盖刚设的下
+    回合意图为 SPLIT（C++ 注释 "the attack is executed after, which
+    is critical"）。
+    """
+
+    name = "Slime Boss"
+    zh = "史莱姆老大"
+    hp_range = (140, 140)
+    hp_range_high = (150, 150)
+    hp_high_asc = 9
+
+    GOOP_SPRAY = MoveDef("Goop Spray", "黏液喷射", "debuff", intent_text="塞 3 张黏液进弃牌堆")
+    PREPARING = MoveDef("Preparing", "蓄势", "unknown", intent_text="（无动作）")
+    SLAM = MoveDef("Slam", "猛击", "attack", base_damage=35)
+    SPLIT = MoveDef("Split", "分裂", "unknown", intent_text="分裂为尖刺史莱姆（大）与酸液史莱姆（大）")
+
+    def __init__(self, idx: int, hp: int, max_hp: int):
+        super().__init__(idx, hp, max_hp, "史莱姆老大(Slime Boss)")
+
+    @classmethod
+    def create(cls, bc: BattleContext, idx: int) -> "SlimeBoss":
+        hp = _roll_hp(bc, cls)
+        return cls(idx, hp, hp)
+
+    def on_hp_lost(self, bc: BattleContext, amount: int) -> None:
+        # 对齐 Monster.cpp onHpLost：HP ≤ maxHp/2 强改意图为 SPLIT
+        if self.hp <= self.max_hp // 2:
+            self.set_move(self.SPLIT)
+
+    def get_move_for_roll(self, bc: BattleContext, roll: int) -> MoveDef:
+        # C++ firstTurn() 固定黏液喷射；此后 take_turn 全 set_move 不再 roll，
+        # 此处兜底返回当前意图（对齐 C++ rollMove 仅开局调用一次）
+        if not self.move_history:
+            return self.GOOP_SPRAY
+        return self.move_history[0]
+
+    def take_turn(self, bc: BattleContext) -> None:
+        move = self.move_history[0]
+        match move.name:
+            case "Goop Spray":
+                n = 5 if bc.ascension >= 19 else 3
+                bc.log.append(f"{self.display_name} 使用 黏液喷射(Goop Spray)，塞 {n} 张黏液进弃牌堆。")
+                # 对齐 C++ actFunc(bc)：立即结算，不入队
+                for _ in range(n):
+                    Actions.make_temp_card_in_discard(SLIMED).fn(bc)
+                self.set_move(self.PREPARING)
+            case "Preparing":
+                bc.log.append(f"{self.display_name} 使用 蓄势(Preparing)。")
+                self.set_move(self.SLAM)
+            case "Slam":
+                dmg = bc.calculate_monster_damage(self, 38 if bc.ascension >= 4 else 35)
+                bc.log.append(f"{self.display_name} 使用 猛击(Slam)。")
+                # 先入队攻击再设下回合意图：反伤触发的 onHpLost 可覆盖为 SPLIT
+                bc.add_to_bot(Actions.attack_player(self.idx, dmg))
+                self.set_move(self.GOOP_SPRAY)
+            case "Split":
+                _slime_boss_split(bc, self)
+            case _:
+                raise AssertionError(f"未知招式 {move}")
+        self.turns_taken += 1
+
+
+class Looter(Monster):
+    """窃贼：打劫（偷金 + 伤害）→ 突进/烟雾弹 → 逃跑。
+
+    wiki/C++ A0：HP 44-48（A7 起 46-50）。开局偷金上限 15（A17 起 20，
+    preBattleAction 的 THIEVERY 层数即单次偷取量；本引擎 misc_info 存
+    累计偷金、THIEVERY 状态作死亡返还标记）。序列（对齐 C++ setMove
+    链，rollMove 仅首回合调用）：
+      第 1 回合 打劫（偷 15 + 10 伤（A2 起 11））→ 意图仍为打劫；
+      第 2 回合 打劫（再偷 15）→ 50/50 切 突进 / 烟雾弹；
+      突进：偷 15 + 12 伤（A2 起 14）→ 烟雾弹；
+      烟雾弹：+6 格挡（立即结算）→ 逃跑；
+      逃跑：逃离战斗（全员死亡/逃跑判胜；逃跑怪不可被指定）。
+    打劫后 MUG 不再回归。死亡返还偷金（引擎 Monster.die 的 THIEVERY
+    分支）。C++ 为对话消息额外消耗的 aiRng roll（randomBoolean(0.6)）
+    不移植（无分布影响）。
+    """
+
+    name = "Looter"
+    zh = "窃贼"
+    hp_range = (44, 48)
+    hp_range_high = (46, 50)
+
+    MUG = MoveDef("Mug", "打劫", "attack", base_damage=10)  # 另偷 15 金（A17 起 20）
+    LUNGE = MoveDef("Lunge", "突进", "attack", base_damage=12)  # 另偷 15 金
+    SMOKE_BOMB = MoveDef("Smoke Bomb", "烟雾弹", "defend", intent_text="获得 6 点格挡")
+    ESCAPE = MoveDef("Escape", "逃跑", "unknown", intent_text="逃离战斗")
+
+    def __init__(self, idx: int, hp: int, max_hp: int):
+        super().__init__(idx, hp, max_hp, "窃贼(Looter)")
+
+    @classmethod
+    def create(cls, bc: BattleContext, idx: int) -> "Looter":
+        hp = _roll_hp(bc, cls)
+        return cls(idx, hp, hp)
+
+    def _steal_amount(self, bc: BattleContext) -> int:
+        return 20 if bc.ascension >= 17 else 15
+
+    def get_move_for_roll(self, bc: BattleContext, roll: int) -> MoveDef:
+        # C++ 注释 called first turn only；此后 take_turn 全 set_move
+        return self.MUG
+
+    def take_turn(self, bc: BattleContext) -> None:
+        move = self.move_history[0]
+        match move.name:
+            case "Mug":
+                bc.log.append(f"{self.display_name} 使用 打劫(Mug)。")
+                bc.add_to_bot(Actions.steal_gold(self.idx, self._steal_amount(bc)))
+                dmg = bc.calculate_monster_damage(self, 11 if bc.ascension >= 2 else 10)
+                bc.add_to_bot(Actions.attack_player(self.idx, dmg))
+                if bc.turn == 1:
+                    self.set_move(self.MUG)  # 首回合后再打劫一次
+                else:
+                    self.set_move(self.SMOKE_BOMB if _ai_boolean(bc, 0.5) else self.LUNGE)
+            case "Lunge":
+                bc.log.append(f"{self.display_name} 使用 突进(Lunge)。")
+                bc.add_to_bot(Actions.steal_gold(self.idx, self._steal_amount(bc)))
+                dmg = bc.calculate_monster_damage(self, 14 if bc.ascension >= 2 else 12)
+                bc.add_to_bot(Actions.attack_player(self.idx, dmg))
+                self.set_move(self.SMOKE_BOMB)
+            case "Smoke Bomb":
+                self.block += 6  # 对齐 C++ addBlock：立即结算，不入队
+                bc.log.append(f"{self.display_name} 使用 烟雾弹(Smoke Bomb)，获得 6 点格挡。")
+                self.set_move(self.ESCAPE)
+            case "Escape":
+                bc.log.append(f"{self.display_name} 逃跑了！")
+                self.escape(bc)
+            case _:
+                raise AssertionError(f"未知招式 {move}")
+        self.turns_taken += 1
+
+
+class Mugger(Monster):
+    """抢劫犯（Act 2 TWO_THIEVES 的窃贼搭档；数值与 Looter 不同）：
+    打劫 ×2 回合 → 突进/烟雾弹 → 逃跑。
+
+    wiki/C++ A0：HP 48-52（A7 起 50-54）。与 Looter 同构不同值（对齐
+    C++ MUGGER_* 分支）：
+      第 1-2 回合 打劫（偷 15 + 10 伤（A2 起 11））；第 2 回合的打劫后
+      50/50 切 突进 / 烟雾弹；
+      突进：偷 15 + 16 伤（A2 起 18）→ 烟雾弹；
+      烟雾弹：+11 格挡（A17 起 17）→ 逃跑。
+    偷金 15（A17 起 20）与 Looter 相同；死亡返还偷金同 Looter。
+    """
+
+    name = "Mugger"
+    zh = "抢劫犯"
+    hp_range = (48, 52)
+    hp_range_high = (50, 54)
+
+    MUG = MoveDef("Mug", "打劫", "attack", base_damage=10)  # 另偷 15 金（A17 起 20）
+    LUNGE = MoveDef("Lunge", "突进", "attack", base_damage=16)  # 另偷 15 金
+    SMOKE_BOMB = MoveDef("Smoke Bomb", "烟雾弹", "defend", intent_text="获得 11 点格挡")
+    ESCAPE = MoveDef("Escape", "逃跑", "unknown", intent_text="逃离战斗")
+
+    def __init__(self, idx: int, hp: int, max_hp: int):
+        super().__init__(idx, hp, max_hp, "抢劫犯(Mugger)")
+
+    @classmethod
+    def create(cls, bc: BattleContext, idx: int) -> "Mugger":
+        hp = _roll_hp(bc, cls)
+        return cls(idx, hp, hp)
+
+    def _steal_amount(self, bc: BattleContext) -> int:
+        return 20 if bc.ascension >= 17 else 15
+
+    def get_move_for_roll(self, bc: BattleContext, roll: int) -> MoveDef:
+        # 同 Looter：仅首回合调用
+        return self.MUG
+
+    def take_turn(self, bc: BattleContext) -> None:
+        move = self.move_history[0]
+        match move.name:
+            case "Mug":
+                bc.log.append(f"{self.display_name} 使用 打劫(Mug)。")
+                bc.add_to_bot(Actions.steal_gold(self.idx, self._steal_amount(bc)))
+                dmg = bc.calculate_monster_damage(self, 11 if bc.ascension >= 2 else 10)
+                bc.add_to_bot(Actions.attack_player(self.idx, dmg))
+                if bc.turn == 2:
+                    self.set_move(self.SMOKE_BOMB if _ai_boolean(bc, 0.5) else self.LUNGE)
+                else:
+                    self.set_move(self.MUG)
+            case "Lunge":
+                bc.log.append(f"{self.display_name} 使用 突进(Lunge)。")
+                bc.add_to_bot(Actions.steal_gold(self.idx, self._steal_amount(bc)))
+                dmg = bc.calculate_monster_damage(self, 18 if bc.ascension >= 2 else 16)
+                bc.add_to_bot(Actions.attack_player(self.idx, dmg))
+                self.set_move(self.SMOKE_BOMB)
+            case "Smoke Bomb":
+                self.block += 17 if bc.ascension >= 17 else 11  # 对齐 C++ addBlock：立即结算
+                bc.log.append(f"{self.display_name} 使用 烟雾弹(Smoke Bomb)，获得 {17 if bc.ascension >= 17 else 11} 点格挡。")
+                self.set_move(self.ESCAPE)
+            case "Escape":
+                bc.log.append(f"{self.display_name} 逃跑了！")
+                self.escape(bc)
+            case _:
+                raise AssertionError(f"未知招式 {move}")
         self.turns_taken += 1

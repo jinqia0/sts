@@ -25,6 +25,17 @@ lightspeed 战斗开始 turn=0（BattleContext.h:87），++turn 只发生在
 afterMonsterTurns（BattleContext.cpp:2158）——第 N 个玩家回合期间
 lightspeed turn == N-1；本项目 _start_player_turn 先 ++turn，第 N 个
 玩家回合期间 turn == N。故 C++ `turn == k` → 本文件 `bc.turn == k+1`。
+
+批次 3（RNG/卡池遗物）已核对：initRelics 的 ENCHIRIDION（L140-146）、
+TOOLBOX（注册 L98 / 执行 L382 / Actions.cpp:988-998 ToolboxAction /
+chooseDiscoveryCard L2995-3010）、WARPED_TONGS（注册 L118 / 首回合入队
+L446-449 + Player.cpp:669-671 / Actions.cpp:940-960
+UpgradeRandomCardAction）、MUMMIFIED_HAND（L1874-1876 →
+mummifiedHandOnUsePower L2847-2873）、DEAD_BRANCH（L2823-2826）、
+STRANGE_SPOON（L1985-1990，批次 1 已实现，批次 3 复核一致）；
+卡池范围见 CardPools.h（CombatCardPool L177-187 / CombatTypeCardPool
+L150-175 / CombatColorlessCardPool L189-198）与 Game.cpp:209-243、
+canUpgrade（CardInstance.cpp:55-59）、moveToHandHelper（BattleContext.cpp:2531-2537）。
 """
 
 from __future__ import annotations
@@ -38,9 +49,12 @@ if TYPE_CHECKING:
     from sts.combat.entities import Monster
 
 from sts.combat.actions import Actions
-from sts.combat.queue import CardQueueItem
+from sts.combat.card_manager import MAX_HAND_SIZE
+from sts.combat.queue import Action, CardQueueItem
 from sts.combat.types import MonsterStatus, PlayerStatus
+from sts.content import cards as _content_cards
 from sts.content.cards import _STRIKE_CARD_NAMES as _STRIKE_NAMES  # 打击牌族（isStrikeCard）
+from sts.content.cards import CardDef, HAND_OF_GREED
 
 # ---------------------------------------------------------------------------
 # 房间类型注册（批次 1）：PRESERVED_INSECT / SLING_OF_COURAGE / PANTOGRAPH 等
@@ -50,6 +64,65 @@ from sts.content.cards import _STRIKE_CARD_NAMES as _STRIKE_NAMES  # 打击牌�
 # 当前五大遭遇（encounters.py）均为普通房，集合为空；场景层/测试按需注册。
 ELITE_ENCOUNTERS: set[str] = set()
 BOSS_ENCOUNTERS: set[str] = set()
+
+# ---------------------------------------------------------------------------
+# 随机卡池（批次 3）：ENCHIRIDION / TOOLBOX / DEAD_BRANCH 的抽样范围。
+# 对齐 CardPools.h：CombatCardPool（L177-187，铁甲色 70 张，不含无色/
+# 状态/诅咒）、CombatTypeCardPool（L150-175，按类型，Power 14 张）、
+# CombatColorlessCardPool（L189-198，无色 34 张）。
+# ---------------------------------------------------------------------------
+
+# 无色牌集合。CardDef 无 color 字段（内容层裁剪），无法从模块扫描自动
+# 识别，显式列举：目前内容层仅 Hand of Greed 一张无色卡（C++ 池 34 张）。
+# 批次 4 扩无色池时把新卡加入此集合（DEAD_BRANCH 的铁甲色池据此排除）。
+_COLORLESS_CARDS: frozenset[CardDef] = frozenset({HAND_OF_GREED})
+
+
+def _combat_card_pool(ctype: str | None = None) -> list[CardDef]:
+    """铁甲色随机卡池（对齐 getTrulyRandomCardInCombat，Game.cpp:215-219 /
+    221-224：CombatCardPool / CombatTypeCardPool）。
+
+    动态扫描 content.cards 模块级 CardDef：批次 4 新增卡自动入池。
+    排除无色（_COLORLESS_CARDS，C++ CombatCardPool 不含无色）与
+    状态/诅咒（池仅 Attack/Skill/Power）。按 name 排序保证抽样映射
+    确定（DESIGN.md §3：不做轨迹对齐，池序不向 C++ blob 看齐）。
+    """
+    pool = [
+        g
+        for g in vars(_content_cards).values()
+        if isinstance(g, CardDef)
+        and g.ctype in ("Attack", "Skill", "Power")
+        and g not in _COLORLESS_CARDS
+        and (ctype is None or g.ctype == ctype)
+    ]
+    return sorted(pool, key=lambda c: c.name)
+
+
+def _colorless_card_pool() -> list[CardDef]:
+    """无色随机卡池（对齐 getTrulyRandomColorlessCardInCombat，Game.cpp:209-213：
+    CombatColorlessCardPool）。当前仅 Hand of Greed（诚实实现，见
+    _COLORLESS_CARDS 注释）。"""
+    return sorted(_COLORLESS_CARDS, key=lambda c: c.name)
+
+
+def _temp_card_into_hand(bc: BattleContext, card: CardDef, upgraded: bool = False,
+                         cost_for_turn: int | None = None) -> None:
+    """临时牌入手（对齐 MakeTempCardInHand → moveToHandHelper，
+    BattleContext.cpp:2531-2537）：满手（≥10）进弃牌堆而非消失。
+
+    card_manager.create_temp_card_in_hand 的满手分支是"直接消失"，与
+    C++ moveToHandHelper 的进弃牌堆不符且该文件本批次不可改，故此处
+    直接组合 card_manager 公开 API（instantiate + move_to_hand /
+    create_temp_card_in_discard）实现 C++ 语义。
+    """
+    if len(bc.cards.hand) >= MAX_HAND_SIZE:
+        bc.cards.create_temp_card_in_discard(card, upgraded)
+        return
+    inst = bc.cards.instantiate(card)
+    inst.upgraded = upgraded
+    if cost_for_turn is not None:
+        inst.cost_for_turn = cost_for_turn
+    bc.cards.move_to_hand(inst)
 
 
 class RelicId(IntEnum):
@@ -92,12 +165,12 @@ class RelicId(IntEnum):
     NUNCHAKU = 33  # 每打出 10 张攻击牌 +1 能量（L181-183 + BattleContext.cpp:1709-1714，跨回合累计）
     PEN_NIB = 34  # 打出第 10 张攻击牌后，下一张攻击伤害翻倍（L189-196 + L1697-1703）
     SUNDIAL = 35  # 每洗 3 次牌 +2 能量（L218-220 + onShuffle L2804-2811）
-    OMAMORI = 36  # 装载 2 充能；抵消诅咒逻辑待"获得诅咒"事件源（L185-187；TODO）
+    OMAMORI = 36  # 装载 2 充能；抵消诅咒逻辑待"获得诅咒"事件源（L185-187；TODO，本框架战斗内无诅咒获得来源）
     LIZARD_TAIL = 37  # 需要免死引擎位（跳过）
     MERCURY_HOURGLASS = 38  # 每回合开始对所有敌人 3 伤（L432-434 + Player.cpp:551-553）
     RED_SKULL = 39  # HP ≤50% 时持有 3 力量（进出半血线 ±3，Player.cpp:169-171/311-313 + L436-438）
     # ---- 战斗开始-抽牌前桶 ----
-    TOOLBOX = 40  # RNG 卡池遗物（批次 3/4）
+    TOOLBOX = 40  # 战斗开始：随机 1 张无色牌本回合 0 费入手（注册 L98 / 执行 L382；Actions.cpp:988-998）
     # ---- 战斗开始-抽牌后桶 ----
     BAG_OF_MARBLES = 41  # 战斗开始对所有敌人 1 层易伤（L395-397）
     BAG_OF_PREPARATION = 42  # 首回合额外抽 2 张（L399-400）
@@ -113,7 +186,7 @@ class RelicId(IntEnum):
     EMOTION_CHIP = 51  # lightspeed 未实现（Player.cpp:299/518 两处 TODO），效果待核实
     POCKETWATCH = 52  # 上回合打出 ≤3 张牌 → 抽 3 张（Player.cpp:663-667）
     ICE_CREAM = 53  # 能量回合结束不清空（Player.cpp:715-720 rechargeEnergy）
-    WARPED_TONGS = 54  # RNG 卡池遗物（批次 3/4）
+    WARPED_TONGS = 54  # 每回合开始（含首回合）：随机升级 1 张手牌（Player.cpp:669-671 + Actions.cpp:940-960）
     # ---- 出牌类 ----
     KUNAI = 55  # 每回合每打出 3 张攻击牌 +1 敏捷（BattleContext.cpp:1671-1673）
     ORNAMENTAL_FAN = 56  # 每回合每打出 3 张攻击牌获得 4 格挡（L1683-1685）
@@ -122,7 +195,7 @@ class RelicId(IntEnum):
     DUALITY = 59  # TODO（Defect 奥义，批次 3+）
     LETTER_OPENER = 60  # 每回合每打出 3 张技能牌对所有敌人 5 伤（L1796-1800）
     BIRD_FACED_URN = 61  # 每打出能力牌回复 2 HP（L1854-1856）
-    MUMMIFIED_HAND = 62  # RNG 卡池遗物（L1802-1804 lightspeed 亦 TODO；批次 3/4）
+    MUMMIFIED_HAND = 62  # 打出 Power 后：随机 1 张费用>0 的手牌本回合 0 费（L1874-1876 + L2847-2873）
     # ---- 伤害计算 ----
     STRIKE_DUMMY = 63  # 打击牌 +3 伤（L2677-2679）
     WRIST_BLADE = 64  # 0 费牌 +4 伤（L2681-2683）
@@ -144,7 +217,7 @@ class RelicId(IntEnum):
     # ---- 洗牌/消耗/死亡 ----
     THE_ABACUS = 78  # 每次洗牌 +6 格挡（onShuffle L2796-2798）
     CHARONS_ASHES = 79  # 每消耗 1 张牌对所有敌人 3 伤（L2819-2821）
-    DEAD_BRANCH = 80  # RNG 卡池遗物（批次 3/4）
+    DEAD_BRANCH = 80  # 任意牌被消耗：随机 1 张铁甲色牌入手（L2823-2826）
     STRANGE_SPOON = 81  # RNG：打出会消耗的牌 50% 不消耗（L1985-1990）
     GREMLIN_HORN = 82  # 怪物死亡 +1 能量 +1 抽（Monster.cpp:317-320）
     THE_SPECIMEN = 83  # 怪物死亡时其中毒层数转移给另一敌人（Monster.cpp:322-324）
@@ -155,7 +228,7 @@ class RelicId(IntEnum):
     # ---- 格挡衰减 ----
     CALIPERS = 87  # 回合开始失去 15 格挡而非全清（L2183-2184）
     # ---- RNG/生成类 ----
-    ENCHIRIDION = 88  # RNG 卡池遗物（批次 3/4）
+    ENCHIRIDION = 88  # 战斗开始：随机 1 张 Power 牌本回合 0 费入手（L140-146）
 
 
 class RelicContainer:
@@ -317,17 +390,41 @@ class RelicContainer:
                 p.statuses.add(PlayerStatus.MANTRA, 1)
             elif rid == RelicId.OMAMORI:
                 # L185-187：装载充能计数（setHasRelic(r.data)，原版 2 充能）。
-                # 战斗内无"获得诅咒"事件源，抵消逻辑留 TODO（批次 3+）；
+                # 抵消逻辑需要"获得诅咒"事件钩子（C++ 在生成诅咒的各效果处
+                # 内联判定），本框架战斗内无任何获得诅咒的来源（内容层无诅咒
+                # 生成效果、Act 1 怪物无施加诅咒）——批次 3 已核实，保持 TODO
+                # 不硬凑，待诅咒来源（局外事件/更高幕怪物）迁移时再补钩子；
                 # 消耗充能的局外事件见 exitBattle L463-469。
                 self.set_counter(RelicId.OMAMORI, 2)
             elif rid == RelicId.MARK_OF_PAIN:
                 # 能量 +1 属每回合同加成（见 extra_energy_per_turn）；
                 # 伤口洗入在抽牌后桶（L411-413，见 on_battle_start_post_draw）
                 pass
+            elif rid == RelicId.ENCHIRIDION:
+                # L140-146：随机 1 张 Power 牌（CombatTypeCardPool，14 张）入手，
+                # 未升级，setCostForTurn(0)——本回合 0 费（C++ 口径；回合末
+                # reset_attributes_at_end_of_turn 还原）。C++ addToBot 排在
+                # 首抽之前 → 净顺序为"先入手再抽首手"，本钩子恰在首抽前，
+                # 同步入手等价（此时手牌为空，无满手分支）。misc 流抽样。
+                pool = _combat_card_pool("Power")
+                card = pool[bc.rngs.misc.int_inclusive(0, len(pool) - 1)]
+                _temp_card_into_hand(bc, card, cost_for_turn=0)
+            elif rid == RelicId.TOOLBOX:
+                # 注册 L98（atBattleStartPreDraw）/ 执行 L382：抽牌前桶。
+                # C++ ToolboxAction（Actions.cpp:988-998）为 3 选 1 Discovery
+                # 选卡，所选牌经 chooseDiscoveryCard（L2995-3010）setCostForTurn(0)
+                # 入手（满手进弃牌堆）；原版游戏为"随机 1 张无色牌直接入手"。
+                # 本项目战斗内无选卡环境接线，按任务口径实现为随机 1 张无色牌
+                # 本回合 0 费直接入手（池见 _COLORLESS_CARDS 注释）。
+                # 与 ENCHIRIDION 同在首抽前入手（C++ 桶序差异：两者都往空手
+                # 各加 1 张，可交换，分布级等价）。misc 流抽样。
+                pool = _colorless_card_pool()
+                card = pool[bc.rngs.misc.int_inclusive(0, len(pool) - 1)]
+                _temp_card_into_hand(bc, card, cost_for_turn=0)
             else:
-                # 明确跳过（跨战斗/RNG 卡池/引擎位缺失，见类注释）：
+                # 明确跳过（跨战斗/引擎位缺失，见类注释）：
                 # NEOWS_LAMENT / FOSSILIZED_HELIX / LIZARD_TAIL / INSERTER /
-                # SNECKO_EYE 自弃 CONFUSED / TOOLBOX / ENCHIRIDION 等
+                # SNECKO_EYE 自弃 CONFUSED 等
                 pass
 
     def on_battle_start_extra_draw(self, bc: BattleContext) -> int:
@@ -372,7 +469,12 @@ class RelicContainer:
         if self.has(RelicId.MERCURY_HOURGLASS):
             # L432-434：桶后固定项（所有桶效果之后）
             bc.add_to_bot(Actions.damage_all_enemy(3))
-        # TODO 批次 3/4：TOOLBOX / ENCHIRIDION（RNG 卡池遗物）
+        # WARPED_TONGS：initRelics L446-449——首回合同样经
+        # atTurnStartPostDraw 桶入队（battle.py 首回合不调
+        # on_turn_start_post_draw，故在此桶尾接线，顺序对齐 C++：
+        # 小时glass → tongs）。
+        if self.has(RelicId.WARPED_TONGS):
+            self._queue_warped_tongs(bc)
 
     # ============================================================
     # 回合开始（Player.cpp applyStartOfTurnRelics L490-563，固定序）
@@ -430,8 +532,36 @@ class RelicContainer:
             if p.cards_played_last_turn <= 3:
                 bc.add_to_bot(Actions.draw_cards(3))
         if self.has(RelicId.WARPED_TONGS):
-            # TODO 批次 3/4（RNG 遗物）：50% 随机升级手牌 1 张
-            pass
+            # Player.cpp:669-671：入队随机升级动作（排在 POCKETWATCH 抽牌
+            # 之后弹出，顺序对齐 applyStartOfTurnPostDrawRelics）
+            self._queue_warped_tongs(bc)
+
+    def _queue_warped_tongs(self, bc: BattleContext) -> None:
+        """WARPED_TONGS：每回合开始随机升级 1 张手牌（入队，对齐
+        addToBot(UpgradeRandomCardAction)，Actions.cpp:940-960）。
+
+        - **无条件触发**（C++ 无 50% 判定；UpgradeRandomCardAction 直接
+          升级），无可升级手牌时 no-op。
+        - 升级资格对齐 canUpgrade（CardInstance.cpp:55-59）：未升级
+          （multiple_upgrades 类可反复）且非状态/诅咒。
+        - 选牌用 misc 流（C++ 经 shuffleRng 洗牌取首张，分布等价）。
+        - 入队而非直接结算：动作在本回合抽牌之后弹出（对齐 C++
+          UpgradeRandomCardAction 排在 DrawCards 之后，升级作用于
+          抽牌后的手牌）。
+        """
+
+        def run(bc2: BattleContext) -> None:
+            upgradeable = [
+                c for c in bc2.cards.hand
+                if (not c.upgraded or c.card.multiple_upgrades)
+                and c.card.ctype not in ("Curse", "Status")
+            ]
+            if not upgradeable:
+                return
+            inst = upgradeable[bc2.rngs.misc.int_inclusive(0, len(upgradeable) - 1)]
+            inst.upgrade()
+
+        bc.add_to_bot(Action(run))
 
     # ============================================================
     # 能量/格挡衰减
@@ -555,7 +685,9 @@ class RelicContainer:
             if self.bump(RelicId.LETTER_OPENER) == 3:
                 self.set_counter(RelicId.LETTER_OPENER, 0)
                 bc.add_to_bot(Actions.damage_all_enemy(5))
-        # MUMMIFIED_HAND：L1802-1804 lightspeed 亦 TODO（RNG 卡池，批次 3/4）
+        # MUMMIFIED_HAND：onUseSkillCard L1802-1804 为 lightspeed 的 `// todo`
+        # 死代码（技能侧不触发，仅能力牌触发，见 on_use_power_card）——
+        # 批次 3 已核对，正确跳过
 
     def on_use_power_card(self, bc: BattleContext) -> None:
         # BIRD_FACED_URN：L1854-1856（Player.heal → MAGIC_FLOWER 放大）
@@ -566,7 +698,20 @@ class RelicContainer:
             if self.bump(RelicId.INK_BOTTLE) == 10:
                 self.set_counter(RelicId.INK_BOTTLE, 0)
                 bc.add_to_bot(Actions.draw_cards(1))
-        # MUMMIFIED_HAND：L1874-1876（RNG 卡池，批次 3/4）
+        # MUMMIFIED_HAND：L1874-1876 → mummifiedHandOnUsePower（L2847-2873）。
+        # 直接结算（C++ 同为钩子内直调）：打出 Power 后，随机 1 张费用 >0
+        # 的手牌 setCostForTurn(0)。此时刚打出的 Power 已移出手牌
+        # （play_card 先 pop），不在候选内。
+        # C++ 资格：cost>0 && costForTurn>0 && !freeToPlayOnce，并排除已在
+        # 卡牌队列中的实例。本项目 cost 属性已折叠 cost_for_turn
+        # （-1=未设置），inst.cost>0 覆盖前两条；freeToPlayOnce 无来源、
+        # 队列中实例必已移出手牌，均无需额外过滤。misc 流抽样
+        # （C++ 用 cardRandomRng）。
+        if self.has(RelicId.MUMMIFIED_HAND):
+            eligible = [c for c in bc.cards.hand if c.cost > 0]
+            if eligible:
+                chosen = eligible[bc.rngs.misc.int_inclusive(0, len(eligible) - 1)]
+                chosen.cost_for_turn = 0
 
     def on_use_status_or_curse_card(self, bc: BattleContext) -> None:
         # INK_BOTTLE：L1927-1933（第四处计数点；本项目状态/诅咒卡多为
@@ -737,8 +882,16 @@ class RelicContainer:
         if self.has(RelicId.CHARONS_ASHES):
             bc.add_to_top(Actions.damage_all_enemy(3))
         if self.has(RelicId.DEAD_BRANCH):
-            # TODO 批次 3/4（RNG 卡池遗物）：随机 1 张牌入手
-            pass
+            # L2823-2826（triggerAndMoveToExhaustPile）：任意牌被消耗
+            # （本钩子是一切消耗来源的统一入口：打出即消耗/Second Wind/
+            # Fiend Fire/虚无等）→ 随机 1 张铁甲色牌（CombatCardPool，
+            # CardPools.h:177-187，不含无色/状态/诅咒）addToBot 入手，
+            # 未升级、原费用。抽样在钩子时点（对齐 C++ 在 trigger 内抽、
+            # 动作只做入手），满手进弃牌堆（见 _temp_card_into_hand）。
+            # misc 流抽样（C++ 用 cardRandomRng）。
+            pool = _combat_card_pool()
+            card = pool[bc.rngs.misc.int_inclusive(0, len(pool) - 1)]
+            bc.add_to_bot(Action(lambda bc2, c=card: _temp_card_into_hand(bc2, c)))
 
     def on_hand_empty(self, bc: BattleContext) -> None:
         # UNCEASING_TOP：BattleContext.cpp:809-819（主循环手牌空 → 抽 1）

@@ -21,6 +21,11 @@
     lagavulin          拉格维林 ×1（精英）
     guardian           守卫者 ×1（Boss）
     hexaghost          六火幽灵 ×1（Boss）
+    large_slime        大史莱姆：酸 L / 尖 L 单怪（misc 布尔抽，批次 3）
+    slime_boss         史莱姆老大 ×1（Boss，批次 3）
+    looter             窃贼 ×1（批次 3）
+    exordium_thugs     荒野暴徒：弱野生动物 + 强人形（批次 3）
+    lots_of_slimes     史莱姆群：尖 S×3 + 酸 S×2 随机排列（批次 3）
 
 组合抽样统一走 misc 流（对齐 lightspeed 的 miscRng 用途划分；
 DESIGN.md §3 不做轨迹对齐，分布级等价即可）。
@@ -32,6 +37,7 @@ from typing import TYPE_CHECKING
 
 from sts.content.cards import starting_deck
 from sts.content.monsters import (
+    AcidSlimeL,
     AcidSlimeM,
     AcidSlimeS,
     BlueSlaver,
@@ -44,12 +50,15 @@ from sts.content.monsters import (
     Hexaghost,
     JawWorm,
     Lagavulin,
+    Looter,
     MadGremlin,
     RedLouse,
     RedSlaver,
     Sentry,
     ShieldGremlin,
+    SlimeBoss,
     SneakyGremlin,
+    SpikeSlimeL,
     SpikeSlimeM,
     SpikeSlimeS,
     Taskmaster,
@@ -194,6 +203,44 @@ def _setup_three_sentries(bc: BattleContext) -> None:
     _spawn(bc, Sentry, Sentry, Sentry)
 
 
+# ---- 批次 3：困难档遭遇（对齐 lightspeed MonsterGroup.cpp 组合表）----
+
+
+def _get_slaver(bc: BattleContext) -> type[Monster]:
+    """对齐 MonsterGroup::getSlaver：misc 布尔选红/蓝奴役者。"""
+    return RedSlaver if _misc_boolean(bc) else BlueSlaver
+
+
+def _setup_large_slime(bc: BattleContext) -> None:
+    # 对齐 LARGE_SLIME：misc 布尔选酸/尖（大），单怪
+    big = AcidSlimeL if _misc_boolean(bc) else SpikeSlimeL
+    _spawn(bc, big)
+
+
+def _setup_slime_boss(bc: BattleContext) -> None:
+    _spawn(bc, SlimeBoss)
+
+
+def _setup_looter(bc: BattleContext) -> None:
+    _spawn(bc, Looter)
+
+
+def _setup_exordium_thugs(bc: BattleContext) -> None:
+    # 对齐 EXORDIUM_THUGS = createWeakWildlife + createStrongHumanoid：
+    # 弱位三选一（虱（红绿 misc 布尔）/ 尖 M / 酸 M），
+    # 强位三选一（邪教徒 / 红 or 蓝奴役者 / 窃贼）。
+    # C++ 对 3 个候选 temp 各 consume 一次 HP roll——无轨迹对齐诉求，不复制。
+    weak = [_get_louse(bc), SpikeSlimeM, AcidSlimeM][bc.rngs.misc.int_inclusive(0, 2)]
+    strong = [Cultist, _get_slaver(bc), Looter][bc.rngs.misc.int_inclusive(0, 2)]
+    _spawn(bc, weak, strong)
+
+
+def _setup_lots_of_slimes(bc: BattleContext) -> None:
+    # 对齐 LOTS_OF_SLIMES：{尖 S×3, 酸 S×2} 无放回全抽（随机排列，misc 流）
+    pool = [SpikeSlimeS, SpikeSlimeS, SpikeSlimeS, AcidSlimeS, AcidSlimeS]
+    _spawn(bc, *_sample_without_replacement(bc, pool, 5))
+
+
 ENCOUNTERS = {
     "cultist": _setup_cultist,
     "jaw_worm": _setup_jaw_worm,
@@ -211,6 +258,11 @@ ENCOUNTERS = {
     "lagavulin": _setup_lagavulin,
     "guardian": _setup_guardian,
     "hexaghost": _setup_hexaghost,
+    "large_slime": _setup_large_slime,
+    "slime_boss": _setup_slime_boss,
+    "looter": _setup_looter,
+    "exordium_thugs": _setup_exordium_thugs,
+    "lots_of_slimes": _setup_lots_of_slimes,
 }
 
 

@@ -12,8 +12,9 @@ import sts.combat.relics as relics_mod
 from sts.combat import BattleContext
 from sts.combat.actions import Actions
 from sts.combat.relics import RelicId
+from sts.combat.relics import _colorless_card_pool, _combat_card_pool
 from sts.combat.types import InputState, MonsterStatus, Outcome, PlayerStatus
-from sts.content.cards import BASH, DEFEND, STRIKE, CardDef
+from sts.content.cards import BASH, DEFEND, STRIKE, WOUND, CardDef
 from sts.content.monsters import Cultist
 
 # ---- 测试桩卡 ----
@@ -950,3 +951,233 @@ def test_meat_on_the_bone_heals_when_below_half():
     setup_hand(bc2, STRIKE)
     bc2.play_card(0)
     assert bc2.player.hp == 60
+
+
+# =====================================================================
+# 批次 3：RNG/卡池遗物（ENCHIRIDION/TOOLBOX/DEAD_BRANCH/MUMMIFIED_HAND/
+# WARPED_TONGS + STRANGE_SPOON 边界）
+# =====================================================================
+
+
+def test_enchiridion_random_power_zero_cost_this_turn():
+    """ENCHIRIDION（BattleContext.cpp:140-146）：随机 Power 牌首抽前入手、
+    未升级、本回合 0 费（C++ setCostForTurn(0)，非原版 1 费口径），
+    回合末还原。misc 流种子确定 → seed=0 必为 Metallicize（Power 池
+    = 铁甲 14 张 Power，已全量迁移，池稳定）。"""
+    bc = BattleContext(seed=0, relics=[RelicId.ENCHIRIDION])
+    # 首抽前入手 → 位于手牌首位，首手 = 1 张临时 Power + 5 张抽牌
+    inst = bc.cards.hand[0]
+    assert inst.card.ctype == "Power"
+    assert inst.card.name == "Metallicize"
+    assert not inst.upgraded  # C++ CardInstance(cardId) 未升级
+    assert inst.cost == 0 and inst.cost_for_turn == 0
+    assert len(bc.cards.hand) == 6
+    bc.player.hp = 300  # 撑过邪教徒反击
+    bc.end_turn()
+    # reset_attributes_at_end_of_turn：cost_for_turn 还原 → Metallicize 回 1 费
+    assert inst.cost_for_turn == -1
+    assert inst.cost == 1
+
+
+def test_enchiridion_power_pool_diversity():
+    """固定种子区间内 misc 流抽样覆盖多个不同 Power（池抽样多样性）。"""
+    names = set()
+    for seed in range(60):
+        bc = BattleContext(seed=seed, relics=[RelicId.ENCHIRIDION])
+        names.add(bc.cards.hand[0].card.name)
+    assert len(names) >= 5  # 60 抽样、14 张池 → 至少 5 种不同 Power
+
+
+def test_toolbox_random_colorless_zero_cost():
+    """TOOLBOX（注册 L98/执行 L382；Actions.cpp:988-998 + chooseDiscoveryCard
+    L2995-3010 的 setCostForTurn(0)）：随机 1 张无色牌首抽前入手、本回合
+    0 费。当前无色池仅 Hand of Greed（诚实实现；批次 4 扩无色池后此断言
+    需随池更新）。"""
+    bc = BattleContext(seed=41, relics=[RelicId.TOOLBOX])
+    inst = bc.cards.hand[0]
+    assert inst.card in _colorless_card_pool()
+    assert inst.card.name == "Hand of Greed"  # 池当前仅此一张
+    assert not inst.upgraded
+    assert inst.cost == 0 and inst.cost_for_turn == 0
+    assert len(bc.cards.hand) == 6
+    bc.player.hp = 300
+    bc.end_turn()
+    assert inst.cost == 2  # 回合末还原为 Hand of Greed 原费用
+
+
+def test_dead_branch_adds_card_on_exhaust():
+    """DEAD_BRANCH（BattleContext.cpp:2823-2826）：打出消耗牌 → 随机 1 张
+    铁甲色牌（CombatCardPool：不含无色/状态/诅咒）入手，未升级、原费用。"""
+    bc = BattleContext(seed=0, relics=[RelicId.DEAD_BRANCH])
+    pool = _combat_card_pool()
+    setup_hand(bc, EXHAUST_STUB)
+    bc.play_card(0)
+    assert any(c.card is EXHAUST_STUB for c in bc.cards.exhaust_pile)
+    assert len(bc.cards.hand) == 1  # 消耗 1 张 + 入手 1 张
+    added = bc.cards.hand[0]
+    assert added.card in pool
+    assert not added.upgraded
+    assert added.cost_for_turn == -1  # 原费用，无临时改费
+    assert added.card.ctype in ("Attack", "Skill", "Power")
+
+
+def test_dead_branch_pool_excludes_colorless_and_status():
+    """DEAD_BRANCH 卡池对齐 C++ CombatCardPool（CardPools.h:177-187）：
+    多种子抽样永远不含无色（Hand of Greed）与状态/诅咒牌。"""
+    names = set()
+    for seed in range(120):
+        bc = BattleContext(seed=seed, relics=[RelicId.DEAD_BRANCH])
+        setup_hand(bc, EXHAUST_STUB)
+        bc.play_card(0)
+        added = bc.cards.hand[0]
+        assert added.card in _combat_card_pool()
+        names.add(added.card.name)
+    assert "Hand of Greed" not in names
+    assert len(names) >= 20  # 73 张池、120 次抽样 → 显著多样
+
+
+def test_dead_branch_triggers_on_non_play_exhaust_source():
+    """DEAD_BRANCH 是"任意牌被消耗"统一触发（on_card_exhausted 一切来源）：
+    非打出路径（exhaust_hand_card 动作，True Grit/Second Wind 族）同样入手。"""
+    bc = BattleContext(seed=7, relics=[RelicId.DEAD_BRANCH])
+    setup_hand(bc, STRIKE)
+    inst = bc.cards.hand[0]
+    bc.add_to_bot(Actions.exhaust_hand_card(inst))
+    run_queue(bc)
+    assert any(c.card is STRIKE for c in bc.cards.exhaust_pile)
+    assert len(bc.cards.hand) == 1
+    assert bc.cards.hand[0].card in _combat_card_pool()
+
+
+def test_dead_branch_full_hand_goes_to_discard():
+    """满手时 DEAD_BRANCH 的牌进弃牌堆（对齐 moveToHandHelper，
+    BattleContext.cpp:2531-2537；引擎 create_temp_card_in_hand 的
+    "消失"分支与 C++ 不符，遗物侧已用组合 API 还原 C++ 语义）。"""
+    bc = BattleContext(seed=0, relics=[RelicId.DEAD_BRANCH])
+    bc.cards.hand.clear()
+    bc.cards.hand.extend(bc.cards.instantiate(STRIKE) for _ in range(10))
+    bc.cards.hand.append(bc.cards.instantiate(EXHAUST_STUB))
+    assert len(bc.cards.hand) == 11
+    bc.play_card(10)
+    assert len(bc.cards.hand) == 10  # 打出消耗桩后满手
+    assert len(bc.cards.discard_pile) == 1
+    assert bc.cards.discard_pile[0].card in _combat_card_pool()
+
+
+def _spoon_reroutes(seed: int) -> bool:
+    """该种子下 STRANGE_SPOON 是否把消耗牌改道弃牌堆（确定性：同种子同结果）。"""
+    bc = BattleContext(seed=seed, relics=[RelicId.STRANGE_SPOON])
+    setup_hand(bc, EXHAUST_STUB)
+    bc.play_card(0)
+    return any(c.card is EXHAUST_STUB for c in bc.cards.discard_pile)
+
+
+def test_strange_spoon_reroute_skips_exhaust_triggers():
+    """边界：改道弃牌堆 = 未发生消耗 → 消耗触发（CHARONS_ASHES）不结算
+    （C++ 走 else 分支，不进 triggerAndMoveToExhaustPile，L1985-1990）。"""
+    reroute_seed = next(s for s in range(50) if _spoon_reroutes(s))
+    bc = BattleContext(
+        seed=reroute_seed,
+        relics=[RelicId.STRANGE_SPOON, RelicId.CHARONS_ASHES],
+        encounter="louses",
+    )
+    hp0 = [m.hp for m in bc.monsters.monsters]
+    setup_hand(bc, EXHAUST_STUB)
+    bc.play_card(0)
+    assert any(c.card is EXHAUST_STUB for c in bc.cards.discard_pile)
+    assert not bc.cards.exhaust_pile
+    assert [m.hp for m in bc.monsters.monsters] == hp0  # 未消耗 → 无灰烬伤害
+
+
+def test_strange_spoon_exhaust_still_triggers_on_exhaust():
+    """边界：未改道（正常消耗）时消耗触发照常结算（CHARONS_ASHES 3 伤）。"""
+    exhaust_seed = next(s for s in range(50) if not _spoon_reroutes(s))
+    bc = BattleContext(
+        seed=exhaust_seed,
+        relics=[RelicId.STRANGE_SPOON, RelicId.CHARONS_ASHES],
+        encounter="louses",
+    )
+    hp0 = [m.hp for m in bc.monsters.monsters]
+    setup_hand(bc, EXHAUST_STUB)
+    bc.play_card(0)
+    assert any(c.card is EXHAUST_STUB for c in bc.cards.exhaust_pile)
+    assert [hp - 3 for hp in hp0] == [m.hp for m in bc.monsters.monsters]
+
+
+def test_strange_spoon_never_affects_non_exhaust_cards():
+    """边界：勺子只在 exhaustOnUse 路径起作用（C++ L1986 判 item.exhaustOnUse），
+    普通牌永远走弃牌堆。"""
+    for seed in range(40):
+        bc = BattleContext(seed=seed, relics=[RelicId.STRANGE_SPOON])
+        setup_hand(bc, STRIKE)
+        bc.play_card(0)
+        assert not bc.cards.exhaust_pile
+        assert any(c.card is STRIKE for c in bc.cards.discard_pile)
+
+
+def test_mummified_hand_zeroes_one_costed_hand_card():
+    """MUMMIFIED_HAND（L1874-1876 → L2847-2873）：打出 Power 后随机 1 张
+    费用 >0 的手牌本回合 0 费；刚打出的 Power 已移出手牌，不在候选。
+    seed=0 → 候选 [Strike, Defend] 中选中 Defend（misc 流确定）。"""
+    bc = BattleContext(seed=0, relics=[RelicId.MUMMIFIED_HAND])
+    setup_hand(bc, POWER_STUB, STRIKE, DEFEND)
+    bc.play_card(0)  # 打出能力桩（0 费）
+    assert len(bc.cards.hand) == 2
+    zeroed = [c for c in bc.cards.hand if c.cost_for_turn == 0]
+    assert len(zeroed) == 1
+    assert zeroed[0].card is DEFEND
+    strike = next(c for c in bc.cards.hand if c.card is STRIKE)
+    assert strike.cost == 1 and strike.cost_for_turn == -1
+    bc.player.hp = 300
+    bc.end_turn()
+    assert zeroed[0].cost == 1  # 回合末还原
+
+
+def test_mummified_hand_excludes_already_zero_cost():
+    """本回合已 0 费的手牌不入选（C++ costForTurn > 0 资格）；
+    无合格候选时 no-op。"""
+    # 唯一候选：已 0 费的 Strike 排除、Defend 命中。seed=1 在双候选时
+    # 会选中 Strike（见上一用例同种子对照）——若排除逻辑缺失则 Defend
+    # 不会被置 0，断言即可甄别。
+    bc = BattleContext(seed=1, relics=[RelicId.MUMMIFIED_HAND])
+    setup_hand(bc, POWER_STUB, STRIKE, DEFEND)
+    bc.cards.hand[1].cost_for_turn = 0  # Strike 本回合已 0 费
+    bc.play_card(0)
+    strike, defend = bc.cards.hand
+    assert strike.cost_for_turn == 0  # 预置维持（未被再次选中也不变）
+    assert defend.cost_for_turn == 0  # 唯一候选必被置 0
+    # 无候选：全 0 费 → no-op，不抛错
+    bc2 = BattleContext(seed=11, relics=[RelicId.MUMMIFIED_HAND])
+    setup_hand(bc2, POWER_STUB, POWER_STUB)
+    bc2.play_card(0)
+    assert len(bc2.cards.hand) == 1
+    assert bc2.cards.hand[0].cost_for_turn == -1
+
+
+def test_warped_tongs_upgrades_one_card_each_turn():
+    """WARPED_TONGS（Player.cpp:669-671 + Actions.cpp:940-960）：**每回合
+    开始（含首回合）无条件**随机升级 1 张可升级手牌（C++ 无 50% 判定）；
+    升级资格 canUpgrade（CardInstance.cpp:55-59）排除状态/诅咒。"""
+    bc = BattleContext(
+        seed=3,
+        relics=[RelicId.WARPED_TONGS],
+        deck=[STRIKE, STRIKE, DEFEND, DEFEND, WOUND, WOUND, STRIKE, DEFEND],
+    )
+    # 首回合（initRelics L446-449 经 atTurnStartPostDraw 桶触发）
+    ups = [c.card.name for c in bc.cards.hand if c.upgraded]
+    assert len(ups) == 1  # seed=3 → Defend（misc 流确定）
+    assert ups[0] == "Defend"
+    assert not any(c.upgraded for c in bc.cards.hand if c.card is WOUND)
+    # 第 2 回合同样触发
+    bc.player.hp = 300  # 撑过邪教徒黑暗打击
+    bc.end_turn()
+    ups2 = [c.card.name for c in bc.cards.hand if c.upgraded]
+    assert len(ups2) == 1  # 本回合新升级 1 张（上回合那张已随弃牌离手）
+    assert not any(c.upgraded for c in bc.cards.hand if c.card is WOUND)
+
+
+def test_warped_tongs_noop_when_nothing_upgradeable():
+    """无可升级手牌（全为状态卡）时 no-op：不升级状态/诅咒（canUpgrade）。"""
+    bc = BattleContext(seed=13, relics=[RelicId.WARPED_TONGS], deck=[WOUND] * 5)
+    assert not any(c.upgraded for c in bc.cards.hand)
+    assert len(bc.cards.hand) == 5

@@ -16,6 +16,7 @@ from sts.combat import BattleContext
 from sts.combat.types import MonsterStatus, PlayerStatus
 from sts.content.cards import BASH, BLUDGEON, DEFEND, STRIKE
 from sts.content.monsters import (
+    AcidSlimeL,
     AcidSlimeM,
     AcidSlimeS,
     BlueSlaver,
@@ -27,12 +28,16 @@ from sts.content.monsters import (
     Hexaghost,
     JawWorm,
     Lagavulin,
+    Looter,
     MadGremlin,
+    Mugger,
     RedLouse,
     RedSlaver,
     Sentry,
     ShieldGremlin,
+    SlimeBoss,
     SneakyGremlin,
+    SpikeSlimeL,
     SpikeSlimeM,
     SpikeSlimeS,
     Taskmaster,
@@ -1480,3 +1485,488 @@ def test_taskmaster_scouring_whip():
     bc.end_turn()
     assert bc.player.hp == PLAYER_MAX_HP - 7 - 8
     assert _card_total(bc, "Wound") == 6
+
+
+# ====================================================================
+# 批次 3：困难档（Acid/Spike Slime L、Slime Boss、Looter、Mugger）
+# + 遭遇注册（large_slime / slime_boss / looter / exordium_thugs /
+# lots_of_slimes）+ Gremlin 逃跑考证定案（本体无此机制，负向断言）。
+# ====================================================================
+
+
+BATCH3_ENCOUNTERS = [
+    ("large_slime", 1, 64, 70),  # 酸 65-69 / 尖 64-70
+    ("slime_boss", 1, 140, 140),
+    ("looter", 1, 44, 48),
+    ("exordium_thugs", 2, 10, 54),  # 弱位 10-32，强位 44-54
+    ("lots_of_slimes", 5, 8, 14),
+]
+
+
+@pytest.mark.parametrize("encounter,count,hp_lo,hp_hi", BATCH3_ENCOUNTERS)
+def test_batch3_encounter_spawn_and_hp_range(encounter, count, hp_lo, hp_hi):
+    for seed in range(10):
+        bc = BattleContext(seed=seed, encounter=encounter)
+        assert bc.monsters.monster_count == count
+        for m in bc.monsters.monsters:
+            assert hp_lo <= m.hp <= hp_hi
+            assert m.max_hp == m.hp
+            assert m.current_move is not None
+        assert len(bc.cards.draw_pile) + len(bc.cards.hand) == 10
+
+
+def test_batch3_ascension_hp_ranges():
+    """A7 起大史莱姆/窃贼用高位 HP；A9 起 Slime Boss 高位 HP（对齐 initHp 分桶）。"""
+    for seed in range(10):
+        bc = BattleContext(seed=seed, encounter="large_slime", ascension=7)
+        m = bc.monsters.monsters[0]
+        assert 68 <= m.hp <= 72 if isinstance(m, AcidSlimeL) else 67 <= m.hp <= 73
+        bc = BattleContext(seed=seed, encounter="looter", ascension=7)
+        assert 46 <= bc.monsters.monsters[0].hp <= 50
+        bc = BattleContext(seed=seed, encounter="slime_boss", ascension=9)
+        assert bc.monsters.monsters[0].hp == 150
+
+
+def test_large_slime_composition():
+    """对齐 LARGE_SLIME：misc 布尔二选一（酸 L / 尖 L）。"""
+    kinds = set()
+    for seed in range(20):
+        comp = _composition("large_slime", seed)
+        assert comp == _composition("large_slime", seed)
+        assert comp in (["AcidSlimeL"], ["SpikeSlimeL"])
+        kinds.add(tuple(comp))
+    assert kinds == {("AcidSlimeL",), ("SpikeSlimeL",)}
+
+
+def test_exordium_thugs_composition():
+    """对齐 EXORDIUM_THUGS：弱野生动物三选一 + 强人形三选一（misc 流）。"""
+    weaks, strongs = set(), set()
+    for seed in range(80):
+        comp = _composition("exordium_thugs", seed)
+        assert len(comp) == 2
+        assert comp == _composition("exordium_thugs", seed)
+        assert comp[0] in {"RedLouse", "GreenLouse", "SpikeSlimeM", "AcidSlimeM"}
+        assert comp[1] in {"Cultist", "RedSlaver", "BlueSlaver", "Looter"}
+        weaks.add(comp[0])
+        strongs.add(comp[1])
+    assert weaks == {"RedLouse", "GreenLouse", "SpikeSlimeM", "AcidSlimeM"}
+    assert strongs == {"Cultist", "RedSlaver", "BlueSlaver", "Looter"}
+
+
+def test_lots_of_slimes_composition():
+    """对齐 LOTS_OF_SLIMES：尖 S×3 + 酸 S×2 无放回随机排列。"""
+    from collections import Counter
+
+    orders = set()
+    for seed in range(30):
+        comp = _composition("lots_of_slimes", seed)
+        assert comp == _composition("lots_of_slimes", seed)
+        assert Counter(comp) == {"SpikeSlimeS": 3, "AcidSlimeS": 2}
+        orders.add(tuple(comp))
+    assert len(orders) > 5  # 排列确实随机
+
+
+# ---- Acid Slime (L) ----
+
+
+def test_acid_slime_l_corrosive_spit_lick_tackle():
+    bc, m = solo_battle(AcidSlimeL)
+    assert 65 <= m.hp <= 69
+    force_intent(m, AcidSlimeL.CORROSIVE_SPIT)
+    bc.end_turn()
+    assert bc.player.hp == PLAYER_MAX_HP - 11
+    assert _card_total(bc, "Slimed") == 2  # 大型塞 2 张黏液
+    force_intent(m, AcidSlimeL.LICK)
+    bc.end_turn()
+    assert bc.player.hp == PLAYER_MAX_HP - 11  # 舔舐无伤害
+    assert bc.player.statuses.get(PlayerStatus.WEAK) == 2  # 大型舔舐 2 层虚弱
+    force_intent(m, AcidSlimeL.TACKLE)
+    bc.end_turn()
+    assert bc.player.hp == PLAYER_MAX_HP - 11 - 16
+    assert _card_total(bc, "Slimed") == 2
+    # A2：腐蚀唾液 12 / 冲撞 18
+    bc, m = solo_battle(AcidSlimeL, ascension=2)
+    force_intent(m, AcidSlimeL.CORROSIVE_SPIT)
+    bc.end_turn()
+    assert bc.player.hp == PLAYER_MAX_HP - 12
+    force_intent(m, AcidSlimeL.TACKLE)
+    bc.end_turn()
+    assert bc.player.hp == PLAYER_MAX_HP - 12 - 18
+
+
+def test_acid_slime_l_roll_segments():
+    """A0 分段 30/70，边界与内层布尔分支对齐 C++ ACID_SLIME_L。"""
+    bc, m = solo_battle(AcidSlimeL)
+    set_history(m)
+    assert m.get_move_for_roll(bc, 0).name == "Corrosive Spit"
+    assert m.get_move_for_roll(bc, 29).name == "Corrosive Spit"
+    assert m.get_move_for_roll(bc, 30).name == "Tackle"
+    assert m.get_move_for_roll(bc, 69).name == "Tackle"
+    assert m.get_move_for_roll(bc, 70).name == "Lick"
+    # 腐蚀唾液连续两回合：roll<30 内层 50% 冲撞/舔舐
+    set_history(m, AcidSlimeL.CORROSIVE_SPIT, AcidSlimeL.CORROSIVE_SPIT)
+    assert m.get_move_for_roll(bc, 10).name in {"Tackle", "Lick"}
+    # 上回合冲撞：30..69 内层 40% 腐蚀唾液/舔舐
+    set_history(m, AcidSlimeL.TACKLE)
+    assert m.get_move_for_roll(bc, 50).name in {"Corrosive Spit", "Lick"}
+    # 上回合非冲撞 → 冲撞
+    set_history(m, AcidSlimeL.LICK)
+    assert m.get_move_for_roll(bc, 50).name == "Tackle"
+    # 舔舐连续两回合：roll≥70 内层 40% 腐蚀唾液/冲撞
+    set_history(m, AcidSlimeL.LICK, AcidSlimeL.LICK)
+    assert m.get_move_for_roll(bc, 85).name in {"Corrosive Spit", "Tackle"}
+
+
+def test_acid_slime_l_a17_roll_segments():
+    """A17 分段 40/70；第二段判冲撞连续两回合、第三段只判上回合舔舐。"""
+    bc, m = solo_battle(AcidSlimeL, ascension=17)
+    set_history(m)
+    assert m.get_move_for_roll(bc, 0).name == "Corrosive Spit"
+    assert m.get_move_for_roll(bc, 40).name == "Tackle"
+    assert m.get_move_for_roll(bc, 70).name == "Lick"
+    set_history(m, AcidSlimeL.TACKLE, AcidSlimeL.TACKLE)
+    assert m.get_move_for_roll(bc, 50).name in {"Corrosive Spit", "Lick"}
+    set_history(m, AcidSlimeL.TACKLE)  # 只出一回合冲撞 → 冲撞
+    assert m.get_move_for_roll(bc, 50).name == "Tackle"
+    set_history(m, AcidSlimeL.LICK)  # A17 上回合舔舐即触发内层
+    assert m.get_move_for_roll(bc, 85).name in {"Corrosive Spit", "Tackle"}
+
+
+# ---- Spike Slime (L) ----
+
+
+def test_spike_slime_l_lick_frail_and_flame_tackle():
+    bc, m = solo_battle(SpikeSlimeL)
+    assert 64 <= m.hp <= 70
+    force_intent(m, SpikeSlimeL.LICK)
+    bc.end_turn()
+    assert bc.player.statuses.get(PlayerStatus.FRAIL) == 2
+    assert not bc.player.statuses.has(PlayerStatus.WEAK)  # 施加脆弱而非虚弱
+    force_intent(m, SpikeSlimeL.FLAME_TACKLE)
+    bc.end_turn()
+    assert bc.player.hp == PLAYER_MAX_HP - 16
+    assert _card_total(bc, "Slimed") == 2
+    # A17：舔舐 3 层脆弱；A17 ⊇ A2：烈焰冲撞 18 伤
+    bc, m = solo_battle(SpikeSlimeL, ascension=17)
+    force_intent(m, SpikeSlimeL.LICK)
+    bc.end_turn()
+    assert bc.player.statuses.get(PlayerStatus.FRAIL) == 3
+    force_intent(m, SpikeSlimeL.FLAME_TACKLE)
+    bc.end_turn()
+    assert bc.player.hp == PLAYER_MAX_HP - 18
+
+
+def test_spike_slime_l_roll_segments():
+    bc, m = solo_battle(SpikeSlimeL)
+    set_history(m)
+    assert m.get_move_for_roll(bc, 0).name == "Flame Tackle"
+    assert m.get_move_for_roll(bc, 29).name == "Flame Tackle"
+    assert m.get_move_for_roll(bc, 30).name == "Lick"
+    # 烈焰冲撞连续两回合：roll<30 强制舔舐
+    set_history(m, SpikeSlimeL.FLAME_TACKLE, SpikeSlimeL.FLAME_TACKLE)
+    assert m.get_move_for_roll(bc, 0).name == "Lick"
+    # 舔舐连续两回合：roll≥30 强制烈焰冲撞；只出一回合仍可舔舐
+    set_history(m, SpikeSlimeL.LICK, SpikeSlimeL.LICK)
+    assert m.get_move_for_roll(bc, 50).name == "Flame Tackle"
+    set_history(m, SpikeSlimeL.LICK)
+    assert m.get_move_for_roll(bc, 50).name == "Lick"
+    # A17：上回合舔舐即切烈焰冲撞
+    bc, m = solo_battle(SpikeSlimeL, ascension=17)
+    set_history(m, SpikeSlimeL.LICK)
+    assert m.get_move_for_roll(bc, 50).name == "Flame Tackle"
+
+
+# ---- 大史莱姆分裂（两型共用断言）----
+
+
+@pytest.mark.parametrize("big_cls,mid_cls", [(AcidSlimeL, AcidSlimeM), (SpikeSlimeL, SpikeSlimeM)])
+def test_large_slime_half_hp_forces_split_intent(big_cls, mid_cls):
+    """HP 掉到 ≤ maxHp/2 时 onHpLost 强改意图为 SPLIT；半血以上不改。"""
+    bc, m = solo_battle(big_cls)
+    m.damage(bc, m.max_hp - m.max_hp // 2)  # 恰好掉到 maxHp//2
+    assert m.hp == m.max_hp // 2
+    assert m.current_move.name == "Split"
+    bc, m = solo_battle(big_cls, seed=1)
+    m.damage(bc, m.max_hp - m.max_hp // 2 - 1)  # 半血以上 1 点
+    assert m.current_move.name != "Split"
+
+
+@pytest.mark.parametrize("big_cls,mid_cls", [(AcidSlimeL, AcidSlimeM), (SpikeSlimeL, SpikeSlimeM)])
+def test_large_slime_split_spawns_two_mids_inheriting_hp(big_cls, mid_cls):
+    """SPLIT 执行：原槽 + 下一槽生成 2 只 M 级，curHp=maxHp=父体当前 HP；
+    分裂体本回合不行动（玩家无伤、turns_taken=0），下回合起正常行动。"""
+    bc, m = solo_battle(big_cls)
+    m.damage(bc, m.max_hp - m.max_hp // 2 + 10)  # 掉到半血以下（保留可观的继承 HP）
+    assert m.current_move.name == "Split"
+    inherited = m.hp
+    assert inherited == m.max_hp - (m.max_hp - m.max_hp // 2 + 10) > 0
+    bc.end_turn()  # SPLIT 招式执行
+    group = bc.monsters
+    assert group.monster_count == 2
+    assert group.alive_count == 2
+    a, b = group.monsters
+    assert isinstance(a, mid_cls) and isinstance(b, mid_cls)
+    assert (a.hp, a.max_hp) == (inherited, inherited)
+    assert (b.hp, b.max_hp) == (inherited, inherited)
+    # 继承的 max_hp 即再分裂阈值的一半基础（initSpawnedMonster 双字段同写）
+    # 分裂体本回合不再行动：玩家未掉血、两者尚未行动
+    assert bc.player.hp == PLAYER_MAX_HP
+    assert a.turns_taken == 0 and b.turns_taken == 0
+    assert a.current_move is not None and b.current_move is not None  # 生成即 roll 意图
+    # 下回合起两只 M 级都行动（不再分裂——M 级无 SPLIT）
+    bc.end_turn()
+    assert a.turns_taken == 1 and b.turns_taken == 1
+    assert not bc.over
+
+
+# ---- Slime Boss ----
+
+
+def test_slime_boss_goop_preparing_slam_cycle():
+    """序列：黏液喷射（3 张黏液）→ 蓄势（无动作、无格挡）→ 猛击 35，循环。"""
+    bc, m = solo_battle(SlimeBoss)
+    assert m.hp == 140
+    assert m.current_move.name == "Goop Spray"
+    bc.end_turn()  # r1
+    assert _card_total(bc, "Slimed") == 3
+    assert bc.player.hp == PLAYER_MAX_HP
+    assert m.current_move.name == "Preparing"
+    bc.end_turn()  # r2
+    assert bc.player.hp == PLAYER_MAX_HP
+    assert m.block == 0  # 蓄势无格挡（对齐 C++ 空分支）
+    assert m.current_move.name == "Slam"
+    bc.end_turn()  # r3 猛击 35
+    assert bc.player.hp == PLAYER_MAX_HP - 35
+    assert m.current_move.name == "Goop Spray"
+    bc.end_turn()  # r4
+    assert _card_total(bc, "Slimed") == 6
+
+
+def test_slime_boss_ascension_branches():
+    """A9 HP 150；A19 黏液 5 张；A4 猛击 38。"""
+    bc, m = solo_battle(SlimeBoss, ascension=19)
+    assert m.hp == 150
+    assert m.current_move.name == "Goop Spray"
+    bc.end_turn()
+    assert _card_total(bc, "Slimed") == 5
+    force_intent(m, SlimeBoss.SLAM)
+    bc.end_turn()
+    assert bc.player.hp == PLAYER_MAX_HP - 38
+
+
+def test_slime_boss_half_hp_forces_split_intent():
+    """HP ≤ 70 强改 SPLIT（每次漏格挡掉血重判）；71 时不改。"""
+    bc, m = solo_battle(SlimeBoss)
+    m.damage(bc, 70)
+    assert m.hp == 70
+    assert m.current_move.name == "Split"
+    bc, m = solo_battle(SlimeBoss, seed=1)
+    m.damage(bc, 69)
+    assert m.hp == 71
+    assert m.current_move.name != "Split"
+
+
+def test_slime_boss_split_replaces_group():
+    """分裂整组替换：槽 0 尖 L、槽 1 死亡占位、槽 2 酸 L；两 L 继承当前 HP
+    为 curHp=maxHp；本回合敌方阶段收束（玩家无伤），下回合槽 0/2 行动。"""
+    bc, m = solo_battle(SlimeBoss)
+    m.damage(bc, 80)  # 140 → 60（半血以下）
+    assert m.current_move.name == "Split"
+    inherited = m.hp
+    assert inherited == 60
+    bc.end_turn()
+    group = bc.monsters
+    assert group.monster_count == 3
+    assert group.alive_count == 2
+    spike, mid, acid = group.monsters
+    assert isinstance(spike, SpikeSlimeL) and spike.idx == 0
+    assert mid.is_dead_or_escaped()  # 槽 1 死亡占位（Boss 本体）
+    assert isinstance(acid, AcidSlimeL) and acid.idx == 2
+    assert (spike.hp, spike.max_hp) == (inherited, inherited)
+    assert (acid.hp, acid.max_hp) == (inherited, inherited)
+    assert spike.current_move is not None and acid.current_move is not None
+    assert bc.player.hp == PLAYER_MAX_HP  # 分裂回合不再攻击
+    assert spike.turns_taken == 0 and acid.turns_taken == 0
+    bc.end_turn()  # 下回合：槽 0 与槽 2 行动，槽 1 跳过
+    assert spike.turns_taken == 1
+    assert acid.turns_taken == 1
+    assert not bc.over
+
+
+def test_slime_boss_split_descendants_split_again():
+    """Boss 分裂出的两只 L 各自半血再分裂：尖 L 覆写槽 1 死亡占位（不后移
+    存活怪），酸 L 落槽 2/3——同回合内两连分裂后整组 4 只 M 级
+    （对齐 C++ arr[idx+1] 覆写 + monsterCount=min(count+1,4) 的可达效果：
+    插入语义会得到 5 只，覆写语义得到 4 只）。"""
+    bc, m = solo_battle(SlimeBoss)
+    m.damage(bc, 100)  # 140 → 40
+    inherited = m.hp
+    assert inherited == 40
+    bc.end_turn()  # Boss 分裂 → [SpikeL(40), 死占位, AcidL(40)]
+    spike = bc.monsters.monsters[0]
+    acid = bc.monsters.monsters[2]
+    # 两只 L 都打到半血以下（强改 SPLIT；阈值 = 继承 HP 的一半 = 20）
+    spike.damage(bc, 25)
+    acid.damage(bc, 25)
+    assert spike.hp == 15 <= spike.max_hp // 2
+    assert spike.current_move.name == "Split"
+    assert acid.current_move.name == "Split"
+    # 尖 L（槽 0）先分裂（覆写槽 1 占位），酸 L（槽 2）同回合随后分裂
+    bc.end_turn()
+    group = bc.monsters
+    assert [type(x).__name__ for x in group.monsters] == [
+        "SpikeSlimeM", "SpikeSlimeM", "AcidSlimeM", "AcidSlimeM",
+    ]
+    assert group.monster_count == 4  # 覆写而非插入：没有第 5 个槽位
+    assert group.alive_count == 4
+    assert all(x.hp == 15 and x.max_hp == 15 for x in group.monsters)  # 继承分裂时 HP
+    assert not any(x.is_dead_or_escaped() for x in group.monsters)
+    assert not bc.over
+
+
+# ---- Looter ----
+
+
+def test_looter_mugs_first_turn_then_rolls():
+    """第 1 回合打劫（偷 15 + 10 伤）后意图仍为打劫；第 2 回合打劫后
+    50/50 切突进/烟雾弹（打劫不再回归）。"""
+    bc, m = solo_battle(Looter)
+    assert 44 <= m.hp <= 48
+    assert m.current_move.name == "Mug"
+    assert bc.player.gold == 99
+    bc.end_turn()  # r1 打劫
+    assert bc.player.gold == 84
+    assert m.misc_info == 15
+    assert bc.player.hp == PLAYER_MAX_HP - 10
+    assert m.current_move.name == "Mug"
+    bc.end_turn()  # r2 打劫
+    assert bc.player.gold == 69
+    assert m.misc_info == 30
+    assert bc.player.hp == PLAYER_MAX_HP - 20
+    assert m.current_move.name in {"Lunge", "Smoke Bomb"}
+
+
+def test_looter_lunge_steals_and_smoke_then_escapes():
+    """突进（偷 15 + 12 伤）→ 烟雾弹（+6 格挡）→ 逃跑（全员逃跑判胜）。"""
+    bc, m = solo_battle(Looter)
+    force_intent(m, Looter.LUNGE)
+    bc.end_turn()
+    assert bc.player.gold == 84  # 突进也偷 15
+    assert bc.player.hp == PLAYER_MAX_HP - 12
+    assert m.current_move.name == "Smoke Bomb"
+    bc.end_turn()  # 烟雾弹
+    assert m.block == 6
+    assert m.current_move.name == "Escape"
+    assert bc.monsters.alive_count == 1
+    bc.end_turn()  # 逃跑
+    assert m.is_escaping
+    assert not m.is_targetable()  # 逃跑怪不可被指定
+    assert bc.monsters.alive_count == 0
+    assert bc.won  # 全员死亡/逃跑判胜
+    assert bc.player.gold == 84  # 只偷过突进一次 15；逃跑不返还偷金
+
+
+def test_looter_death_returns_stolen_gold():
+    """死亡返还累计偷金（引擎 THIEVERY 分支）；偷取不超过玩家现有。"""
+    bc, m = solo_battle(Looter)
+    force_intent(m, Looter.MUG)
+    bc.end_turn()
+    assert bc.player.gold == 84
+    slay(bc, 0)
+    assert bc.player.gold == 99  # 全额返还
+    # 玩家金币不足时只偷到现有数量
+    bc, m = solo_battle(Looter, seed=1)
+    bc.player.gold = 7
+    force_intent(m, Looter.LUNGE)
+    bc.end_turn()
+    assert bc.player.gold == 0
+    assert m.misc_info == 7
+    slay(bc, 0)
+    assert bc.player.gold == 7
+
+
+def test_looter_ascension_branches():
+    """A17 偷 20；A2 打劫 11 / 突进 14。"""
+    bc, m = solo_battle(Looter, ascension=17)
+    force_intent(m, Looter.MUG)
+    bc.end_turn()
+    assert bc.player.gold == 79
+    assert bc.player.hp == PLAYER_MAX_HP - 11
+    force_intent(m, Looter.LUNGE)
+    bc.end_turn()
+    assert bc.player.hp == PLAYER_MAX_HP - 11 - 14
+
+
+# ---- Mugger ----
+
+
+def test_mugger_mugs_twice_then_rolls():
+    """打劫前 2 回合固定（每回合偷 15 + 10 伤），第 2 回合后 50/50 切换。"""
+    bc, m = solo_battle(Mugger)
+    assert 48 <= m.hp <= 52
+    assert m.current_move.name == "Mug"
+    bc.end_turn()  # r1
+    assert m.current_move.name == "Mug"
+    assert m.misc_info == 15
+    bc.end_turn()  # r2
+    assert m.misc_info == 30
+    assert bc.player.gold == 69
+    assert bc.player.hp == PLAYER_MAX_HP - 20
+    assert m.current_move.name in {"Lunge", "Smoke Bomb"}
+
+
+def test_mugger_numbers_and_escape():
+    """突进 16 伤 + 偷 15；烟雾弹 11 格挡；逃跑判胜。A17 烟雾弹 17、A2 突进 18。"""
+    bc, m = solo_battle(Mugger)
+    force_intent(m, Mugger.LUNGE)
+    bc.end_turn()
+    assert bc.player.hp == PLAYER_MAX_HP - 16
+    assert bc.player.gold == 84
+    assert m.current_move.name == "Smoke Bomb"
+    bc.end_turn()
+    assert m.block == 11
+    assert m.current_move.name == "Escape"
+    bc.end_turn()
+    assert m.is_escaping
+    assert bc.won
+    # A17：烟雾弹 17 格挡；A17 ⊇ A2：突进 18 伤、偷 20
+    bc, m = solo_battle(Mugger, ascension=17)
+    force_intent(m, Mugger.MUG)
+    bc.end_turn()
+    assert bc.player.gold == 79  # A17 偷 20
+    force_intent(m, Mugger.SMOKE_BOMB)
+    bc.end_turn()
+    assert m.block == 17
+    force_intent(m, Mugger.LUNGE)
+    bc.end_turn()
+    assert bc.player.hp == PLAYER_MAX_HP - 11 - 18  # A17 ⊇ A2：打劫 11、突进 18
+
+
+def test_mugger_death_returns_stolen_gold():
+    bc, m = solo_battle(Mugger)
+    force_intent(m, Mugger.MUG)
+    bc.end_turn()
+    assert bc.player.gold == 84
+    slay(bc, 0)
+    assert bc.player.gold == 99
+
+
+# ---- Gremlin 逃跑考证（批次 3 定案：本体无逃跑机制）----
+
+
+def test_gremlin_gang_gremlins_never_escape():
+    """负向断言：多回合后小鬼不逃跑、战斗不因逃跑提前结束。
+
+    考证（见 monsters.py 模块头）：lightspeed escapeNext 从不置位（死代码，
+    且仅 Fat/Mad/Sneaky 残留分支）；本体 wiki 记载各小鬼招式无限循环、
+    无逃跑条目。"3 回合后逃跑"为 StS2 的 Escape Artist 机制。
+    """
+    bc = staged_battle(5, [FatGremlin, SneakyGremlin, ShieldGremlin, GremlinWizard])
+    for _ in range(6):
+        bc.end_turn()
+        assert not any(m.is_escaping for m in bc.monsters.monsters)
+        assert not bc.over
+        bc.player.hp = PLAYER_MAX_HP  # 测试续命，隔离逃跑断言
+    for m in bc.monsters.monsters:
+        assert m.is_targetable()
+        assert not m.is_escaping

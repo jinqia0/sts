@@ -860,7 +860,8 @@ GHOSTLY_ARMOR = CardDef("Ghostly Armor", "幽灵护甲", 1, "Skill", "虚无。�
 RAMPAGE = CardDef("Rampage", "狂暴冲杀", 1, "Attack", "造成 8 点伤害。本次战斗中此牌每次打出永久 +5 伤害。",
                   True, False, _rampage_play)
 SEARING_BLOW = CardDef("Searing Blow", "灼热打击", 2, "Attack", "造成 12 点伤害。可以多次升级，每次 +2 伤害递增。",
-                       True, False, _searing_blow_play)
+                       True, False, _searing_blow_play,
+                       multiple_upgrades=True)  # 批次 3 接线：Armaments 升级路径经 upgrade() 推进 misc_data（原批次 2 遗留 TODO）
 BLOOD_FOR_BLOOD = CardDef("Blood for Blood", "以血还血", 4, "Attack", "造成 18 点伤害。战斗中每次失去 HP，费用 -1。",
                           True, False, _blood_for_blood_play, upgraded_cost=3, cost_delta_on_damage=-1)
 SEVER_SOUL = CardDef("Sever Soul", "撕裂灵魂", 2, "Attack", "消耗手中所有非攻击牌。造成 16 点伤害。", True, False,
@@ -873,3 +874,237 @@ FEED = CardDef("Feed", "吞噬", 1, "Attack", "造成 10 点伤害。若击杀�
                True, True, _feed_play)
 HAND_OF_GREED = CardDef("Hand of Greed", "贪婪之手", 2, "Attack", "造成 20 点伤害。若击杀敌人，获得 20 金币。",
                         True, False, _hand_of_greed_play)
+
+
+# ---- 困难档迁移（批次 3，2026-10-06）：X 费 Whirlwind + 选卡族 6 张 ----
+# 数值与结算顺序以 lightspeed C++ 为准（BattleContext.cpp useAttackCard /
+# useSkillCard 各分支 + Actions.cpp 复合动作 + BattleContext.cpp 的
+# chooseXxx 回调族 + Cards.h doesCardExhaust/isXCost/getUpgradedCost）；
+# 与 wiki 不一致处逐卡注释。True Grit+ 的选卡版已在批次 2 实现，本批次
+# 核对与 C++ TRUE_GRIT 分支（ChooseExhaustOne / ExhaustRandomCardInHand）
+# 一致，不改动。
+
+
+def _whirlwind_play(bc: BattleContext, item: CardQueueItem) -> None:
+    up = item.card.upgraded
+    # 对齐 C++ WHIRLWIND 分支：baseDamage = 5/8 + VIGOR。活力必须在出牌时
+    # 捕获——on_use_attack_card（VIGOR 出伤后移除）先于动作出队执行；C++ 在
+    # 管线内二次加 VIGOR 实为延迟结算下捕获活力的必要 hack（同 Sword
+    # Boomerang 注释），净效果 = 计入恰好一次，本实现以出牌时捕获等价表达。
+    vigor = bc.player.statuses.get(PlayerStatus.VIGOR)
+    base = (8 if up else 5) + vigor
+
+    def run(bc: BattleContext) -> None:
+        # 对齐 WhirlwindAction：能量已由 play_card 快照进 energy_on_use 并清零
+        #（引擎契约；C++ 在动作内 useEnergy，时机差异无观测点），次数 =
+        # max(快照, 0)。C++ 的 CHEMICAL_X +2 次未实现（本引擎遗物集不含）。
+        times = max(item.energy_on_use, 0)
+        if times <= 0:
+            return
+        # 一次性算好每怪伤害矩阵（每怪 calculateCardDamage）→ 循环 N 遍用矩阵
+        # 值打：力量/易伤在第一遍后的变化不影响后续遍（伤害入队前算死）。
+        # C++ 用 AttackAllMonsterRecursive 逐遍 addToTop 入队，本实现合并为
+        # 单闭包——净行为等价：CURL_UP 等受击 add_to_bot 的动作同样落在全部
+        # 遍数之后（C++ 首遍直执 + 余遍入 top，受击入队永远在递归项之后）；
+        # 胜利清队以 outcome 判断替代 clear_post_combat。
+        matrix = {
+            m.idx: bc.calculate_card_damage(item, m.idx, base)
+            for m in bc.monsters.monsters
+            if not m.is_dead_or_escaped()
+        }
+        for _ in range(times):
+            for m in bc.monsters.monsters:
+                if not m.is_dead_or_escaped():
+                    m.attacked(bc, matrix[m.idx])
+            bc.check_combat()
+            if bc.outcome != Outcome.UNDECIDED:
+                return
+
+    bc.add_to_bot(Action(run))
+
+
+def _upgrade_in_place(inst: CardInstance) -> None:
+    """升级手牌实例（Armaments 路径）。引擎 CardInstance.upgrade() 对已升级
+    实例 no-op 返回 False，而 C++ upgrade() 的 SEARING_BLOW 分支无条件
+    ++specialData（可反复升级，CardInstance.cpp:143-146）——引擎层
+    （card_manager）不在本批次可改范围，内容层补齐该分支：可多次升级且
+    已升级的实例直接递增 misc_data。
+    """
+    if inst.card.multiple_upgrades and inst.upgraded:
+        inst.misc_data += 1
+    else:
+        inst.upgrade()
+
+
+def _armaments_play(bc: BattleContext, item: CardQueueItem) -> None:
+    # 对齐 C++ ARMAMENTS：恒 5 格挡（calculateCardBlock(5)，升级不改，wiki 同）；
+    # 升级版 UpgradeAllCardsInHand（已升级 no-op），基础版 ArmamentsAction 选
+    # 1 张可升级手牌。canUpgrade（CardInstance.cpp:55）：未升级或可多次升级
+    #（Searing Blow），且非状态/诅咒；自身打出时已离手，天然不在候选。
+    bc.add_to_bot(Actions.gain_block(bc.calculate_card_block(5)))
+    if item.card.upgraded:
+
+        def upgrade_all(bc: BattleContext) -> None:
+            for inst in bc.cards.hand:
+                _upgrade_in_place(inst)
+
+        bc.add_to_bot(Action(upgrade_all))
+        return
+
+    def run(bc: BattleContext) -> None:
+        candidates = [
+            c for c in bc.cards.hand
+            if (not c.upgraded or c.card.multiple_upgrades) and c.card.ctype not in ("Status", "Curse")
+        ]
+
+        def on_choose(bc2: BattleContext, chosen: list) -> None:
+            for inst in chosen:
+                _upgrade_in_place(inst)
+
+        bc.open_card_select(candidates, on_choose, prompt="武装：选择 1 张手牌升级")
+
+    bc.add_to_bot(Action(run))
+
+
+def _warcry_play(bc: BattleContext, item: CardQueueItem) -> None:
+    # 对齐 C++ WARCRY：先抽 1（升级 2），后 WarcryAction 置顶选卡——候选 =
+    # 抽牌后的手牌（自身已离手不在候选；C++ 单候选分支有空转 cardRandom 流，
+    # 本项目不做轨迹对齐故省略），选中 → 置抽牌堆顶 + 移出手牌
+    bc.add_to_bot(Actions.draw_cards(2 if item.card.upgraded else 1))
+
+    def run(bc: BattleContext) -> None:
+        def on_choose(bc2: BattleContext, chosen: list) -> None:
+            for inst in chosen:
+                bc2.cards.hand.remove(inst)
+                bc2.cards.append_to_draw_top(inst)  # 置顶：抽牌从 draw_pile 尾弹出
+
+        bc.open_card_select(
+            list(bc.cards.hand), on_choose, prompt="战吼：选择 1 张手牌置于抽牌堆顶"
+        )
+
+    bc.add_to_bot(Action(run))
+
+
+def _headbutt_play(bc: BattleContext, item: CardQueueItem) -> None:
+    # 对齐 C++ HEADBUTT：先攻击（9/12，出牌时算伤）后 HeadbuttAction 选卡
+    # （候选=弃牌堆全部，空堆仅攻击无选卡）；选中 → 置抽牌堆顶 + 移出弃牌堆。
+    # C++ 的 OnAfterCardUsed（打出的牌落堆）是入队动作，晚于本卡自身效果
+    # （Actions.cpp OnAfterCardUsed）——即 C++ HeadbuttAction 看到的弃牌堆
+    # 不含刚打出的 Headbutt；本引擎 on_after_use_card 同步先行，刚打出的
+    # Headbutt 已落弃牌堆，故按实例身份排除以对齐 C++ 净候选集（"空堆仅
+    # 攻击"的口径也由此成立；堆中先前的 Headbutt 仍可选，与 C++ 一致）。
+    dmg = bc.calculate_card_damage(item, item.target, 12 if item.card.upgraded else 9)
+    bc.add_to_bot(Actions.attack_enemy(item.target, dmg))
+
+    def run(bc: BattleContext) -> None:
+        candidates = [c for c in bc.cards.discard_pile if c is not item.card]
+
+        def on_choose(bc2: BattleContext, chosen: list) -> None:
+            for inst in chosen:
+                bc2.cards.discard_pile.remove(inst)
+                bc2.cards.append_to_draw_top(inst)
+
+        bc.open_card_select(
+            candidates, on_choose, prompt="头槌：选择 1 张弃牌置于抽牌堆顶"
+        )
+
+    bc.add_to_bot(Action(run))
+
+
+def _copy_instance_to_hand(bc: BattleContext, inst: CardInstance, count: int) -> None:
+    """复制实例入手（Dual Wield）：手满则落弃牌堆（对齐 C++ createTempCardInHand /
+    createTempCardInDiscard 的手满分支）。保留升级态与实例计数（对齐 C++ 整实例
+    拷贝）；引擎 create_temp_card_in_hand 工厂不拷 misc_data，故内容层自建副本。
+    """
+    for _ in range(count):
+        copy = bc.cards.instantiate(inst.card)
+        copy.upgraded = inst.upgraded
+        copy.misc_data = inst.misc_data
+        if len(bc.cards.hand) < MAX_HAND_SIZE:
+            bc.cards.hand.append(copy)
+        else:
+            bc.cards.move_to_discard_pile(copy)
+
+
+def _dual_wield_play(bc: BattleContext, item: CardQueueItem) -> None:
+    # 对齐 C++ DUAL_WIELD：DualWieldAction(up ? 2 : 1)——基础复制 1 份、
+    # 升级 2 份（wiki 同；任务口径的 2/3 以 C++ 为准修正）。候选 = 手中
+    # 攻击/能力牌（自身已离手）；单候选直执由 open_card_select 内建。
+    copy_count = 2 if item.card.upgraded else 1
+
+    def run(bc: BattleContext) -> None:
+        candidates = [c for c in bc.cards.hand if c.card.ctype in ("Attack", "Power")]
+
+        def on_choose(bc2: BattleContext, chosen: list) -> None:
+            for inst in chosen:
+                _copy_instance_to_hand(bc2, inst, copy_count)
+
+        bc.open_card_select(
+            candidates, on_choose, prompt="双持：选择 1 张攻击或能力牌复制"
+        )
+
+    bc.add_to_bot(Action(run))
+
+
+def _exhume_play(bc: BattleContext, item: CardQueueItem) -> None:
+    def run(bc: BattleContext) -> None:
+        # 手牌满：整体跳过（对齐 C++ cardsInHand == MAX_HAND_SIZE 守卫）
+        if len(bc.cards.hand) >= MAX_HAND_SIZE:
+            return
+        # 候选 = 消耗堆中非 Exhume 的牌（对齐 C++ 排除分支——lightspeed 自带
+        # todo 标注此为 bug：本体允许选回 Exhume 自身；按"以 C++ 为准"口径
+        # 实现排除）。时序差异说明：C++ 打出的牌落堆晚于自身效果（OnAfterCardUsed
+        # 入队），本引擎同步先行——但排除按卡牌身份过滤，两边的净候选集一致
+        #（本引擎额外排除的"刚打出的自身"在 C++ 中尚未落堆，同样不可选）。
+        candidates = [c for c in bc.cards.exhaust_pile if c.card is not EXHUME]
+
+        def on_choose(bc2: BattleContext, chosen: list) -> None:
+            for inst in chosen:
+                bc2.cards.exhaust_pile.remove(inst)
+                bc2.cards.hand.append(inst)  # 回手（对齐 moveToHandHelper；手满守卫已前置）
+
+        bc.open_card_select(
+            candidates, on_choose, prompt="发掘：选择 1 张消耗堆的牌回到手牌"
+        )
+
+    bc.add_to_bot(Action(run))
+
+
+def _burning_pact_play(bc: BattleContext, item: CardQueueItem) -> None:
+    # 对齐 C++ BURNING_PACT：ChooseExhaustOne + DrawCards(up?3:2)——基础版
+    # 也是选卡消耗（wiki：基础版随机消耗、升级版才可选卡；以 C++ 为准）。
+    # 消耗走内容层统一路径 _exhaust_from_hand（触发 FNP/Dark Embrace/Sentinel）。
+    def run(bc: BattleContext) -> None:
+        def on_choose(bc2: BattleContext, chosen: list) -> None:
+            for inst in chosen:
+                _exhaust_from_hand(bc2, inst)
+
+        bc.open_card_select(
+            list(bc.cards.hand), on_choose, prompt="燃烧契约：选择 1 张手牌消耗"
+        )
+
+    bc.add_to_bot(Action(run))
+    bc.add_to_bot(Actions.draw_cards(3 if item.card.upgraded else 2))
+
+
+WHIRLWIND = CardDef("Whirlwind", "旋风斩", -1, "Attack",
+                    "消耗所有能量，对所有敌人造成 5 点伤害，次数等同于能量数。（升级 8 点）",
+                    False, False, _whirlwind_play, x_cost=True)
+ARMAMENTS = CardDef("Armaments", "武装", 1, "Skill",
+                    "获得 5 点格挡。升级 1 张手牌。（升级后：升级所有手牌）",
+                    False, False, _armaments_play)
+WARCRY = CardDef("Warcry", "战吼", 0, "Skill",
+                 "抽 1 张牌。将 1 张手牌置于抽牌堆顶。消耗。（升级抽 2 张）",
+                 False, True, _warcry_play)
+HEADBUTT = CardDef("Headbutt", "头槌", 1, "Attack",
+                   "造成 9 点伤害。将 1 张弃牌堆的牌置于抽牌堆顶。（升级 12 点）",
+                   True, False, _headbutt_play)
+DUAL_WIELD = CardDef("Dual Wield", "双持", 1, "Skill",
+                     "复制 1 张手中的攻击或能力牌加入手牌。（升级后 2 份）消耗。",
+                     False, True, _dual_wield_play)  # wiki 口径置消耗；lightspeed doesCardExhaust 未收录 DUAL_WIELD（偏差，同 Havoc 处理）
+EXHUME = CardDef("Exhume", "发掘", 1, "Skill",
+                 "从消耗堆选 1 张牌回到手牌。消耗。", False, True, _exhume_play,
+                 upgraded_cost=0)  # Cards.h getUpgradedCost：EXHUME 升级 1→0（同 Havoc/Seeing Red）
+BURNING_PACT = CardDef("Burning Pact", "燃烧契约", 1, "Skill",
+                       "消耗 1 张手牌。抽 2 张牌。（升级抽 3 张）",
+                       False, False, _burning_pact_play)

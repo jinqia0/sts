@@ -12,6 +12,7 @@ from sts.combat import BattleContext
 from sts.combat.types import InputState, MonsterStatus, PlayerStatus
 from sts.content.cards import (
     ANGER,
+    ARMAMENTS,
     BARRICADE,
     BATTLE_TRANCE,
     BERSERK,
@@ -20,6 +21,7 @@ from sts.content.cards import (
     BLOODLETTING,
     BODY_SLAM,
     BRUTALITY,
+    BURNING_PACT,
     CARNAGE,
     CLASH,
     CLEAVE,
@@ -32,8 +34,10 @@ from sts.content.cards import (
     DISARM,
     DOUBLE_TAP,
     DROPKICK,
+    DUAL_WIELD,
     ENTRENCH,
     EVOLVE,
+    EXHUME,
     FEED,
     FEEL_NO_PAIN,
     FIEND_FIRE,
@@ -43,6 +47,7 @@ from sts.content.cards import (
     GHOSTLY_ARMOR,
     HAND_OF_GREED,
     HAVOC,
+    HEADBUTT,
     HEAVY_BLADE,
     HEMOKINESIS,
     IMMOLATE,
@@ -77,7 +82,9 @@ from sts.content.cards import (
     TRUE_GRIT,
     TWIN_STRIKE,
     UPPERCUT,
+    WARCRY,
     WILD_STRIKE,
+    WHIRLWIND,
     WOUND,
 )
 from sts.content.monsters import Cultist
@@ -1493,3 +1500,457 @@ def test_hand_of_greed_kill_gains_gold():
     setup_hand_upgraded(bc3, HAND_OF_GREED)
     bc3.play_card(0)
     assert bc3.player.gold == gold2 + 25
+
+
+# ---- 困难档批次 3：X 费 Whirlwind + 选卡族（Armaments/Warcry/Headbutt/
+# Dual Wield/Exhume/Burning Pact）。True Grit+ 已在批次 2 实现并核对。 ----
+
+
+def test_whirlwind_x_cost_hits_all_per_energy():
+    """旋风斩：3 能量 → 每敌 3×5；能量快照后清零；牌落弃牌堆。"""
+    bc = BattleContext(seed=110)
+    bc.player.energy = 3
+    add_cultist(bc)
+    hp0 = [m.hp for m in bc.monsters.monsters]
+    setup_hand(bc, WHIRLWIND)
+    bc.play_card(0)
+    assert [m.hp for m in bc.monsters.monsters] == [hp0[0] - 15, hp0[1] - 15]
+    assert bc.player.energy == 0  # X 费：打出后能量归零
+    assert any(c.card.name == "Whirlwind" for c in bc.cards.discard_pile)
+
+
+def test_whirlwind_upgraded_strength_vigor_snapshot():
+    """旋风斩：升级 8/遍；力量/活力并入矩阵——活力在 on_use_attack_card 移除前捕获，恰好计入一次。"""
+    bc = BattleContext(seed=111)
+    bc.player.energy = 2
+    bc.player.statuses.add(PlayerStatus.STRENGTH, 2)
+    bc.player.statuses.add(PlayerStatus.VIGOR, 3)
+    m = bc.monsters.monsters[0]
+    m.hp = 100
+    m.max_hp = 100
+    hp0 = m.hp
+    setup_hand_upgraded(bc, WHIRLWIND)
+    bc.play_card(0)
+    # 每遍 = 8 + 3(活力) + 2(力量) = 13，共 2 遍
+    assert m.hp == hp0 - 26
+    assert not bc.player.statuses.has(PlayerStatus.VIGOR)  # 出伤后移除，未重复计入
+
+
+def test_whirlwind_zero_energy_plays_but_zero_hits():
+    """旋风斩：0 能量仍可打出（X 费不校验能量），0 遍无伤。"""
+    bc = BattleContext(seed=112)
+    bc.player.energy = 0
+    m = bc.monsters.monsters[0]
+    hp0 = m.hp
+    setup_hand(bc, WHIRLWIND)
+    bc.play_card(0)
+    assert m.hp == hp0
+    assert bc.player.energy == 0
+    assert any(c.card.name == "Whirlwind" for c in bc.cards.discard_pile)
+
+
+def test_whirlwind_block_absorbed_per_pass():
+    """旋风斩逐遍独立结算格挡：12 格挡吃掉两遍各 5，剩 2、不掉血。"""
+    bc = BattleContext(seed=113)
+    bc.player.energy = 2
+    m = bc.monsters.monsters[0]
+    m.block = 12
+    hp0 = m.hp
+    setup_hand(bc, WHIRLWIND)
+    bc.play_card(0)
+    assert m.hp == hp0
+    assert m.block == 2
+
+
+def test_whirlwind_curl_up_block_lands_after_all_passes():
+    """旋风斩时序（对齐 C++ 递归入队净顺序）：CURL_UP 的格挡动作 add_to_bot，落在全部遍数之后。"""
+    bc = BattleContext(seed=114)
+    bc.player.energy = 2
+    m = bc.monsters.monsters[0]
+    m.statuses.add(MonsterStatus.CURL_UP, 10)
+    hp0 = m.hp
+    setup_hand(bc, WHIRLWIND)
+    bc.play_card(0)
+    assert m.hp == hp0 - 10  # 两遍各 5 全部漏过格挡（+10 格挡动作尚未落地）
+    assert m.block == 10
+
+
+def test_whirlwind_dead_monster_skipped_in_later_passes():
+    """旋风斩：第一遍打死的怪后续遍跳过；幸存者吃满全部遍数（矩阵伤害不因死亡衰减）。"""
+    bc = BattleContext(seed=115)
+    bc.player.energy = 2
+    bc.monsters.monsters[0].hp = 4  # 第一遍即死
+    m1 = add_cultist(bc)
+    hp1 = m1.hp
+    setup_hand(bc, WHIRLWIND)
+    bc.play_card(0)
+    assert bc.monsters.monsters[0].hp == 0
+    assert m1.hp == hp1 - 10
+
+
+def test_armaments_block_and_select_upgrade():
+    """武装：5 格挡 + 多候选挂起选卡；选中者升级，其余不动。"""
+    bc = BattleContext(seed=120)
+    setup_hand(bc, ARMAMENTS, STRIKE, DEFEND)
+    bc.play_card(0)
+    assert bc.player.block == 5
+    assert bc.input_state == InputState.CARD_SELECT
+    bc.choose_card(0)  # 候选 [Strike, Defend]，选 Strike
+    strike, defend = bc.cards.hand
+    assert strike.upgraded
+    assert not defend.upgraded
+    assert bc.input_state == InputState.PLAYER_NORMAL
+
+
+def test_armaments_single_candidate_auto():
+    """武装：可升级候选恰 1 张时直执不挂选卡（对齐 ArmamentsAction 计数分支）。"""
+    bc = BattleContext(seed=121)
+    setup_hand(bc, ARMAMENTS, STRIKE)
+    defend = bc.cards.instantiate(DEFEND)
+    defend.upgraded = True
+    bc.cards.hand.append(defend)  # 候选仅未升级的 Strike
+    bc.play_card(0)
+    assert bc.input_state == InputState.PLAYER_NORMAL
+    assert bc.cards.hand[0].upgraded  # Strike 被升级
+    assert bc.cards.hand[1] is defend and defend.upgraded  # Defend+ 保持原样（不在候选）
+
+
+def test_armaments_no_candidate_and_cannot_upgrade_self():
+    """武装：无可升级手牌（已升级 + 状态卡）时仅格挡；自身打出已离手，不能升自己。"""
+    bc = BattleContext(seed=122)
+    setup_hand(bc, ARMAMENTS)
+    strike = bc.cards.instantiate(STRIKE)
+    strike.upgraded = True
+    bc.cards.hand.append(strike)
+    bc.cards.hand.append(bc.cards.instantiate(WOUND))  # 状态卡：canUpgrade 排除
+    bc.play_card(0)
+    assert bc.player.block == 5
+    assert bc.input_state == InputState.PLAYER_NORMAL
+    assert bc.cards.hand[0] is strike and bc.cards.hand[0].upgraded  # 未被动过
+    assert not bc.cards.hand[1].upgraded
+    # Armaments 落弃牌堆且保持未升级
+    assert any(c.card.name == "Armaments" and not c.upgraded for c in bc.cards.discard_pile)
+
+
+def test_armaments_plus_upgrades_all_in_hand():
+    """武装+：5 格挡 + 全部手牌升级（UpgradeAllCardsInHand），不挂选卡。"""
+    bc = BattleContext(seed=123)
+    setup_hand_upgraded(bc, ARMAMENTS, STRIKE, DEFEND)
+    bc.cards.hand.append(bc.cards.instantiate(WOUND))
+    bc.play_card(0)
+    assert bc.player.block == 5
+    assert bc.input_state == InputState.PLAYER_NORMAL
+    assert all(c.upgraded for c in bc.cards.hand)  # 全手牌升级（状态卡也置位，对齐 C++ upgrade 全遍）
+
+
+def test_armaments_searing_blow_repeat_upgrade():
+    """武装：Searing Blow 已升级仍可再升（multiple_upgrades），misc_data 递增。"""
+    bc = BattleContext(seed=124)
+    setup_hand(bc, ARMAMENTS)
+    sb = bc.cards.instantiate(SEARING_BLOW)
+    sb.upgraded = True
+    sb.misc_data = 1
+    bc.cards.hand.append(sb)
+    bc.play_card(0)
+    assert bc.input_state == InputState.PLAYER_NORMAL  # 单候选直执
+    assert sb.upgraded
+    assert sb.misc_data == 2
+
+
+def test_warcry_draw_then_put_on_top():
+    """战吼：先抽 1 再选卡置顶（候选含新抽的牌）；自身消耗、不在候选。"""
+    bc = BattleContext(seed=125)
+    setup_hand(bc, WARCRY, STRIKE, DEFEND)
+    bc.play_card(0)
+    assert bc.input_state == InputState.CARD_SELECT
+    assert len(bc.cards.hand) == 3  # Strike/Defend + 新抽 1（候选 = 3 张）
+    assert all(c.card.name != "Warcry" for c in bc.card_select_info.candidates)
+    strike = bc.cards.hand[0]
+    bc.choose_card(0)
+    assert bc.input_state == InputState.PLAYER_NORMAL
+    assert bc.cards.draw_pile[-1] is strike  # 置顶 = 列表尾
+    assert strike not in bc.cards.hand
+    assert len(bc.cards.hand) == 2
+    assert any(c.card.name == "Warcry" for c in bc.cards.exhaust_pile)
+    assert bc.cards.pop_from_draw_pile() is strike  # 下一张抽到的就是它
+
+
+def test_warcry_single_candidate_and_empty_hand():
+    """战吼：抽完仅 1 张手牌时自动置顶；抽完空手时跳过选卡。"""
+    bc = BattleContext(seed=126)
+    bc.cards.draw_pile.clear()
+    bc.cards.discard_pile.clear()
+    setup_hand(bc, WARCRY, STRIKE)
+    bc.play_card(0)
+    assert bc.input_state == InputState.PLAYER_NORMAL  # 单候选直执（无牌可抽 → 候选仅 Strike）
+    assert bc.cards.draw_pile[-1].card.name == "Strike"
+    assert bc.cards.hand == []
+    # 空手：无候选 → 跳过选卡仅消耗自身（NO_DRAW 拦住抽牌；留 1 张抽牌堆
+    # 牌避免触发引擎"三堆皆空即败"的必败守卫）
+    bc2 = BattleContext(seed=126)
+    bc2.cards.draw_pile.clear()
+    bc2.cards.discard_pile.clear()
+    bc2.cards.draw_pile.append(bc2.cards.instantiate(STRIKE))
+    bc2.player.statuses.add(PlayerStatus.NO_DRAW, 1)
+    setup_hand(bc2, WARCRY)
+    bc2.play_card(0)
+    assert bc2.input_state == InputState.PLAYER_NORMAL
+    assert bc2.cards.hand == []
+    assert len(bc2.cards.draw_pile) == 1  # 未被抽走也未被置顶
+    assert any(c.card.name == "Warcry" for c in bc2.cards.exhaust_pile)
+
+
+def test_warcry_upgraded_draws_two():
+    """战吼+：抽 2 后选卡置顶。"""
+    bc = BattleContext(seed=127)
+    setup_hand_upgraded(bc, WARCRY, STRIKE, DEFEND)
+    draw0 = len(bc.cards.draw_pile)
+    bc.play_card(0)
+    assert bc.input_state == InputState.CARD_SELECT
+    assert len(bc.cards.hand) == 4  # Strike/Defend + 抽 2
+    assert len(bc.cards.draw_pile) == draw0 - 2
+    bc.choose_card(0)
+    assert len(bc.cards.hand) == 3
+    assert bc.cards.draw_pile[-1].card.name == "Strike"
+
+
+def test_headbutt_attack_then_put_on_top_single():
+    """头槌：9 伤 + 弃牌堆单候选自动置顶；刚打出的自身已落堆但被排除（对齐 C++ 净候选集）。"""
+    bc = BattleContext(seed=128)
+    m = bc.monsters.monsters[0]
+    hp0 = m.hp
+    strike = bc.cards.instantiate(STRIKE)
+    bc.cards.discard_pile.append(strike)
+    setup_hand(bc, HEADBUTT)
+    headbutt_inst = bc.cards.hand[0]
+    bc.play_card(0)
+    assert m.hp == hp0 - 9
+    assert bc.input_state == InputState.PLAYER_NORMAL  # 候选仅 strike（自身被排除）→ 直执
+    assert bc.cards.draw_pile[-1] is strike
+    assert bc.cards.discard_pile == [headbutt_inst]  # strike 已移出；自身留堆
+
+
+def test_headbutt_multi_discard_select_and_upgraded():
+    """头槌：弃牌堆多卡挂起选卡；未选中者与刚打出的自身留堆；升级 12 伤。"""
+    bc = BattleContext(seed=129)
+    m = bc.monsters.monsters[0]
+    hp0 = m.hp
+    s1 = bc.cards.instantiate(STRIKE)
+    d1 = bc.cards.instantiate(DEFEND)
+    bc.cards.discard_pile.extend([s1, d1])
+    setup_hand(bc, HEADBUTT)
+    bc.play_card(0)
+    assert bc.input_state == InputState.CARD_SELECT
+    assert len(bc.card_select_info.candidates) == 2  # s1/d1（自身已落堆但被排除）
+    bc.choose_card(1)  # 选 Defend
+    assert bc.cards.draw_pile[-1] is d1
+    assert [c.card.name for c in bc.cards.discard_pile] == ["Strike", "Headbutt"]  # strike 留堆 + 打出的本体
+    # 升级 12 伤；清空弃牌堆（排除自身后无候选）→ 仅攻击
+    setup_hand_upgraded(bc, HEADBUTT)
+    bc.cards.discard_pile.clear()
+    bc.play_card(0)
+    assert m.hp == hp0 - 9 - 12
+    assert bc.input_state == InputState.PLAYER_NORMAL
+
+
+def test_headbutt_empty_discard_only_attack():
+    """头槌：弃牌堆空时仅攻击、不挂选卡。"""
+    bc = BattleContext(seed=130)
+    m = bc.monsters.monsters[0]
+    hp0 = m.hp
+    bc.cards.discard_pile.clear()
+    setup_hand(bc, HEADBUTT)
+    bc.play_card(0)
+    assert m.hp == hp0 - 9
+    assert bc.input_state == InputState.PLAYER_NORMAL
+
+
+def test_headbutt_kill_clears_pending_select():
+    """头槌结算序（先攻击后选卡）：击杀收尾 → 胜利清队，后续选卡动作被清空。"""
+    bc = BattleContext(seed=131)
+    bc.monsters.monsters[0].hp = 9
+    bc.cards.discard_pile.append(bc.cards.instantiate(STRIKE))
+    bc.cards.discard_pile.append(bc.cards.instantiate(DEFEND))
+    setup_hand(bc, HEADBUTT)
+    bc.play_card(0)
+    assert bc.won
+    assert bc.card_select_info is None
+
+
+def test_dual_wield_single_candidate_copies_one():
+    """双持：单候选自动复制 1 份（C++ up?2:1——基础 1 份），保留升级态；自身消耗。"""
+    bc = BattleContext(seed=132)
+    setup_hand(bc, DUAL_WIELD)
+    strike = bc.cards.instantiate(STRIKE)
+    strike.upgraded = True
+    bc.cards.hand.append(strike)
+    bc.play_card(0)
+    assert bc.input_state == InputState.PLAYER_NORMAL  # 单候选直执
+    assert len(bc.cards.hand) == 2  # 本体 + 1 副本
+    copy = bc.cards.hand[1]
+    assert copy.card.name == "Strike"
+    assert copy.upgraded  # 副本保留升级态
+    assert copy.unique_id != strike.unique_id
+    assert any(c.card.name == "Dual Wield" for c in bc.cards.exhaust_pile)
+
+
+def test_dual_wield_copy_preserves_misc_data():
+    """双持：副本保留实例计数（对齐 C++ 整实例拷贝）——Rampage 叠伤随副本带走。"""
+    bc = BattleContext(seed=133)
+    setup_hand(bc, DUAL_WIELD)
+    rampage = bc.cards.instantiate(RAMPAGE)
+    rampage.misc_data = 5
+    bc.cards.hand.append(rampage)
+    bc.play_card(0)
+    copies = [c for c in bc.cards.hand if c.card.name == "Rampage"]
+    assert len(copies) == 2  # 本体 + 副本
+    assert copies[1].misc_data == 5
+    assert copies[1].unique_id != rampage.unique_id
+
+
+def test_dual_wield_multi_select_and_upgraded_count():
+    """双持：多候选挂起选卡；升级复制 2 份；无攻击/能力候选时跳过。"""
+    bc = BattleContext(seed=134)
+    setup_hand(bc, DUAL_WIELD, STRIKE, INFLAME)
+    bc.play_card(0)
+    assert bc.input_state == InputState.CARD_SELECT
+    bc.choose_card(1)  # 选 Inflame
+    assert [c.card.name for c in bc.cards.hand] == ["Strike", "Inflame", "Inflame"]
+    assert len({c.unique_id for c in bc.cards.hand}) == 3
+    # 升级：2 份副本
+    bc2 = BattleContext(seed=134)
+    setup_hand_upgraded(bc2, DUAL_WIELD, STRIKE)
+    bc2.play_card(0)
+    assert bc2.input_state == InputState.PLAYER_NORMAL
+    assert [c.card.name for c in bc2.cards.hand] == ["Strike"] * 3  # 本体 + 2 副本
+    # 无候选（手牌全是技能）：不挂选卡
+    bc3 = BattleContext(seed=134)
+    setup_hand(bc3, DUAL_WIELD, DEFEND)
+    bc3.play_card(0)
+    assert bc3.input_state == InputState.PLAYER_NORMAL
+    assert [c.card.name for c in bc3.cards.hand] == ["Defend"]
+    assert any(c.card.name == "Dual Wield" for c in bc3.cards.exhaust_pile)
+
+
+def test_dual_wield_hand_full_overflow_to_discard():
+    """双持：手牌满时副本落弃牌堆（对齐 createTempCardInDiscard 手满分支）。"""
+    bc = BattleContext(seed=135)
+    setup_hand_upgraded(bc, DUAL_WIELD, *([STRIKE] * 9))  # 10 张；打出后手牌 9
+    bc.play_card(0)
+    assert bc.input_state == InputState.CARD_SELECT  # 9 张打击多候选
+    bc.choose_card(0)
+    assert len(bc.cards.hand) == 10  # 第 1 份副本入手（满）
+    assert len(bc.cards.discard_pile) == 1  # 第 2 份落弃牌堆
+    assert bc.cards.discard_pile[0].card.name == "Strike"
+
+
+def test_exhume_select_from_exhaust_pile_excludes_self():
+    """发掘：消耗堆多卡挂起选卡回手；自身消耗落堆先于选卡、被排除在候选外（对齐 C++ 排除分支）。"""
+    bc = BattleContext(seed=136)
+    wound = bc.cards.instantiate(WOUND)
+    strike = bc.cards.instantiate(STRIKE)
+    bc.cards.exhaust_pile.extend([wound, strike])
+    setup_hand(bc, EXHUME)
+    bc.play_card(0)
+    assert bc.input_state == InputState.CARD_SELECT
+    # Exhume 自身已落消耗堆但不在候选
+    assert [c.card.name for c in bc.card_select_info.candidates] == ["Wound", "Strike"]
+    bc.choose_card(1)
+    assert [c.card.name for c in bc.cards.hand] == ["Strike"]
+    assert bc.cards.hand[0] is strike
+    assert [c.card.name for c in bc.cards.exhaust_pile] == ["Wound", "Exhume"]
+
+
+def test_exhume_single_candidate_empty_and_upgraded_cost():
+    """发掘：单候选直执；消耗堆排除后为空时跳过；升级 1→0 费（Cards.h getUpgradedCost）。"""
+    bc = BattleContext(seed=137)
+    wound = bc.cards.instantiate(WOUND)
+    bc.cards.exhaust_pile.append(wound)
+    setup_hand(bc, EXHUME)
+    bc.play_card(0)
+    assert bc.input_state == InputState.PLAYER_NORMAL  # 候选仅 Wound → 直执
+    assert bc.cards.hand == [wound]
+    assert [c.card.name for c in bc.cards.exhaust_pile] == ["Exhume"]
+    # 消耗堆只有自身：无候选 → 跳过
+    bc2 = BattleContext(seed=137)
+    setup_hand(bc2, EXHUME)
+    bc2.play_card(0)
+    assert bc2.input_state == InputState.PLAYER_NORMAL
+    assert bc2.cards.hand == []
+    assert [c.card.name for c in bc2.cards.exhaust_pile] == ["Exhume"]
+    # 升级 0 费
+    assert EXHUME.upgraded_cost == 0
+    bc3 = BattleContext(seed=137)
+    bc3.cards.exhaust_pile.append(bc3.cards.instantiate(STRIKE))
+    setup_hand_upgraded(bc3, EXHUME)
+    energy0 = bc3.player.energy
+    bc3.play_card(0)
+    assert bc3.player.energy == energy0
+    assert bc3.cards.hand[0].card.name == "Strike"
+
+
+def test_exhume_hand_full_guard():
+    """发掘：手牌满时整体跳过（对齐 C++ cardsInHand == MAX_HAND_SIZE 守卫）。"""
+    bc = BattleContext(seed=138)
+    setup_hand(bc, EXHUME, *([STRIKE] * 10))  # 11 张；打出后手牌 10（满）
+    strike = bc.cards.instantiate(STRIKE)
+    bc.cards.exhaust_pile.append(strike)
+    bc.play_card(0)
+    assert bc.input_state == InputState.PLAYER_NORMAL
+    assert len(bc.cards.hand) == 10  # 未回手
+    assert strike in bc.cards.exhaust_pile
+    assert [c.card.name for c in bc.cards.exhaust_pile] == ["Strike", "Exhume"]
+
+
+def test_burning_pact_select_exhaust_then_draw():
+    """燃烧契约：选卡消耗（基础版也是选卡——wiki 为随机消耗，以 C++ 为准）→ 后抽 2。"""
+    bc = BattleContext(seed=139)
+    draw0 = len(bc.cards.draw_pile)
+    setup_hand(bc, BURNING_PACT, STRIKE, DEFEND)
+    bc.play_card(0)
+    assert bc.input_state == InputState.CARD_SELECT
+    strike = bc.cards.hand[0]
+    bc.choose_card(0)  # 选 Strike 消耗
+    assert bc.input_state == InputState.PLAYER_NORMAL
+    assert any(c is strike for c in bc.cards.exhaust_pile)
+    assert len(bc.cards.hand) == 3  # Defend + 抽 2
+    assert len(bc.cards.draw_pile) == draw0 - 2
+
+
+def test_burning_pact_single_candidate_empty_hand_upgraded():
+    """燃烧契约：单候选直执；空手仅抽牌；升级抽 3。"""
+    bc = BattleContext(seed=140)
+    draw0 = len(bc.cards.draw_pile)
+    setup_hand(bc, BURNING_PACT, STRIKE)
+    bc.play_card(0)
+    assert bc.input_state == InputState.PLAYER_NORMAL  # 候选仅 Strike → 直执
+    assert any(c.card.name == "Strike" for c in bc.cards.exhaust_pile)
+    assert len(bc.cards.hand) == 2  # 抽 2
+    assert len(bc.cards.draw_pile) == draw0 - 2
+    # 空手：跳过消耗，仅抽牌
+    bc2 = BattleContext(seed=140)
+    draw1 = len(bc2.cards.draw_pile)
+    setup_hand(bc2, BURNING_PACT)
+    bc2.play_card(0)
+    assert bc2.input_state == InputState.PLAYER_NORMAL
+    assert bc2.cards.exhaust_pile == []
+    assert len(bc2.cards.hand) == 2
+    assert len(bc2.cards.draw_pile) == draw1 - 2
+    # 升级抽 3
+    bc3 = BattleContext(seed=140)
+    draw2 = len(bc3.cards.draw_pile)
+    setup_hand_upgraded(bc3, BURNING_PACT, STRIKE)
+    bc3.play_card(0)
+    assert len(bc3.cards.hand) == 3
+    assert len(bc3.cards.draw_pile) == draw2 - 3
+
+
+def test_burning_pact_triggers_feel_no_pain():
+    """燃烧契约：消耗走统一路径——先打出的 Feel No Pain 在其消耗时 +3 格挡。"""
+    bc = BattleContext(seed=141)
+    setup_hand(bc, FEEL_NO_PAIN, BURNING_PACT, STRIKE)
+    bc.play_card(0)  # FNP
+    bc.play_card(0)  # Burning Pact：单候选 Strike 直执消耗
+    assert bc.player.block == 3
+    assert any(c.card.name == "Strike" for c in bc.cards.exhaust_pile)
+    assert len(bc.cards.hand) == 2  # 抽 2
