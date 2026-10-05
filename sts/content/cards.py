@@ -53,6 +53,8 @@ class CardDef:
     self_retain: bool = False  # 自带保留：回合末不弃（Crescendo/Protect 等）
     retain_when_upgraded: bool = False  # 仅升级版保留（Worship/Blasphemy）
     on_discard_effect: "callable | None" = None  # 被弃置时触发（Tactician/Reflex），引擎 on_manual_discard 已接线
+    on_drawn_effect: "callable | None" = None  # 被抽到时触发（Endless Agony：复制 1 张入手），引擎 on_card_drawn 已接线
+    dynamic_cost: "callable | None" = None  # 动态费用回调 (bc, inst) -> int（Eviscerate：3-本回合弃牌数）
     # ---- 中等档迁移新增（批次 2）----
     innate_when_upgraded: bool = False  # 仅升级版固有（Brutality+；引擎 move_innate_to_top 需接线读此位，见批次 2 报告）
     on_exhaust_effect: "callable | None" = None  # 被消耗时触发 (bc, inst) -> None（Sentinel +能量；引擎 on_card_exhausted 已接线读取，内容层 _exhaust_from_hand 的显式调用以效果侧守卫防双重）
@@ -66,7 +68,8 @@ def _strike_play(bc: BattleContext, item: CardQueueItem) -> None:
 
 
 def _defend_play(bc: BattleContext, item: CardQueueItem) -> None:
-    bc.add_to_bot(Actions.gain_block(bc.calculate_card_block(5)))
+    # Defend+ 为 8 格挡（wiki；批次 C 遗留修正——原恒 5 不读升级位）
+    bc.add_to_bot(Actions.gain_block(bc.calculate_card_block(8 if item.card.upgraded else 5)))
 
 
 def _bash_play(bc: BattleContext, item: CardQueueItem) -> None:
@@ -1126,9 +1129,9 @@ BURNING_PACT = CardDef("Burning Pact", "燃烧契约", 1, "Skill",
                        False, False, _burning_pact_play)
 
 
-# ---- 诅咒卡 / 无色卡 re-export（正式定义在 curses_cards.py / colorless_cards.py，
-# 2026-10-06 批次 4）----
-# 惰性 re-export（PEP 562）：两个内容子模块均需在模块级导入本文件的 CardDef，
+# ---- 诅咒卡 / 无色卡 / 静默卡 re-export（正式定义在 curses_cards.py /
+# colorless_cards.py / silent_cards.py，批次 4 / 批次 C）----
+# 惰性 re-export（PEP 562）：各内容子模块均需在模块级导入本文件的 CardDef，
 # 顶部 from-import 会构成 cards→子模块→cards 的导入期循环（子模块先导入时
 # 本文件尾部拿不到已定义名）；__getattr__ 只在属性缺失时触发，任意导入顺序
 # 均安全。from sts.content.cards import REGRET / BANDAGE_UP 等用法保持兼容。
@@ -1143,4 +1146,8 @@ def __getattr__(name: str):
 
     if hasattr(_colorless, name):
         return getattr(_colorless, name)
+    import sts.content.silent_cards as _silent
+
+    if hasattr(_silent, name):
+        return getattr(_silent, name)
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

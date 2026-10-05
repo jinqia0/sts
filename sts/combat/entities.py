@@ -164,6 +164,11 @@ class Player(Combatant):
             bc.add_to_bot(Actions.remove_player_status(PlayerStatus.LOSE_STRENGTH))
         if s.has(PlayerStatus.NO_DRAW):
             bc.add_to_bot(Actions.remove_player_status(PlayerStatus.NO_DRAW))
+        # Wraith Form（wiki 现行文本：每回合末失去 1×层 敏捷；对齐 C++
+        # PS::WRAITH_FORM 的 DecrementStatus<DEXTERITY>，永续可叠）
+        n = bc.player.special.get("wraith_form_dex", 0)
+        if n > 0:
+            bc.add_to_bot(Actions.debuff_player(PlayerStatus.DEXTERITY, -n, False))
         if s.has(PlayerStatus.ENTANGLED):
             bc.add_to_bot(Actions.remove_player_status(PlayerStatus.ENTANGLED))
         if s.has(PlayerStatus.DOUBLE_TAP):
@@ -189,6 +194,14 @@ class Player(Combatant):
             # 均衡衰减在弃牌之后的回合末统一段（Player.cpp:472-474），
             # 玩家自施无 justApplied
             self.statuses.decrement(PlayerStatus.EQUILIBRIUM)
+        if self.statuses.has(PlayerStatus.DOUBLE_DAMAGE):
+            # Phantasmal Killer 落地态：全回合攻击翻倍（wiki "your Attacks
+            # deal double damage"），回合末衰减（对齐 C++ DOUBLE_DAMAGE 在
+            # JustApplied 组）——原"首攻击后移除"实现错误已修
+            if self.statuses.just_applied(PlayerStatus.DOUBLE_DAMAGE):
+                self.statuses.set_just_applied(PlayerStatus.DOUBLE_DAMAGE, False)
+            else:
+                self.statuses.decrement(PlayerStatus.DOUBLE_DAMAGE)
 
     def apply_start_of_turn_powers(self, bc: BattleContext) -> None:
         """玩家回合开始：仅限回合开始的清除类状态。
@@ -479,6 +492,8 @@ class Monster(Combatant):
                 return
         if s.has(MonsterStatus.LOCK_ON):
             s.decrement(MonsterStatus.LOCK_ON)  # Monster.cpp:83-84
+        if s.has(MonsterStatus.CHOKED):
+            s.remove(MonsterStatus.CHOKED)  # Monster.cpp:24-26：回合开始清除
         if s.has(MonsterStatus.SLOW):
             s.remove(MonsterStatus.SLOW)  # Giant Head：回合开始清零（Monster.cpp:79-80）
         self.block = 0

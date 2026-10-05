@@ -129,8 +129,10 @@ class BattleContext:
             self.relics.on_battle_start_post_draw(self)
 
     def _recharge_energy(self) -> None:
-        """回合开始回能：基础 3 + Berserk/能量遗物加成 + ICE_CREAM 结转。"""
+        """回合开始回能：基础 3 + Berserk/能量遗物加成 + ICE_CREAM 结转 +
+        Flying Knee/Outmaneuver 的下回合能量槽（Silent 卡，special 一次性）。"""
         base = ENERGY_PER_TURN + self.player.energy_per_turn_bonus + self.relics.extra_energy_per_turn(self)
+        base += self.player.special.pop("next_turn_energy", 0)
         leftover = self.player.energy if self.relics.keeps_leftover_energy(self) else 0
         self.player.energy = base + leftover
 
@@ -161,7 +163,7 @@ class BattleContext:
                 self.play_card_queue_item(self.card_queue.pop_front())
                 continue
             # 我方无牌且无 HP 外伤害手段 → 必败（本场景牌耗尽即败）
-            if not (self.cards.hand or self.cards.draw_pile or self.cards.discard_pile):
+            if not (self.cards.hand or self.cards.draw_pile or self.cards.discard_pile or self.cards.limbo):
                 self.outcome = Outcome.PLAYER_LOSS
                 break
             if self.monster_turn_idx < self.monsters.monster_count:
@@ -226,6 +228,8 @@ class BattleContext:
             self.player.energy = 0
         else:
             cost = inst.cost
+            if getattr(inst.card, "dynamic_cost", None) is not None:
+                cost = inst.card.dynamic_cost(self, inst)
             # Corruption：技能牌 0 费（打出即消耗的标志在 use_card 置位）
             if inst.card.ctype == "Skill" and self.player.statuses.has(PlayerStatus.CORRUPTION):
                 cost = 0
@@ -353,6 +357,14 @@ class BattleContext:
             from sts.content.cards import DAZED
 
             self.add_to_bot(Actions.make_temp_card_in_draw_pile(DAZED, False, shuffle_into=True))
+        # AFTER_IMAGE（Silent 残像）：每打出一张牌得 1 格挡（对齐 C++ 四处
+        # onUseXxxCard 的 GainBlock 分支与 wiki；原"出技能生成 Shiv"实现错误）
+        if self.player.statuses.has(PlayerStatus.AFTER_IMAGE):
+            self.add_to_bot(Actions.gain_block(1))
+        # CHOKED（Silent Choke）：每打出一张牌，带 CHOKED 的怪受层伤
+        for m in self.monsters.monsters:
+            if m.is_targetable() and m.statuses.has(MonsterStatus.CHOKED):
+                self.add_to_bot(Actions.damage_enemy(m.idx, m.statuses.get(MonsterStatus.CHOKED)))
         # 逐怪"出牌响应"状态（对齐 onAfterUseCard 的 arr[0] 段，BattleContext.cpp:1941-1959；
         # C++ 只查 arr[0]——Time Eater/SLOW/BEAT_OF_DEATH 均为单怪遭遇，沿用）
         if not item.autoplay:
@@ -438,9 +450,6 @@ class BattleContext:
         item = self.cur_card_queue_item
         p.skills_played_this_turn += 1
         self.relics.on_use_skill_card(self)
-        # AFTER_IMAGE（Silent 残像）：每打出技能牌生成 1 张 Shiv
-        if p.statuses.has(PlayerStatus.AFTER_IMAGE):
-            self._gen_shiv()
         # BURST（Silent 爆发）：本回合下一张技能牌结算两次（DOUBLE_TAP 的
         # 技能版；触发后递减）
         if p.statuses.has(PlayerStatus.BURST) and item is not None and not item.autoplay:
@@ -519,12 +528,13 @@ class BattleContext:
         # Well-Laid Plans（Silent）：回合末选 1 张手牌保留
         if p.special.get("wlp"):
             cands = list(self.cards.hand)
+            n_keep = p.special.get("wlp")
             if cands:
                 def _retain_chosen(bc2, chosen):
                     for inst in chosen:
                         inst.retain = True
-                self.open_card_select(cands, _retain_chosen, pick_count=1,
-                                      can_pick_zero=True, prompt="选择 1 张保留")
+                self.open_card_select(cands, _retain_chosen, pick_count=n_keep,
+                                      can_pick_zero=True, prompt=f"选择 {n_keep} 张保留")
         # Burn/Regret/Decay/Doubt/Shame/Pride：以 trigger_on_use=False 入队
         #（对齐 lightspeed callEndTurnActions 的逐张入队；处理时机在
         # on_turn_ending 弃手牌之前）
@@ -562,9 +572,10 @@ class BattleContext:
         if s.has(PlayerStatus.NOXIOUS_FUMES):
             self.add_to_bot(Actions.debuff_all_enemy(MonsterStatus.POISON, s.get(PlayerStatus.NOXIOUS_FUMES), False))
         if s.has(PlayerStatus.INFINITE_BLADES):
-            if self.player.attacks_played_last_turn > 0:
-                for _ in range(s.get(PlayerStatus.INFINITE_BLADES)):
-                    self._gen_shiv()
+            # wiki/C++（Player.cpp 无条件 MakeTempCardInHand(SHIV)）：每回合
+            # 无条件生成 ×层 Shiv——原"上回合出过攻击牌"条件系我方误加，去除
+            for _ in range(s.get(PlayerStatus.INFINITE_BLADES)):
+                self._gen_shiv()
         # 下回合生成槽（Nightmare/Doppelganger）：N 份保留副本入手
         for card_def, upgraded, count in self.player.special.pop("next_turn_cards", []):
             for _ in range(count):
@@ -575,13 +586,24 @@ class BattleContext:
                     self.cards.hand.append(inst)
                 else:
                     self.cards.move_to_discard_pile(inst)
-        # 格挡衰减：BARRICADE 保留全部，CALIPERS 保留 15，否则清零
+        # 格挡衰减：BARRICADE 保留全部，CALIPERS 保留 15，否则清零；
+        # BLUR（Silent）：标记时本回合格挡全额保留一轮（special 一次性）
         if not self.player.statuses.has(PlayerStatus.BARRICADE):
-            retain = self.relics.on_block_decay(self)
-            self.player.block = min(self.player.block, retain)
+            if self.player.special.pop("blur_next_turn", False):
+                pass  # Blur：跳过本回合衰减
+            else:
+                retain = self.relics.on_block_decay(self)
+                self.player.block = min(self.player.block, retain)
         if self.outcome != Outcome.UNDECIDED:
             return
-        self.add_to_bot(Actions.draw_cards(HAND_DRAW))
+        # Predator/Doppelganger 的下回合加抽（special 一次性）
+        extra = self.player.special.pop("next_turn_draw", 0)
+        self.add_to_bot(Actions.draw_cards(HAND_DRAW + extra))
+        # Tools of the Trade（Silent）：回合开始抽 1 弃 1（对齐 C++
+        # applyStartOfTurnPostDrawPowers 的 TOOLS 分支 + wiki 弃牌口径）
+        if self.player.special.get("tott"):
+            self.add_to_bot(Actions.draw_cards(1))
+            self.add_to_bot(Actions.discard_chosen(1))
         self.relics.on_turn_start_post_draw(self)
         self._recharge_energy()
         self._reset_turn_counters()
@@ -628,6 +650,9 @@ class BattleContext:
         s = self.player.statuses
         if inst.card.lose_energy_when_drawn > 0:
             self.player.energy = max(0, self.player.energy - inst.card.lose_energy_when_drawn)
+        draw_eff = getattr(inst.card, "on_drawn_effect", None)
+        if draw_eff is not None:
+            draw_eff(self, inst)
         if s.has(PlayerStatus.CONFUSED):
             # Snecko/Confused：抽到的牌本回合费用随机 0~3（CardManager.cpp:403-412）
             inst.cost_for_turn = self.rngs.misc.int_inclusive(0, 3)
@@ -724,8 +749,7 @@ class BattleContext:
         if item.card is not None and item.card.card.name == "Shiv":
             d += self.player.statuses.get(PlayerStatus.ACCURACY)
         if self.player.statuses.has(PlayerStatus.DOUBLE_DAMAGE):
-            d *= 2
-            self.player.statuses.remove(PlayerStatus.DOUBLE_DAMAGE)
+            d *= 2  # 全回合翻倍（衰减在 apply_at_end_of_round_powers）
         d = self.relics.modify_card_damage(self, item, target_idx, d)
         if self.player.statuses.has(PlayerStatus.WEAK):
             d *= 0.75
