@@ -346,6 +346,13 @@ class BattleContext:
         if self.player.statuses.has(PlayerStatus.A_THOUSAND_CUTS):
             self.add_to_bot(
                 Actions.damage_all_enemy(self.player.statuses.get(PlayerStatus.A_THOUSAND_CUTS)))
+        # HEX（Chosen 巫咒）：每打出一张牌洗入 1 张 DAZED（对齐
+        # BattleContext.cpp:1765/1844/1907 三处 onUseXxx 之后的统一段）；
+        # 原"每抽 1 牌掉 1 HP"实现错误，已修正
+        if self.player.statuses.has(PlayerStatus.HEX):
+            from sts.content.cards import DAZED
+
+            self.add_to_bot(Actions.make_temp_card_in_draw_pile(DAZED, False, shuffle_into=True))
         # 逐怪"出牌响应"状态（对齐 onAfterUseCard 的 arr[0] 段，BattleContext.cpp:1941-1959；
         # C++ 只查 arr[0]——Time Eater/SLOW/BEAT_OF_DEATH 均为单怪遭遇，沿用）
         if not item.autoplay:
@@ -621,8 +628,6 @@ class BattleContext:
         s = self.player.statuses
         if inst.card.lose_energy_when_drawn > 0:
             self.player.energy = max(0, self.player.energy - inst.card.lose_energy_when_drawn)
-        if s.has(PlayerStatus.HEX):
-            self.add_to_bot(Actions.player_lose_hp(1))
         if s.has(PlayerStatus.CONFUSED):
             # Snecko/Confused：抽到的牌本回合费用随机 0~3（CardManager.cpp:403-412）
             inst.cost_for_turn = self.rngs.misc.int_inclusive(0, 3)

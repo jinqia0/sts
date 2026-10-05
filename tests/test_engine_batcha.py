@@ -374,13 +374,18 @@ def test_lock_on_decrements():
 # ---- 玩家侧：HEX / CONFUSED / CURIOSITY / PAINFUL_STABS / ENVENOM ----
 
 
-def test_hex_damages_per_draw():
-    bc = BattleContext(seed=227)
+def test_hex_adds_dazed_per_card_played():
+    """HEX（Chosen）：每打出一张牌洗入 1 张 DAZED（BattleContext.cpp:1765）。"""
+    from sts.content.cards import DAZED
+
+    bc = BattleContext(seed=227, deck=[STRIKE] * 20)
+    setup_hand(bc, STRIKE, STRIKE)
+    dazed0 = sum(1 for c in bc.cards.draw_pile if c.card is DAZED)
     bc.player.statuses.add(PlayerStatus.HEX, 1)
-    bc.cards.draw_pile.append(bc.cards.instantiate(STRIKE))
-    bc.add_to_bot(Actions.draw_cards(1))
-    run_queue(bc)
-    assert bc.player.hp == 80 - 1
+    bc.play_card(0)
+    dazed1 = sum(1 for c in bc.cards.draw_pile if c.card is DAZED)
+    assert dazed1 == dazed0 + 1  # 打 1 张 → +1 DAZED（洗入抽牌堆随机位）
+    assert bc.player.hp == 80  # 不掉血（原实现错误已修）
 
 
 def test_confused_randomizes_cost():

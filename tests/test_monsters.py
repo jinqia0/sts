@@ -20,8 +20,15 @@ from sts.content.monsters import (
     AcidSlimeM,
     AcidSlimeS,
     BlueSlaver,
+    BookOfStabbing,
+    BronzeAutomaton,
+    BronzeOrb,
+    Byrd,
+    Centurion,
+    Chosen,
     FatGremlin,
     FungiBeast,
+    GremlinLeader,
     GremlinNob,
     GreenLouse,
     GremlinWizard,
@@ -31,17 +38,25 @@ from sts.content.monsters import (
     Looter,
     MadGremlin,
     Mugger,
+    Mystic,
     RedLouse,
     RedSlaver,
     Sentry,
+    ShelledParasite,
     ShieldGremlin,
     SlimeBoss,
     SneakyGremlin,
+    Snecko,
+    SnakePlant,
     SpikeSlimeL,
     SpikeSlimeM,
     SpikeSlimeS,
+    SphericGuardian,
     Taskmaster,
+    TheChamp,
+    TheCollector,
     TheGuardian,
+    TorchHead,
 )
 
 PLAYER_MAX_HP = 80
@@ -1970,3 +1985,1123 @@ def test_gremlin_gang_gremlins_never_escape():
     for m in bc.monsters.monsters:
         assert m.is_targetable()
         assert not m.is_escaping
+
+
+# ====================================================================
+# 批次 B：Act 2 全部新怪（15 种）+ 19 个 Act 2 遭遇注册。
+# 数值/分段逐行对齐 lightspeed MonsterSpecific.cpp，wiki 交叉校验。
+# ====================================================================
+
+
+def act2_battle(encounter: str, seed: int = 0, ascension: int = 0) -> BattleContext:
+    return BattleContext(seed=seed, encounter=encounter, ascension=ascension)
+
+
+ACT2_ENCOUNTERS = [
+    ("spheric_guardian", 1, 20, 20),
+    ("chosen", 1, 95, 99),
+    ("shell_parasite", 1, 68, 72),
+    ("three_byrds", 3, 25, 31),
+    ("two_thieves", 2, 44, 52),
+    ("chosen_and_byrds", 2, 25, 99),
+    ("sentry_and_sphere", 2, 20, 42),
+    ("cultist_and_chosen", 2, 48, 99),
+    ("three_cultist", 3, 48, 54),
+    ("shelled_parasite_and_fungi", 2, 22, 72),
+    ("snecko", 1, 114, 120),
+    ("snake_plant", 1, 75, 79),
+    ("centurion_and_healer", 2, 48, 80),
+    ("book_of_stabbing", 1, 160, 164),
+    ("champ", 1, 420, 420),
+]
+
+
+@pytest.mark.parametrize("encounter,count,hp_lo,hp_hi", ACT2_ENCOUNTERS)
+def test_act2_encounter_spawn_and_hp_range(encounter, count, hp_lo, hp_hi):
+    for seed in range(10):
+        bc = act2_battle(encounter, seed=seed)
+        assert bc.monsters.monster_count == count
+        for m in bc.monsters.monsters:
+            assert hp_lo <= m.hp <= hp_hi
+            assert m.max_hp == m.hp
+            assert m.current_move is not None
+        assert len(bc.cards.draw_pile) + len(bc.cards.hand) == 10
+
+
+def test_act2_compositions():
+    """多怪遭遇的槽位构成（对齐 MonsterGroup.cpp 的 Act 2 分支）。"""
+    for seed in range(5):
+        assert [type(m).__name__ for m in act2_battle("three_byrds", seed).monsters.monsters] == ["Byrd"] * 3
+        comp = [type(m).__name__ for m in act2_battle("two_thieves", seed).monsters.monsters]
+        assert comp == ["Looter", "Mugger"]
+        comp = [type(m).__name__ for m in act2_battle("chosen_and_byrds", seed).monsters.monsters]
+        assert comp == ["Byrd", "Chosen"]
+        comp = [type(m).__name__ for m in act2_battle("sentry_and_sphere", seed).monsters.monsters]
+        assert comp == ["Sentry", "SphericGuardian"]
+        comp = [type(m).__name__ for m in act2_battle("cultist_and_chosen", seed).monsters.monsters]
+        assert comp == ["Cultist", "Chosen"]
+        comp = [type(m).__name__ for m in act2_battle("three_cultist", seed).monsters.monsters]
+        assert comp == ["Cultist"] * 3
+        comp = [type(m).__name__ for m in act2_battle("shelled_parasite_and_fungi", seed).monsters.monsters]
+        assert comp == ["ShelledParasite", "FungiBeast"]
+        comp = [type(m).__name__ for m in act2_battle("centurion_and_healer", seed).monsters.monsters]
+        assert comp == ["Centurion", "Mystic"]
+
+
+def test_act2_ascension_hp_ranges():
+    """A7/A8/A9 高位 HP 区间（C++ initHp 的分档与 lightspeed 一致）。"""
+    for seed in range(10):
+        for enc, lo, hi in [("chosen", 98, 103), ("snecko", 120, 125), ("snake_plant", 78, 82),
+                            ("three_byrds", 26, 33), ("shell_parasite", 70, 75)]:
+            m = act2_battle(enc, seed=seed, ascension=7).monsters.monsters[0]
+            assert lo <= m.hp <= hi
+        bc = act2_battle("centurion_and_healer", seed=seed, ascension=7)
+        assert 76 <= bc.monsters.monsters[0].hp <= 83
+        assert 50 <= bc.monsters.monsters[1].hp <= 58
+        m = act2_battle("gremlin_leader", seed=seed, ascension=8).monsters.monsters[3]
+        assert 145 <= m.hp <= 155
+        m = act2_battle("book_of_stabbing", seed=seed, ascension=8).monsters.monsters[0]
+        assert 168 <= m.hp <= 172
+        m = act2_battle("automaton", seed=seed, ascension=9).monsters.monsters[1]
+        assert m.hp == 320
+        m = act2_battle("collector", seed=seed, ascension=9).monsters.monsters[2]
+        assert m.hp == 300
+        m = act2_battle("champ", seed=seed, ascension=9).monsters.monsters[0]
+        assert m.hp == 440
+
+
+# ---- Spheric Guardian ----
+
+
+def test_spheric_guardian_initial_state():
+    """开局：HP 恒 20（不抽样）、人工制品 3、40 格挡 + 壁垒。"""
+    for seed in range(10):
+        m = act2_battle("spheric_guardian", seed=seed).monsters.monsters[0]
+        assert isinstance(m, SphericGuardian)
+        assert m.hp == 20 and m.max_hp == 20
+        assert m.statuses.get(MonsterStatus.ARTIFACT) == 3
+        assert m.block == 40
+        assert m.current_move.name == "Activate"
+
+
+def test_spheric_guardian_activate_and_barricade():
+    """激活 +25 格挡；壁垒：回合开始不清格挡（引擎无 MS::BARRICADE，
+    子类覆盖 apply_start_of_turn_powers 实现）。"""
+    bc = act2_battle("spheric_guardian")
+    m = bc.monsters.monsters[0]
+    bc.end_turn()
+    assert bc.player.hp == PLAYER_MAX_HP
+    assert m.block == 40 + 25  # 激活
+    assert m.current_move.name == "Attack Debuff"
+    bc.end_turn()
+    # 壁垒：第 2 回合怪物阶段开始时 65 格挡仍在
+    assert m.block == 65
+    assert bc.player.hp == PLAYER_MAX_HP - 10
+    assert bc.player.statuses.get(PlayerStatus.FRAIL) == 5
+    assert m.current_move.name == "Slam"
+    bc.end_turn()
+    assert m.block == 65  # 壁垒持续
+    assert bc.player.hp == PLAYER_MAX_HP - 10 - 20  # Slam 10×2
+    assert m.current_move.name == "Harden"
+
+
+def test_spheric_guardian_harden_and_ascension():
+    """硬化：+15 格挡 + 10 伤；A17 激活 35 格挡、A2 起攻击 11。"""
+    bc = act2_battle("spheric_guardian")
+    m = bc.monsters.monsters[0]
+    force_intent(m, SphericGuardian.HARDEN)
+    bc.end_turn()
+    assert m.block == 40 + 15
+    assert bc.player.hp == PLAYER_MAX_HP - 10
+
+    bc = act2_battle("spheric_guardian", ascension=2)
+    m = bc.monsters.monsters[0]
+    force_intent(m, SphericGuardian.SLAM)
+    bc.end_turn()
+    assert bc.player.hp == PLAYER_MAX_HP - 22  # 11×2
+
+    bc = act2_battle("spheric_guardian", ascension=17)
+    m = bc.monsters.monsters[0]
+    bc.end_turn()
+    assert m.block == 40 + 35
+    assert bc.player.hp == PLAYER_MAX_HP  # 激活无伤害
+
+
+# ---- Chosen ----
+
+
+def test_chosen_opening_poke_then_hex():
+    """A0 开局 Poke（5×2），第二次 roll 固定 Hex（施 1 层 HEX）。"""
+    bc = act2_battle("chosen")
+    m = bc.monsters.monsters[0]
+    assert m.current_move.name == "Poke"
+    bc.end_turn()
+    assert bc.player.hp == PLAYER_MAX_HP - 10
+    # 回合末自动 roll：仅一招历史（lastMoveBefore INVALID）→ Hex
+    assert m.current_move.name == "Hex"
+    force_intent(m, Chosen.HEX)
+    bc.end_turn()
+    assert bc.player.statuses.get(PlayerStatus.HEX) == 1
+    # 引擎 HEX 语义（已对齐 C++ BattleContext.cpp:1765）：每打出一张牌
+    # 洗入 1 张 DAZED。玩家空过回合 → 无 DAZED 增加、不掉血。
+    from sts.content.cards import DAZED
+
+    assert bc.player.hp == PLAYER_MAX_HP - 10
+    assert not any(c.card is DAZED for c in bc.cards.draw_pile)
+    # 打 1 张牌 → +1 DAZED 洗入抽牌堆
+    bc.cards.hand.clear()
+    bc.cards.hand.append(bc.cards.instantiate(STRIKE))
+    bc.play_card(0)
+    assert sum(1 for c in bc.cards.draw_pile if c.card is DAZED) == 1
+
+
+def test_chosen_move_values():
+    bc = act2_battle("chosen")
+    m = bc.monsters.monsters[0]
+    force_intent(m, Chosen.ZAP)
+    bc.end_turn()
+    assert bc.player.hp == PLAYER_MAX_HP - 18
+    force_intent(m, Chosen.DRAIN)
+    bc.end_turn()
+    assert bc.player.statuses.get(PlayerStatus.WEAK) == 3
+    assert m.statuses.get(MonsterStatus.STRENGTH) == 3
+    assert bc.player.hp == PLAYER_MAX_HP - 18
+    force_intent(m, Chosen.DEBILITATE)
+    bc.end_turn()
+    assert bc.player.hp == PLAYER_MAX_HP - 18 - 13  # 汲取给被选者 +3 力量
+    assert bc.player.statuses.get(PlayerStatus.VULNERABLE) == 2
+
+
+def test_chosen_roll_segments():
+    bc = act2_battle("chosen")
+    m = bc.monsters.monsters[0]
+    m.move_history.clear()
+    assert m.get_move_for_roll(bc, 99).name == "Poke"  # 首回合
+    m.move_history.clear()
+    m.set_move(Chosen.POKE)
+    assert m.get_move_for_roll(bc, 99).name == "Hex"  # 仅一招历史 → Hex
+    set_history(m, Chosen.HEX, Chosen.POKE)
+    assert m.get_move_for_roll(bc, 49).name == "Debilitate"
+    assert m.get_move_for_roll(bc, 50).name == "Drain"
+    set_history(m, Chosen.DEBILITATE, Chosen.HEX)
+    assert m.get_move_for_roll(bc, 39).name == "Zap"
+    assert m.get_move_for_roll(bc, 40).name == "Poke"
+    # A17：首回合固定 Hex
+    bc17 = act2_battle("chosen", ascension=17)
+    m17 = bc17.monsters.monsters[0]
+    m17.move_history.clear()
+    assert m17.get_move_for_roll(bc17, 99).name == "Hex"
+
+
+def test_chosen_ascension_damage():
+    bc = act2_battle("chosen", ascension=2)
+    m = bc.monsters.monsters[0]
+    force_intent(m, Chosen.ZAP)
+    bc.end_turn()
+    assert bc.player.hp == PLAYER_MAX_HP - 21
+    force_intent(m, Chosen.POKE)
+    bc.end_turn()
+    assert bc.player.hp == PLAYER_MAX_HP - 21 - 12  # 6×2
+    force_intent(m, Chosen.DEBILITATE)
+    bc.end_turn()
+    assert bc.player.hp == PLAYER_MAX_HP - 21 - 12 - 12
+
+
+# ---- Shelled Parasite ----
+
+
+def test_shelled_parasite_initial_state():
+    for seed in range(10):
+        m = act2_battle("shell_parasite", seed=seed).monsters.monsters[0]
+        assert isinstance(m, ShelledParasite)
+        assert m.statuses.get(MonsterStatus.PLATED_ARMOR_M) == 14
+        assert m.block == 14
+
+
+def test_shelled_parasite_moves_and_suck_heal():
+    bc = act2_battle("shell_parasite")
+    m = bc.monsters.monsters[0]
+    force_intent(m, ShelledParasite.FELL)
+    bc.end_turn()
+    assert bc.player.hp == PLAYER_MAX_HP - 18
+    assert bc.player.statuses.get(PlayerStatus.FRAIL) == 2
+    force_intent(m, ShelledParasite.DOUBLE_STRIKE)
+    bc.end_turn()
+    assert bc.player.hp == PLAYER_MAX_HP - 18 - 12  # 6×2
+    # 吸血：先打掉 10 HP，Suck 漏格挡 10 → 回 10
+    m.hp -= 10
+    force_intent(m, ShelledParasite.SUCK)
+    bc.end_turn()
+    assert bc.player.hp == PLAYER_MAX_HP - 18 - 12 - 10
+    assert m.hp == m.max_hp - 10 + 10
+
+
+def test_shelled_parasite_suck_heal_capped_by_unblocked():
+    """吸血量 = min(伤害, 漏格挡量)：玩家有 6 格挡时只回 4。"""
+    bc = act2_battle("shell_parasite")
+    m = bc.monsters.monsters[0]
+    m.hp -= 10
+    bc.player.block = 6
+    force_intent(m, ShelledParasite.SUCK)
+    bc.end_turn()
+    assert bc.player.hp == PLAYER_MAX_HP - 4  # 10 伤被 6 格挡吸收，漏 4
+    assert m.hp == m.max_hp - 10 + 4  # 吸血 = min(伤害 10, 漏格挡 4)
+
+
+def test_shelled_parasite_plated_armor_stun_chain():
+    """重甲归零 → 眩晕：空转一回合后按 roll 出招。"""
+    bc = act2_battle("shell_parasite")
+    m = bc.monsters.monsters[0]
+    m.statuses.set(MonsterStatus.PLATED_ARMOR_M, 1)
+    m.block = 0  # 绕过开局 14 格挡，保证 6 伤漏过
+    play_strike(bc, target=0)  # 未格挡 → 层数归零 → 眩晕
+    assert not m.statuses.has(MonsterStatus.PLATED_ARMOR_M)
+    assert m.current_move.name == "Stunned"
+    hp0 = bc.player.hp
+    bc.end_turn()  # 眩晕空转
+    assert bc.player.hp == hp0
+    # 眩晕后 setMove(FELL) 再 roll：意图是任意常规招
+    assert m.current_move.name in {"Fell", "Double Strike", "Suck"}
+    # 重甲在回合开始按剩余层数给格挡：归零后不再给
+    assert m.block == 0
+
+
+def test_shelled_parasite_roll_segments():
+    bc = act2_battle("shell_parasite")
+    m = bc.monsters.monsters[0]
+    m.move_history.clear()
+    assert m.get_move_for_roll(bc, 0).name in {"Double Strike", "Suck"}  # 首回合 50/50
+    set_history(m, ShelledParasite.DOUBLE_STRIKE)
+    assert m.get_move_for_roll(bc, 19).name == "Fell"  # roll<20 且上回合非 Fell
+    set_history(m, ShelledParasite.FELL)
+    # roll<20 且上回合 Fell → roll2∈[20,99] 内层，落点按 roll2<60 判
+    assert m.get_move_for_roll(bc, 19).name in {"Double Strike", "Suck"}
+    set_history(m, ShelledParasite.DOUBLE_STRIKE, ShelledParasite.DOUBLE_STRIKE)
+    assert m.get_move_for_roll(bc, 30).name == "Suck"  # DS 连续两回合
+    set_history(m, ShelledParasite.SUCK, ShelledParasite.SUCK)
+    assert m.get_move_for_roll(bc, 80).name == "Double Strike"  # Suck 连续两回合
+
+
+def test_shelled_parasite_a17_opens_fell():
+    bc = act2_battle("shell_parasite", ascension=17)
+    m = bc.monsters.monsters[0]
+    m.move_history.clear()
+    assert m.get_move_for_roll(bc, 99).name == "Fell"
+
+
+# ---- Byrd ----
+
+
+def test_byrd_initial_flight_and_a17():
+    for seed in range(10):
+        m = act2_battle("three_byrds", seed=seed).monsters.monsters[0]
+        assert m.statuses.get(MonsterStatus.FLIGHT) == 3
+        m17 = act2_battle("three_byrds", seed=seed, ascension=17).monsters.monsters[0]
+        assert m17.statuses.get(MonsterStatus.FLIGHT) == 4
+
+
+def test_byrd_moves():
+    bc = act2_battle("three_byrds")
+    b0, b1, b2 = bc.monsters.monsters
+    force_intent(b0, Byrd.PECK)
+    force_intent(b1, Byrd.SWOOP)
+    force_intent(b2, Byrd.CAW)
+    hp0 = bc.player.hp
+    bc.end_turn()
+    assert bc.player.hp == hp0 - 5 - 12  # Peck 1×5 + Swoop 12（Caw 无伤害）
+    assert b2.statuses.get(MonsterStatus.STRENGTH) == 1
+
+
+def test_byrd_flight_loss_stun_headbutt_fly_chain():
+    """受未格挡攻击 -1 层飞行；归零落地 → 眩晕 → 头槌 → 起飞。"""
+    bc = act2_battle("three_byrds")
+    slay(bc, 1)
+    slay(bc, 2)
+    b = bc.monsters.monsters[0]
+    for _ in range(3):
+        b.attacked(bc, 5)  # 无格挡直伤
+    assert not b.statuses.has(MonsterStatus.FLIGHT)
+    assert b.current_move.name == "Stunned"
+    hp0 = bc.player.hp
+    bc.end_turn()  # 眩晕空转
+    assert bc.player.hp == hp0
+    assert b.current_move.name == "Headbutt"
+    bc.end_turn()
+    assert bc.player.hp == hp0 - 3
+    assert b.current_move.name == "Fly"
+    bc.end_turn()
+    assert b.statuses.get(MonsterStatus.FLIGHT) == 3
+
+
+def test_byrd_flight_resets_each_turn_while_flying():
+    """回合开始仍在飞则回满 3 层（对齐 C++ applyStartOfTurnPowers）。"""
+    bc = act2_battle("three_byrds")
+    slay(bc, 1)
+    slay(bc, 2)
+    b = bc.monsters.monsters[0]
+    b.attacked(bc, 5)
+    assert b.statuses.get(MonsterStatus.FLIGHT) == 2
+    bc.end_turn()
+    assert b.statuses.get(MonsterStatus.FLIGHT) == 3
+
+
+def test_byrd_roll_segments():
+    bc = act2_battle("three_byrds")
+    m = bc.monsters.monsters[0]
+    m.move_history.clear()
+    assert m.get_move_for_roll(bc, 0).name in {"Caw", "Peck"}  # 首回合 37.5% Caw
+    set_history(m, Byrd.PECK, Byrd.PECK)
+    assert m.get_move_for_roll(bc, 49).name in {"Swoop", "Caw"}
+    set_history(m, Byrd.PECK)
+    assert m.get_move_for_roll(bc, 49).name == "Peck"  # 未连续两回合
+    set_history(m, Byrd.SWOOP)
+    assert m.get_move_for_roll(bc, 69).name in {"Caw", "Peck"}
+    set_history(m, Byrd.PECK)
+    assert m.get_move_for_roll(bc, 69).name == "Swoop"
+    set_history(m, Byrd.CAW)
+    assert m.get_move_for_roll(bc, 99).name in {"Swoop", "Peck"}
+    set_history(m, Byrd.PECK)
+    assert m.get_move_for_roll(bc, 99).name == "Caw"
+
+
+def test_byrd_peck_a2_hits():
+    bc = act2_battle("three_byrds", ascension=2)
+    slay(bc, 1)
+    slay(bc, 2)
+    b = bc.monsters.monsters[0]
+    force_intent(b, Byrd.PECK)
+    hp0 = bc.player.hp
+    bc.end_turn()
+    assert bc.player.hp == hp0 - 6  # A2 起 1×6 段
+
+
+# ---- Snake Plant ----
+
+
+def test_snake_plant_malleable_and_reset():
+    bc = act2_battle("snake_plant")
+    m = bc.monsters.monsters[0]
+    assert m.statuses.get(MonsterStatus.MALLEABLE) == 3
+    play_strike(bc, target=0)  # 6 伤未格挡 → +3 格挡，层数 4
+    assert m.block == 3
+    assert m.statuses.get(MonsterStatus.MALLEABLE) == 4
+    bc.end_turn()
+    # 回合末重置回 3（对齐 C++ applyEndOfTurnTriggers）
+    assert m.statuses.get(MonsterStatus.MALLEABLE) == 3
+
+
+def test_snake_plant_moves():
+    bc = act2_battle("snake_plant")
+    m = bc.monsters.monsters[0]
+    force_intent(m, SnakePlant.CHOMP)
+    bc.end_turn()
+    assert bc.player.hp == PLAYER_MAX_HP - 21  # 7×3
+    force_intent(m, SnakePlant.ENFEEBLING_SPORES)
+    bc.end_turn()
+    assert bc.player.statuses.get(PlayerStatus.FRAIL) == 2
+    assert bc.player.statuses.get(PlayerStatus.WEAK) == 2
+
+
+def test_snake_plant_roll_segments():
+    bc = act2_battle("snake_plant")
+    m = bc.monsters.monsters[0]
+    set_history(m, SnakePlant.CHOMP)
+    assert m.get_move_for_roll(bc, 64).name == "Chomp"
+    set_history(m, SnakePlant.CHOMP, SnakePlant.CHOMP)
+    assert m.get_move_for_roll(bc, 64).name == "Enfeebling Spores"
+    set_history(m, SnakePlant.ENFEEBLING_SPORES)
+    assert m.get_move_for_roll(bc, 65).name == "Chomp"  # A0：上回合孢子 → Chomp
+    set_history(m, SnakePlant.CHOMP)
+    assert m.get_move_for_roll(bc, 65).name == "Enfeebling Spores"
+    # A17：第三段改判孢子连续两回合
+    bc17 = act2_battle("snake_plant", ascension=17)
+    m17 = bc17.monsters.monsters[0]
+    set_history(m17, SnakePlant.ENFEEBLING_SPORES)
+    assert m17.get_move_for_roll(bc17, 65).name == "Enfeebling Spores"  # A17 需连续两回合
+    set_history(m17, SnakePlant.ENFEEBLING_SPORES, SnakePlant.ENFEEBLING_SPORES)
+    assert m17.get_move_for_roll(bc17, 65).name == "Chomp"
+
+
+# ---- Snecko ----
+
+
+def test_snecko_first_turn_glare_confuses_draw_costs():
+    bc = act2_battle("snecko")
+    m = bc.monsters.monsters[0]
+    assert m.current_move.name == "Perplexing Glare"
+    bc.end_turn()
+    assert bc.player.statuses.get(PlayerStatus.CONFUSED) == 1
+    # 引擎 CONFUSED：本回合抽到的牌费用随机 0~3
+    assert all(0 <= c.cost_for_turn <= 3 for c in bc.cards.hand)
+
+
+def test_snecko_moves_and_segments():
+    bc = act2_battle("snecko")
+    m = bc.monsters.monsters[0]
+    force_intent(m, Snecko.BITE)
+    bc.end_turn()
+    assert bc.player.hp == PLAYER_MAX_HP - 15
+    force_intent(m, Snecko.TAIL_WHIP)
+    bc.end_turn()
+    assert bc.player.hp == PLAYER_MAX_HP - 15 - 8
+    assert bc.player.statuses.get(PlayerStatus.VULNERABLE) == 2
+    set_history(m, Snecko.BITE)
+    assert m.get_move_for_roll(bc, 39).name == "Tail Whip"
+    assert m.get_move_for_roll(bc, 40).name == "Bite"
+    set_history(m, Snecko.BITE, Snecko.BITE)
+    assert m.get_move_for_roll(bc, 40).name == "Tail Whip"  # Bite 连续两回合
+
+
+def test_snecko_a17_tail_whip_adds_weak():
+    bc = act2_battle("snecko", ascension=17)
+    m = bc.monsters.monsters[0]
+    force_intent(m, Snecko.TAIL_WHIP)
+    bc.end_turn()
+    assert bc.player.statuses.get(PlayerStatus.WEAK) == 2
+    assert bc.player.statuses.get(PlayerStatus.VULNERABLE) == 2
+
+
+# ---- Centurion & Mystic ----
+
+
+def test_centurion_slash_fury_and_defend():
+    bc = act2_battle("centurion_and_healer")
+    cent, mystic = bc.monsters.monsters
+    force_intent(mystic, Mystic.HEAL)  # 隔离秘术师（治疗无玩家伤害）
+    force_intent(cent, Centurion.SLASH)
+    hp0 = bc.player.hp
+    bc.end_turn()
+    assert bc.player.hp == hp0 - 12
+    assert mystic.block == 0  # 秘术师未防御
+    force_intent(mystic, Mystic.HEAL)
+    force_intent(cent, Centurion.DEFEND)
+    bc.end_turn()
+    assert mystic.block == 15
+    slay(bc, 1)  # 孤军 → Fury
+    force_intent(cent, Centurion.FURY)
+    hp0 = bc.player.hp
+    bc.end_turn()
+    assert bc.player.hp == hp0 - 18  # 6×3
+
+
+def test_centurion_roll_segments():
+    bc = act2_battle("centurion_and_healer")
+    m = bc.monsters.monsters[0]
+    set_history(m, Centurion.SLASH)
+    assert m.get_move_for_roll(bc, 64).name == "Slash"
+    assert m.get_move_for_roll(bc, 65).name == "Defend"  # 秘术师在场
+    set_history(m, Centurion.SLASH, Centurion.SLASH)
+    assert m.get_move_for_roll(bc, 0).name == "Defend"
+    set_history(m, Centurion.DEFEND, Centurion.DEFEND)
+    assert m.get_move_for_roll(bc, 0).name == "Slash"  # 防御不能三连
+    slay(bc, 1)
+    set_history(m, Centurion.SLASH, Centurion.SLASH)
+    assert m.get_move_for_roll(bc, 0).name == "Fury"  # 秘术师死后 Fury
+
+
+def test_mystic_heal_buff_attack_debuff():
+    """百夫长固定防御（不攻击玩家），隔离验证秘术师三个招式。"""
+    bc = act2_battle("centurion_and_healer")
+    cent, mystic = bc.monsters.monsters
+    cent.hp -= 20
+    mystic.hp -= 20
+    force_intent(cent, Centurion.DEFEND)
+    force_intent(mystic, Mystic.HEAL)
+    hp0 = bc.player.hp
+    bc.end_turn()
+    assert cent.hp == cent.max_hp - 20 + 16
+    assert mystic.hp == mystic.max_hp - 20 + 16
+    assert bc.player.hp == hp0  # 治疗/防御均无玩家伤害
+    force_intent(cent, Centurion.DEFEND)
+    force_intent(mystic, Mystic.BUFF)
+    bc.end_turn()
+    assert mystic.statuses.get(MonsterStatus.STRENGTH) == 2
+    assert cent.statuses.get(MonsterStatus.STRENGTH) == 2
+    force_intent(cent, Centurion.DEFEND)
+    force_intent(mystic, Mystic.ATTACK_DEBUFF)
+    hp0 = bc.player.hp
+    bc.end_turn()
+    assert bc.player.hp == hp0 - 10  # 8 + 秘术师自身增益的 +2 力量
+    assert bc.player.statuses.get(PlayerStatus.FRAIL) == 2
+
+
+def test_mystic_roll_segments():
+    bc = act2_battle("centurion_and_healer")
+    cent, mystic = bc.monsters.monsters
+    cent.hp -= 20  # 百夫长缺血 ≥16 → 治疗
+    assert mystic.get_move_for_roll(bc, 99).name == "Heal"
+    cent.hp = cent.max_hp
+    set_history(mystic, Mystic.BUFF)
+    assert mystic.get_move_for_roll(bc, 39).name == "Buff"
+    assert mystic.get_move_for_roll(bc, 40).name == "Attack Debuff"
+    set_history(mystic, Mystic.ATTACK_DEBUFF)
+    assert mystic.get_move_for_roll(bc, 40).name == "Attack Debuff"  # 未连续两回合
+    set_history(mystic, Mystic.ATTACK_DEBUFF, Mystic.ATTACK_DEBUFF)
+    assert mystic.get_move_for_roll(bc, 40).name == "Buff"
+    set_history(mystic, Mystic.BUFF, Mystic.BUFF)
+    assert mystic.get_move_for_roll(bc, 99).name == "Attack Debuff"  # Buff 不能三连
+
+
+def test_mystic_a17_branches():
+    bc = act2_battle("centurion_and_healer", ascension=17)
+    cent, mystic = bc.monsters.monsters
+    cent.hp -= 16  # 16 < 21：A17 治疗阈值提高到 21 → 不再治疗
+    set_history(mystic, Mystic.BUFF)
+    assert mystic.get_move_for_roll(bc, 99).name == "Attack Debuff"  # A17 上回合出过即禁
+
+
+# ---- Gremlin Leader ----
+
+
+def test_gremlin_leader_encounter_layout():
+    for seed in range(20):
+        bc = act2_battle("gremlin_leader", seed=seed)
+        group = bc.monsters
+        assert group.monster_count == 4
+        assert group.alive_count == 3
+        assert group.monsters[0].is_dead_or_escaped()  # 槽 0 死亡占位
+        gremlin_types = {"MadGremlin", "SneakyGremlin", "FatGremlin", "ShieldGremlin", "GremlinWizard"}
+        assert type(group.monsters[1]).__name__ in gremlin_types
+        assert type(group.monsters[2]).__name__ in gremlin_types
+        for i in (1, 2):
+            assert group.monsters[i].statuses.has(MonsterStatus.MINION)
+        leader = group.monsters[3]
+        assert isinstance(leader, GremlinLeader)
+        assert 140 <= leader.hp <= 148
+        assert leader.statuses.has(MonsterStatus.MINION_LEADER)
+
+
+def test_gremlin_leader_encourage_and_stab():
+    """Encourage：存活小鬼力量 +3、格挡 +6（Shield Gremlin 的 Protect 可能
+    追加随机格挡，故格挡断言下界）；Stab 6×3。"""
+    bc = act2_battle("gremlin_leader")
+    group = bc.monsters
+    g1, g2, leader = group.monsters[1], group.monsters[2], group.monsters[3]
+    force_intent(leader, GremlinLeader.ENCOURAGE)
+    bc.end_turn()
+    assert g1.statuses.get(MonsterStatus.STRENGTH) == 3
+    assert g1.block >= 6
+    assert g2.statuses.get(MonsterStatus.STRENGTH) == 3
+    assert g2.block >= 6
+    assert leader.statuses.get(MonsterStatus.STRENGTH) == 3
+    slay(bc, 1)
+    slay(bc, 2)
+    force_intent(leader, GremlinLeader.STAB)
+    hp0 = bc.player.hp
+    bc.end_turn()
+    assert bc.player.hp == hp0 - 27  # (6+3 鼓动力量)×3
+
+
+def test_gremlin_leader_rally_summons_into_open_slots():
+    bc = act2_battle("gremlin_leader")
+    group = bc.monsters
+    slay(bc, 1)
+    slay(bc, 2)
+    leader = group.monsters[3]
+    force_intent(leader, GremlinLeader.RALLY)
+    bc.end_turn()
+    assert group.alive_count == 3
+    gremlin_types = {"MadGremlin", "SneakyGremlin", "FatGremlin", "ShieldGremlin", "GremlinWizard"}
+    for i in (1, 2):
+        assert type(group.monsters[i]).__name__ in gremlin_types
+        assert group.monsters[i].statuses.has(MonsterStatus.MINION)
+        assert group.monsters[i].current_move is not None
+
+
+def test_gremlin_leader_death_wins_despite_minions():
+    bc = act2_battle("gremlin_leader")
+    group = bc.monsters
+    assert group.alive_count == 3
+    slay(bc, 3)
+    assert bc.won  # MINION_LEADER：主死即胜，小鬼仍在场
+    # die() 的 MINION_LEADER 分支立即判胜返回，存活数不减（引擎既有语义）
+    assert group.alive_count == 3
+
+
+def _leader_battle(n_gremlins: int, seed: int = 0, ascension: int = 0):
+    """按存活小鬼数构造 4 槽布局（首领恒在槽 3）。"""
+    from sts.content.monsters import _SlotPlaceholder
+
+    bc = BattleContext(seed=seed, encounter="cultist", ascension=ascension)
+    layout = [_SlotPlaceholder(0), _SlotPlaceholder(1), _SlotPlaceholder(2), None]
+    for i in range(n_gremlins):
+        layout[i + 1] = MadGremlin.create(bc, i + 1)
+    layout[3] = GremlinLeader.create(bc, 3)
+    bc.monsters.monsters = layout
+    bc.monsters.alive_count = n_gremlins + 1
+    for m in layout:
+        if not m.is_dead_or_escaped():
+            m.roll_move(bc)
+    return bc, layout[3]
+
+
+def test_gremlin_leader_roll_segments():
+    bc, leader = _leader_battle(0)
+    force_intent(leader, GremlinLeader.RALLY)
+    assert leader.get_move_for_roll(bc, 74).name == "Stab"
+    assert leader.get_move_for_roll(bc, 0).name == "Stab"
+    force_intent(leader, GremlinLeader.STAB)
+    assert leader.get_move_for_roll(bc, 0).name == "Rally"
+    assert leader.get_move_for_roll(bc, 74).name == "Rally"
+    assert leader.get_move_for_roll(bc, 75).name == "Rally"  # 上回合 Stab
+    force_intent(leader, GremlinLeader.RALLY)
+    assert leader.get_move_for_roll(bc, 75).name == "Stab"
+
+    bc, leader = _leader_battle(1)
+    force_intent(leader, GremlinLeader.RALLY)
+    assert leader.get_move_for_roll(bc, 49).name in {"Encourage", "Stab"}  # 内层 roll2
+    force_intent(leader, GremlinLeader.STAB)
+    assert leader.get_move_for_roll(bc, 49).name == "Rally"
+    force_intent(leader, GremlinLeader.ENCOURAGE)
+    assert leader.get_move_for_roll(bc, 79).name == "Stab"
+    force_intent(leader, GremlinLeader.STAB)
+    assert leader.get_move_for_roll(bc, 80).name in {"Rally", "Encourage"}  # 内层 roll2
+    force_intent(leader, GremlinLeader.RALLY)
+    assert leader.get_move_for_roll(bc, 80).name == "Stab"
+
+    bc, leader = _leader_battle(2)
+    force_intent(leader, GremlinLeader.ENCOURAGE)
+    assert leader.get_move_for_roll(bc, 65).name == "Stab"
+    force_intent(leader, GremlinLeader.STAB)
+    assert leader.get_move_for_roll(bc, 65).name == "Encourage"
+    force_intent(leader, GremlinLeader.RALLY)
+    assert leader.get_move_for_roll(bc, 0).name == "Encourage"
+
+
+# ---- Book of Stabbing ----
+
+
+def test_book_of_stabbing_initial_state():
+    bc = act2_battle("book_of_stabbing")
+    m = bc.monsters.monsters[0]
+    assert isinstance(m, BookOfStabbing)
+    assert m.statuses.get(MonsterStatus.PAINFUL_STABS) == 1
+    # 计数起点 1；开局 roll 若选中 Multi Stab 则已 +1（C++ 同此行为）
+    assert m.misc_info in (1, 2)
+    assert m.current_move.name in {"Single Stab", "Multi Stab"}
+
+
+def test_book_of_stabbing_painful_stabs_trigger():
+    """玩家每打出攻击牌受 1 伤（引擎 on_use_attack_card）。"""
+    bc = act2_battle("book_of_stabbing")
+    m = bc.monsters.monsters[0]
+    hp0 = m.hp
+    play_strike(bc, target=0)
+    assert m.hp == hp0 - 6  # Strike 打怪
+    assert bc.player.hp == PLAYER_MAX_HP - 1  # 痛苦刺击：玩家打攻击牌受 1 伤
+
+
+def test_book_of_stabbing_moves_and_count_growth():
+    bc = act2_battle("book_of_stabbing")
+    m = bc.monsters.monsters[0]
+    force_intent(m, BookOfStabbing.SINGLE_STAB)
+    bc.end_turn()
+    assert bc.player.hp == PLAYER_MAX_HP - 21
+    # 计数在选 Multi Stab 时 +1：首段 2
+    m.misc_info = 1
+    m.move_history.clear()
+    assert m.get_move_for_roll(bc, 50).name == "Multi Stab"
+    assert m.misc_info == 2
+    m.misc_info = 2
+    force_intent(m, BookOfStabbing.MULTI_STAB)
+    hp0 = bc.player.hp
+    bc.end_turn()
+    assert bc.player.hp == hp0 - 12  # 6×2
+
+
+def test_book_of_stabbing_roll_segments():
+    bc = act2_battle("book_of_stabbing")
+    m = bc.monsters.monsters[0]
+    force_intent(m, BookOfStabbing.SINGLE_STAB)
+    assert m.get_move_for_roll(bc, 14).name == "Multi Stab"
+    force_intent(m, BookOfStabbing.MULTI_STAB)
+    assert m.get_move_for_roll(bc, 14).name == "Single Stab"
+    set_history(m, BookOfStabbing.MULTI_STAB, BookOfStabbing.MULTI_STAB)
+    c0 = m.misc_info
+    assert m.get_move_for_roll(bc, 50).name == "Single Stab"
+    assert m.misc_info == c0  # Single Stab 不加计数
+    set_history(m, BookOfStabbing.SINGLE_STAB, BookOfStabbing.MULTI_STAB)
+    assert m.get_move_for_roll(bc, 50).name == "Multi Stab"
+    assert m.misc_info == c0 + 1
+
+
+# ---- Bronze Automaton & Bronze Orb ----
+
+
+def test_bronze_automaton_encounter_layout():
+    for seed in range(10):
+        bc = act2_battle("automaton", seed=seed)
+        group = bc.monsters
+        assert group.monster_count == 3
+        assert group.alive_count == 1
+        assert group.monsters[0].is_dead_or_escaped()
+        assert group.monsters[2].is_dead_or_escaped()
+        m = group.monsters[1]
+        assert isinstance(m, BronzeAutomaton)
+        assert m.hp == 300
+        assert m.statuses.get(MonsterStatus.ARTIFACT) == 3
+        assert m.statuses.has(MonsterStatus.MINION_LEADER)
+        assert m.current_move.name == "Spawn Orbs"
+
+
+def test_bronze_automaton_spawn_orbs_first_turn():
+    """首回合召球：槽 0/2 各生成青铜球（MINION、有意图），本回合不行动。"""
+    bc = act2_battle("automaton")
+    group = bc.monsters
+    bc.end_turn()
+    assert group.alive_count == 3
+    orb1, orb2 = group.monsters[0], group.monsters[2]
+    assert isinstance(orb1, BronzeOrb) and isinstance(orb2, BronzeOrb)
+    assert 52 <= orb1.hp <= 58 and 52 <= orb2.hp <= 58
+    for orb in (orb1, orb2):
+        assert orb.statuses.has(MonsterStatus.MINION)
+        assert orb.current_move is not None
+        assert orb.turns_taken == 0  # 本回合不行动（C++ ++monsterTurnIdx）
+    assert group.monsters[1].current_move.name == "Flail"
+
+
+def test_bronze_automaton_flail_boost_hyper_beam_cycle():
+    bc = act2_battle("automaton")
+    m = bc.monsters.monsters[1]
+    # 槽 0/2 是死亡占位（不行动、不可 slay——占位 die 会误判全员死亡）
+    force_intent(m, BronzeAutomaton.FLAIL)
+    hp0 = bc.player.hp
+    bc.end_turn()
+    assert bc.player.hp == hp0 - 14  # 7×2
+    assert m.current_move.name == "Boost"
+    force_intent(m, BronzeAutomaton.BOOST)
+    m.misc_info = 0
+    bc.end_turn()
+    assert m.statuses.get(MonsterStatus.STRENGTH) == 3
+    assert m.block == 9
+    assert m.current_move.name == "Flail"  # misc 翻转：首 Boost 后接 Flail
+    force_intent(m, BronzeAutomaton.BOOST)
+    m.misc_info = 1
+    bc.end_turn()
+    assert m.current_move.name == "Hyper Beam"  # 第二次 Boost 后接超光束
+    force_intent(m, BronzeAutomaton.HYPER_BEAM)
+    hp0 = bc.player.hp
+    bc.end_turn()
+    assert bc.player.hp == hp0 - 51  # 45 + 两次充能累计的 6 力量
+    assert m.current_move.name == "Stunned"  # A0：超光束后眩晕
+    force_intent(m, BronzeAutomaton.STUNNED)
+    bc.end_turn()
+    assert m.current_move.name == "Flail"
+
+
+def test_bronze_automaton_a19_hyper_beam_skips_stun():
+    bc = act2_battle("automaton", ascension=19)
+    m = bc.monsters.monsters[1]
+    force_intent(m, BronzeAutomaton.HYPER_BEAM)
+    bc.end_turn()
+    assert m.current_move.name == "Boost"
+
+
+def test_bronze_automaton_a4_a9_boost():
+    bc = act2_battle("automaton", ascension=4)
+    m = bc.monsters.monsters[1]
+    force_intent(m, BronzeAutomaton.FLAIL)
+    bc.end_turn()
+    assert bc.player.hp == PLAYER_MAX_HP - 16  # 8×2
+    force_intent(m, BronzeAutomaton.BOOST)
+    bc.end_turn()
+    assert m.statuses.get(MonsterStatus.STRENGTH) == 4
+    assert m.block == 9  # 格挡要 A9 才 +12（C++ 与 wiki 的分歧点，以 C++ 为准）
+    bc9 = act2_battle("automaton", ascension=9)
+    m9 = bc9.monsters.monsters[1]
+    force_intent(m9, BronzeAutomaton.BOOST)
+    bc9.end_turn()
+    assert m9.block == 12
+
+
+def test_bronze_automaton_death_wins_with_orbs_alive():
+    bc = act2_battle("automaton")
+    bc.end_turn()  # 召球
+    slay(bc, 1)
+    assert bc.won  # MINION_LEADER：主死即胜，青铜球仍在场
+
+
+def test_bronze_orb_stasis_steals_once():
+    """静滞：从抽牌堆偷 1 张（misc 流随机），每场一次；死后归还弃牌堆。"""
+    bc = act2_battle("automaton")
+    bc.end_turn()  # 召球（球意图已 roll）
+    orb, automaton, orb2 = bc.monsters.monsters[0], bc.monsters.monsters[1], bc.monsters.monsters[2]
+    force_intent(automaton, BronzeAutomaton.STUNNED)  # 隔离自律机（眩晕无动作）
+    force_intent(orb2, BronzeOrb.SUPPORT_BEAM)  # 隔离另一只球（不动牌堆）
+    total_before = len(bc.cards.draw_pile) + len(bc.cards.hand) + len(bc.cards.discard_pile)
+    force_intent(orb, BronzeOrb.STASIS)
+    bc.end_turn()
+    total_after = len(bc.cards.draw_pile) + len(bc.cards.hand) + len(bc.cards.discard_pile)
+    assert total_after == total_before - 1  # 一张牌离开所有可见区
+    assert len(orb.stasis_cards) == 1
+    assert orb.misc_info == 1
+    assert orb.statuses.has(MonsterStatus.STASIS)
+    # 已用过 Stasis：此后 roll 永不再出
+    assert orb.get_move_for_roll(bc, 99).name == "Support Beam"
+    assert orb.get_move_for_roll(bc, 99).name != "Stasis"
+    # 归还：球死亡时进弃牌堆（引擎 die() 的 STASIS 分支）
+    slay(bc, 0)
+    assert len(orb.stasis_cards) == 0
+    total_final = len(bc.cards.draw_pile) + len(bc.cards.hand) + len(bc.cards.discard_pile)
+    assert total_final == total_before
+
+
+def test_bronze_orb_roll_segments():
+    bc = act2_battle("automaton")
+    bc.end_turn()
+    orb = bc.monsters.monsters[0]
+    orb.misc_info = 0
+    set_history(orb, BronzeOrb.BEAM)
+    assert orb.get_move_for_roll(bc, 25).name == "Stasis"  # 未用 + roll≥25
+    assert orb.get_move_for_roll(bc, 24).name == "Beam"  # roll<25 跳过 Stasis
+    orb.misc_info = 1  # 已用 Stasis
+    set_history(orb, BronzeOrb.BEAM)
+    assert orb.get_move_for_roll(bc, 70).name == "Support Beam"
+    set_history(orb, BronzeOrb.BEAM, BronzeOrb.BEAM)
+    assert orb.get_move_for_roll(bc, 71).name == "Support Beam"  # Beam 连续两回合
+    set_history(orb, BronzeOrb.SUPPORT_BEAM, BronzeOrb.SUPPORT_BEAM)
+    assert orb.get_move_for_roll(bc, 71).name == "Beam"  # Support 连续两回合 → Beam
+
+
+def test_bronze_orb_beam_and_support_beam():
+    bc = act2_battle("automaton")
+    bc.end_turn()  # 召球
+    group = bc.monsters
+    orb, automaton, orb2 = group.monsters[0], group.monsters[1], group.monsters[2]
+    force_intent(automaton, BronzeAutomaton.STUNNED)  # 隔离自律机
+    force_intent(orb2, BronzeOrb.SUPPORT_BEAM)  # 隔离另一只球（其支援给自律机格挡）
+    force_intent(orb, BronzeOrb.BEAM)
+    hp0 = bc.player.hp
+    bc.end_turn()
+    assert bc.player.hp == hp0 - 8
+    force_intent(automaton, BronzeAutomaton.STUNNED)
+    force_intent(orb2, BronzeOrb.SUPPORT_BEAM)
+    force_intent(orb, BronzeOrb.SUPPORT_BEAM)
+    block0 = automaton.block
+    bc.end_turn()
+    assert automaton.block == block0 + 12
+
+
+# ---- The Collector & Torch Head ----
+
+
+def test_collector_encounter_layout():
+    for seed in range(10):
+        bc = act2_battle("collector", seed=seed)
+        group = bc.monsters
+        assert group.monster_count == 3
+        assert group.alive_count == 1
+        assert group.monsters[0].is_dead_or_escaped()
+        assert group.monsters[1].is_dead_or_escaped()
+        m = group.monsters[2]
+        assert isinstance(m, TheCollector)
+        assert m.hp == 282
+        assert m.statuses.has(MonsterStatus.MINION_LEADER)
+        assert m.current_move.name == "Spawn"
+
+
+def test_collector_spawn_fills_torch_heads():
+    """首回合 Spawn：槽 1、0 各生成火把头（MINION、意图固定冲撞）。"""
+    bc = act2_battle("collector")
+    group = bc.monsters
+    bc.end_turn()
+    assert group.alive_count == 3
+    torch1, torch0 = group.monsters[1], group.monsters[0]
+    assert isinstance(torch1, TorchHead) and isinstance(torch0, TorchHead)
+    for t in (torch0, torch1):
+        assert 38 <= t.hp <= 40
+        assert t.statuses.has(MonsterStatus.MINION)
+        assert t.current_move.name == "Tackle"
+        assert t.turns_taken == 0  # 本回合不行动（在收藏家之后生成）
+    assert group.monsters[2].current_move.name != "Spawn"  # 上回合 Spawn 不重复
+
+
+def test_collector_fireball_buff_mega_debuff():
+    bc = act2_battle("collector")
+    bc.end_turn()  # Spawn
+    group = bc.monsters
+    collector = group.monsters[2]
+    t0, t1 = group.monsters[0], group.monsters[1]
+    force_intent(collector, TheCollector.FIREBALL)
+    hp0 = bc.player.hp
+    bc.end_turn()
+    assert bc.player.hp == hp0 - 18 - 14  # 火球 18 + 两只火把头冲撞 7×2
+    force_intent(collector, TheCollector.BUFF)
+    bc.end_turn()
+    assert t0.statuses.get(MonsterStatus.STRENGTH) == 3
+    assert t1.statuses.get(MonsterStatus.STRENGTH) == 3
+    assert collector.statuses.get(MonsterStatus.STRENGTH) == 3
+    assert collector.block == 15
+    # 第 3 回合末的 roll 恒出 Mega Debuff（getMonsterTurnNumber()==3）
+    assert collector.current_move.name == "Mega Debuff"
+    bc.end_turn()  # 第 4 回合执行
+    assert bc.player.statuses.get(PlayerStatus.WEAK) == 3
+    assert bc.player.statuses.get(PlayerStatus.VULNERABLE) == 3
+    assert bc.player.statuses.get(PlayerStatus.FRAIL) == 3
+
+
+def test_collector_spawn_refills_dead_slots():
+    bc = act2_battle("collector")
+    bc.end_turn()  # Spawn 补满
+    group = bc.monsters
+    slay(bc, 0)  # 杀一只火把头
+    assert group.alive_count == 2
+    collector = group.monsters[2]
+    force_intent(collector, TheCollector.SPAWN)
+    bc.end_turn()
+    assert group.alive_count == 3
+    assert isinstance(group.monsters[0], TorchHead)
+    assert group.monsters[0].current_move.name == "Tackle"
+
+
+def test_collector_death_wins_with_torch_heads():
+    bc = act2_battle("collector")
+    bc.end_turn()  # Spawn
+    slay(bc, 2)
+    assert bc.won  # MINION_LEADER：主死即胜
+
+
+# ---- The Champ ----
+
+
+def _fresh_champ(ascension: int = 0, seed: int = 0):
+    bc = act2_battle("champ", seed=seed, ascension=ascension)
+    m = bc.monsters.monsters[0]
+    m.misc_info = 0  # 重置开局 roll 可能消耗的防御姿态计数
+    m.move_history.clear()
+    return bc, m
+
+
+def test_champ_phase1_roll_segments():
+    bc, m = _fresh_champ()
+    assert m.get_move_for_roll(bc, 0).name == "Defensive Stance"
+    assert m.misc_info & 0x3 == 1
+    m.misc_info = 0
+    m.move_history.clear()
+    assert m.get_move_for_roll(bc, 15).name == "Defensive Stance"
+    assert m.get_move_for_roll(bc, 16).name == "Gloat"
+    assert m.get_move_for_roll(bc, 30).name == "Gloat"
+    assert m.get_move_for_roll(bc, 31).name == "Face Slap"
+    assert m.get_move_for_roll(bc, 55).name == "Face Slap"
+    assert m.get_move_for_roll(bc, 56).name == "Heavy Slash"
+    set_history(m, TheChamp.HEAVY_SLASH)
+    assert m.get_move_for_roll(bc, 99).name == "Face Slap"
+    set_history(m, TheChamp.DEFENSIVE_STANCE)
+    m.misc_info = 0
+    assert m.get_move_for_roll(bc, 0).name == "Face Slap"  # 上回合防御 → 本回合非防御
+    # 防御姿态最多 2 次（低 2 位计数）
+    m.misc_info = 2
+    set_history(m, TheChamp.GLOAT)
+    assert m.get_move_for_roll(bc, 0).name == "Face Slap"
+
+
+def test_champ_taunt_every_fourth_turn():
+    """(turn+1)%4==0 → Taunt（roll 无关；第 3 回合末 roll 出第 4 回合的嘲讽）。"""
+    bc, m = _fresh_champ()
+    bc.turn = 3
+    assert m.get_move_for_roll(bc, 99).name == "Taunt"
+    assert m.get_move_for_roll(bc, 0).name == "Taunt"
+    bc.turn = 4
+    m.move_history.clear()
+    assert m.get_move_for_roll(bc, 50).name != "Taunt"
+    # 全程模拟：第 4 回合执行 Taunt
+    bc2 = act2_battle("champ")
+    champ = bc2.monsters.monsters[0]
+    executed = []
+    for _ in range(5):
+        executed.append(champ.current_move.name)
+        bc2.end_turn()
+    assert executed[3] == "Taunt"  # 第 4 回合执行的是第 3 回合末 roll 的意图
+
+
+def test_champ_anger_phase_transition():
+    """HP < 半 → Anger（移除削弱 + 力量）→ 二阶段 Execute 主导。"""
+    bc, m = _fresh_champ()
+    m.statuses.add(MonsterStatus.WEAK, 2)
+    m.statuses.add(MonsterStatus.VULNERABLE, 3)
+    m.statuses.add(MonsterStatus.POISON, 2)
+    m.hp = m.max_hp // 2 - 1
+    assert m.get_move_for_roll(bc, 99).name == "Anger"
+    assert m.misc_info & 0x4
+    force_intent(m, TheChamp.ANGER)
+    bc.end_turn()
+    assert not m.statuses.has(MonsterStatus.WEAK)
+    assert not m.statuses.has(MonsterStatus.VULNERABLE)
+    assert not m.statuses.has(MonsterStatus.POISON)
+    assert m.statuses.get(MonsterStatus.STRENGTH) == 6
+    # 二阶段：Execute 未连续 → Execute
+    m.move_history.clear()
+    assert m.get_move_for_roll(bc, 0).name == "Execute"
+    set_history(m, TheChamp.EXECUTE)
+    # Execute 出现过一次后回落通用段（防御/嘲讽/掌掴/重斩）
+    assert m.get_move_for_roll(bc, 0).name in {"Gloat", "Face Slap", "Defensive Stance", "Taunt"}
+    set_history(m, TheChamp.EXECUTE, TheChamp.EXECUTE)
+    assert m.get_move_for_roll(bc, 56).name == "Heavy Slash"
+
+
+def test_champ_move_values():
+    bc, m = _fresh_champ()
+    force_intent(m, TheChamp.HEAVY_SLASH)
+    bc.end_turn()
+    assert bc.player.hp == PLAYER_MAX_HP - 16
+    force_intent(m, TheChamp.FACE_SLAP)
+    bc.end_turn()
+    assert bc.player.hp == PLAYER_MAX_HP - 16 - 12
+    assert bc.player.statuses.get(PlayerStatus.FRAIL) == 2
+    assert bc.player.statuses.get(PlayerStatus.VULNERABLE) == 2
+    force_intent(m, TheChamp.GLOAT)
+    bc.end_turn()
+    assert m.statuses.get(MonsterStatus.STRENGTH) == 3
+    force_intent(m, TheChamp.EXECUTE)
+    hp0 = bc.player.hp
+    bc.end_turn()
+    # (10 + 得意 3 力量) × 1.5（掌掴的 2 层易伤仍在）× 2 段 = 19×2
+    assert bc.player.hp == hp0 - 38
+    force_intent(m, TheChamp.TAUNT)
+    bc.end_turn()
+    assert bc.player.statuses.get(PlayerStatus.WEAK) == 2
+    assert bc.player.statuses.get(PlayerStatus.VULNERABLE) == 2
+    force_intent(m, TheChamp.DEFENSIVE_STANCE)
+    bc.end_turn()
+    assert m.block == 15
+    assert m.statuses.get(MonsterStatus.METALLICIZE) == 5
+
+
+def test_champ_ascension_branches():
+    bc, m = _fresh_champ(ascension=4)
+    force_intent(m, TheChamp.HEAVY_SLASH)
+    bc.end_turn()
+    assert bc.player.hp == PLAYER_MAX_HP - 18
+    force_intent(m, TheChamp.FACE_SLAP)
+    bc.end_turn()
+    assert bc.player.hp == PLAYER_MAX_HP - 18 - 14
+    force_intent(m, TheChamp.GLOAT)
+    bc.end_turn()
+    assert m.statuses.get(MonsterStatus.STRENGTH) == 4  # A4：+4（wiki 记 +3，以 C++ 为准）
+    m.hp = 100
+    force_intent(m, TheChamp.ANGER)
+    bc.end_turn()
+    assert m.statuses.get(MonsterStatus.STRENGTH) == 4 + 9  # 得意 4 + 愤怒 9
+
+    # A9：防御姿态 18 格挡 + 6 金属化；A19：20/7、Gloat+5、Anger+12、阈值 30
+    bc9, m9 = _fresh_champ(ascension=9)
+    force_intent(m9, TheChamp.DEFENSIVE_STANCE)
+    bc9.end_turn()
+    assert m9.block == 18
+    assert m9.statuses.get(MonsterStatus.METALLICIZE) == 6
+
+    bc19, m19 = _fresh_champ(ascension=19)
+    m19.move_history.clear()
+    assert m19.get_move_for_roll(bc19, 30).name == "Defensive Stance"  # 阈值 30
+    force_intent(m19, TheChamp.DEFENSIVE_STANCE)
+    bc19.end_turn()
+    assert m19.block == 20
+    assert m19.statuses.get(MonsterStatus.METALLICIZE) == 7
+    m19.statuses.remove(MonsterStatus.METALLICIZE)
+    force_intent(m19, TheChamp.GLOAT)
+    bc19.end_turn()
+    assert m19.statuses.get(MonsterStatus.STRENGTH) == 5
+    m19.hp = 100
+    force_intent(m19, TheChamp.ANGER)
+    bc19.end_turn()
+    assert m19.statuses.get(MonsterStatus.STRENGTH) == 5 + 12
