@@ -31,11 +31,21 @@
 - 验收：训练策略胜率显著超过两个 baseline ✅
 
 ### 第 3 步：扩内容 + 奖励实验
-- [ ] 扩到 Act 1 主要卡池（~30 张起步，向 ~75 张推进）与主要敌池（普通怪→精英→Slime Boss/Guardian）
-- [ ] 敌人意图系统（行动回合结束时生成，参考真实游戏的 move 表）
+
+**内容全量迁移（2026-10-05 启动，批次化推进，计划文件见 `~/.claude/plans/lightspeed-pure-harbor.md`）**：
+
+- [x] **批次 0 引擎能力地基**：X 费（energy_on_use 快照）/ CARD_SELECT 选卡状态机（单候选直执）/ Ethereal / Innate / 诅咒状态卡回合末自动结算（no_trigger 路径）/ 六类触发钩子（消耗/抽牌/格挡/自伤/受击/出牌）/ 怪物逃跑+战斗中原位分裂+掉血改意图 / THIEVERY 偷金 / ENTANGLED / POISON / 遗物框架 sts/combat/relics.py（~20 钩子位 + ~35 个已实现遗物）——157 个测试全绿
+- [~] **批次 1 简单内容**（并行进行中）：20 张简单铁甲卡（Clash/Bludgeon/Reaper 等）、9 种简单怪（双史莱姆 M/奴役者/小鬼帮/哨卫）、遗物逐个核对+测试（test_relics.py）
+- [ ] **批次 2 中等内容**：14 个 Power 状态族卡（Barricade/Corruption/Demon Form 等）+ 消耗/虚无/生成族卡、中等怪（Mad Gremlin/Gremlin Nob/Lagavulin/Guardian/Hexaghost）、出牌/回合类遗物
+- [ ] **批次 3 困难内容**：Whirlwind（X 费）+ 选卡六件（Armaments/Headbutt 等）、分裂怪（L 级史莱姆/Slime Boss）、Looter 偷金逃跑、RNG 遗物
+- [ ] **批次 4 无色/诅咒/状态卡全量 + 遭遇注册表收尾**（Act 1 全遭遇 + 随机策略全量冒烟）
+- [ ] **批次 5（另行规划）**：env 观测全词表接线 + 训练侧更新（现有模型届时作废）
+- 决策点：Gremlin 帮逃跑（lightspeed 未实现、真实游戏有）→ 按分布级保真补齐；Normality 诅咒限制（lightspeed 未实现）→ 跳过并注释
+
+原有子项：
 - [ ] 奖励对比实验：稀疏 ±1 vs HP shaping
-- [ ] 多敌人战斗（最多 5 个槽位）
-- 验收：训练策略对 Act 1 敌池多数敌人胜率 > 启发式 baseline
+- [x] 多敌人战斗（最多 5 个槽位）——引擎已支持（MonsterGroup.MAX_MONSTERS=5）
+- 验收：训练策略对 Act 1 敌池多数敌人胜率 > 启发式 baseline（批次 5 训练验证）
 
 ### 第 4 步：卡组泛化（为 Phase 2 铺路）
 - [ ] 卡组可变长编码（multi-hot/计数）
