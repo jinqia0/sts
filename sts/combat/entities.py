@@ -118,12 +118,19 @@ class Player(Combatant):
         任意姿态得格挡）→ 设 stance。同姿态切换跳过（wiki 语义：No-op）。"""
         if new == self.stance:
             return
-        self.stance = new
         s = self.statuses
+        # 退出 Calm +2 能量 / 进入 Divinity +3 能量（wiki Keywords#Stance；
+        # 进入钩子前结算离开效果）
+        if self.stance == Stance.CALM and new != Stance.CALM:
+            bc.add_to_bot(Actions.gain_energy(2))
         if new == Stance.WRATH and s.has(PlayerStatus.RUSHDOWN):
             bc.add_to_bot(Actions.draw_cards(2 * s.get(PlayerStatus.RUSHDOWN)))
         if s.has(PlayerStatus.MENTAL_FORTRESS):
-            bc.add_to_bot(Actions.gain_block(3 * s.get(PlayerStatus.MENTAL_FORTRESS)))
+            # wiki：4/6 格挡每层（升级不叠加层数语义，用 4×层）
+            bc.add_to_bot(Actions.gain_block(4 * s.get(PlayerStatus.MENTAL_FORTRESS)))
+        self.stance = new
+        if new == Stance.DIVINITY:
+            bc.add_to_bot(Actions.gain_energy(3))
 
     def gain_mantra(self, bc: BattleContext, n: int) -> None:
         """真言获取（对齐 C++ Player.cpp:692 todo 的正确语义）：累计满 10
@@ -137,18 +144,26 @@ class Player(Combatant):
 
     # ---- 格挡获得（Juggernaut 等触发钩子的统一入口）----
     def gain_block(self, bc: BattleContext, amount: int) -> None:
-        """获得格挡（一切格挡来源必须走此入口：NO_BLOCK 拦截 + Juggernaut 触发）。"""
+        """获得格挡（一切格挡来源必须走此入口：NO_BLOCK 拦截 + Juggernaut/
+        WAVE_OF_THE_HAND 触发）。"""
         if self.statuses.has(PlayerStatus.NO_BLOCK):
             return
         self.block += amount
         if self.statuses.has(PlayerStatus.JUGGERNAUT):
             n = self.statuses.get(PlayerStatus.JUGGERNAUT)
             bc.add_to_bot(Actions.damage_random_enemy(5 * n))
+        # WAVE_OF_THE_HAND（观者手波，special 一次性标记）：本回合每次获得
+        # 格挡对所有敌人施加 1×层 虚弱（wiki："Whenever you gain Block"）
+        if bc.player.special.get("wave_of_the_hand"):
+            bc.add_to_bot(Actions.debuff_all_enemy(MonsterStatus.WEAK, bc.player.special["wave_of_the_hand"], False))
 
     # ---- 玩家受击（对齐 Player::attacked，Player.cpp:209-255）----
     def attacked(self, bc: BattleContext, enemy_idx: int, damage: int) -> None:
         if self.statuses.has(PlayerStatus.INTANGIBLE):
             damage = min(damage, 1)  # C++ 由 attackPlayerHelper 上游钳制，等价
+        # WRATH 姿态承伤 ×2（wiki Keywords#Stance：对观者的攻击伤害加倍）
+        if self.stance == Stance.WRATH:
+            damage *= 2
         saved_block = self.block
         self.block = max(0, self.block - damage)
         damage -= saved_block  # damage = 漏过格挡的余量
@@ -266,7 +281,8 @@ class Player(Combatant):
             #（BattleContext.cpp:2068-2070，位于 METALLICIZE 之后；本文件
             # 顺序约束下追加在方法尾，格挡增益相互可交换）
             bc.add_to_bot(Actions.gain_block(s.get(PlayerStatus.PLATED_ARMOR)))
-        # LIKE_WATER（对齐 BattleContext.cpp:2072-2074）：平静姿态回合末得格挡
+        # LIKE_WATER（wiki：平静回合末 5/7 格挡）：层值直接作为格挡数
+        #（卡侧落 5/7 层；BattleContext.cpp:2072-2074 同为按层直读）
         if s.has(PlayerStatus.LIKE_WATER) and self.stance == Stance.CALM:
             bc.add_to_bot(Actions.gain_block(s.get(PlayerStatus.LIKE_WATER)))
 

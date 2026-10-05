@@ -1129,8 +1129,8 @@ BURNING_PACT = CardDef("Burning Pact", "燃烧契约", 1, "Skill",
                        False, False, _burning_pact_play)
 
 
-# ---- 诅咒卡 / 无色卡 / 静默卡 re-export（正式定义在 curses_cards.py /
-# colorless_cards.py / silent_cards.py，批次 4 / 批次 C）----
+# ---- 诅咒卡 / 无色卡 / 静默卡 / 观者卡 re-export（正式定义在 curses_cards.py /
+# colorless_cards.py / silent_cards.py / watcher_cards.py，批次 4 / 批次 C / 批次 E）----
 # 惰性 re-export（PEP 562）：各内容子模块均需在模块级导入本文件的 CardDef，
 # 顶部 from-import 会构成 cards→子模块→cards 的导入期循环（子模块先导入时
 # 本文件尾部拿不到已定义名）；__getattr__ 只在属性缺失时触发，任意导入顺序
@@ -1150,4 +1150,8 @@ def __getattr__(name: str):
 
     if hasattr(_silent, name):
         return getattr(_silent, name)
+    import sts.content.watcher_cards as _watcher
+
+    if hasattr(_watcher, name):
+        return getattr(_watcher, name)
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

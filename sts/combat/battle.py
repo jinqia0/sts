@@ -454,6 +454,11 @@ class BattleContext:
         p = self.player
         item = self.cur_card_queue_item
         p.attacks_played_this_turn += 1
+        # BLOCK_RETURN（Talk to the Hand）：攻击带此状态的敌人时获得层数格挡
+        if item is not None and isinstance(item.target, int) and 0 <= item.target < self.monsters.monster_count:
+            m = self.monsters.monsters[item.target]
+            if m.statuses.has(MonsterStatus.BLOCK_RETURN):
+                self.add_to_bot(Actions.gain_block(m.statuses.get(MonsterStatus.BLOCK_RETURN)))
         if p.statuses.has(PlayerStatus.RAGE):
             self.add_to_bot(Actions.gain_block(p.statuses.get(PlayerStatus.RAGE)))
         self.relics.on_use_attack_card(self)
@@ -558,6 +563,16 @@ class BattleContext:
         # 预期位置 callEndTurnActions 的 TriggerEndOfTurnOrbsAction）
         self.player.trigger_orb_passives(self, start=False)
         p.apply_end_of_turn_powers(self)
+        # Watcher special 回合末钩子：study（生成 Insight）/omega（全体 50/60）
+        if self.player.special.get("study"):
+            from sts.content.watcher_cards import INSIGHT
+
+            self.cards.create_temp_card_in_hand(INSIGHT, self.player.special.get("master_reality", False))
+        if self.player.special.get("omega"):
+            self.add_to_bot(Actions.damage_all_enemy(self.player.special["omega"]))
+        # Establishment：保留牌 -1 费（回合末保留进 limbo 前处理）
+        if self.player.special.get("establishment") and self.cards.limbo:
+            pass  # 已在 discard 阶段处理（费用在保留时递减，见下）
         # Well-Laid Plans（Silent）：回合末选 1 张手牌保留
         if p.special.get("wlp"):
             cands = list(self.cards.hand)
@@ -604,6 +619,28 @@ class BattleContext:
         self.player.apply_start_of_turn_powers(self)
         # ---- 回合开始的 Silent 状态（PHANTASMAL_KILLER 在此翻 DOUBLE_DAMAGE，
         # 使"下回合首次攻击翻倍"成立）----
+        # Blasphemy：下回合开始死亡（special 一次性）
+        if self.player.special.pop("blasphemy_die", False):
+            self.add_to_bot(Actions.player_lose_hp(99999))
+        # Watcher special 回合开始钩子：foresight（scry）/battle_hymn（Smite）/
+        # deva_form（能量爬坡）/collect_miracles（升级版 Miracle）
+        n_scry = self.player.special.pop("foresight", 0)
+        if n_scry:
+            self.open_scry(n_scry)
+        if self.player.special.get("battle_hymn"):
+            from sts.content.watcher_cards import SMITE
+
+            for _ in range(self.player.special["battle_hymn"]):
+                self.cards.create_temp_card_in_hand(SMITE, self.player.special.get("master_reality", False))
+        if self.player.special.get("deva_form"):
+            self.player.special["deva_form_counter"] = self.player.special.get("deva_form_counter", 1) + 1
+            self.add_to_bot(Actions.gain_energy(self.player.special["deva_form_counter"] - 1))
+        if self.player.special.pop("collect_miracles", 0):
+            from sts.content.watcher_cards import MIRACLE
+
+            self.cards.create_temp_card_in_hand(MIRACLE, True)  # 必须升级版
+        # Wave of the Hand 每回合清零
+        self.player.special.pop("wave_of_the_hand", None)
         s = self.player.statuses
         if s.has(PlayerStatus.PHANTASMAL_KILLER):
             s.remove(PlayerStatus.PHANTASMAL_KILLER)

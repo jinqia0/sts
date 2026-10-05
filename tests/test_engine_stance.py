@@ -55,7 +55,7 @@ def test_mental_fortress_blocks_on_any_stance_entry():
     bc.player.statuses.add(PlayerStatus.MENTAL_FORTRESS, 2)
     bc.player.change_stance(bc, Stance.CALM)
     run_queue(bc)
-    assert bc.player.block == 6  # 3 × 2 层
+    assert bc.player.block == 8  # 4 × 2 层（wiki 常量）
 
 
 def test_mantra_ten_enters_divinity():
@@ -82,21 +82,19 @@ def test_devotion_grants_mantra_per_turn():
 
 def test_like_water_calm_end_of_turn_block():
     """CALM 回合末得格挡：格挡只在敌方回合有效（回合开始清零），观察点
-    是敌方攻击的吸收量（Cultist 第 2 回合 Dark Strike 6 伤）。"""
+    是敌方攻击的吸收量（Cultist Dark Strike 6 伤）。wiki：5/7 格挡按层直读。"""
     bc = BattleContext(seed=308, deck=[STRIKE] * 15)
     m = bc.monsters.monsters[0]
-    m.set_move(m.__class__.DARK_STRIKE)  # 强制下回合攻击
-    bc.player.statuses.add(PlayerStatus.LIKE_WATER, 3)
+    m.set_move(m.__class__.DARK_STRIKE)
+    bc.player.statuses.add(PlayerStatus.LIKE_WATER, 5)
     bc.player.change_stance(bc, Stance.CALM)
     bc.end_turn()
-    assert bc.player.hp == 80 - 3  # 6 攻击 - 3 如水格挡（回合 2：仪式 skipFirst 尚无力量）
-    # 非平静（WRATH）不触发：受满额伤害。set 的 DARK_STRIKE 在敌方回合 2
-    # 执行（ Ritual 的 +3 要到回合 2 末才结算，故攻击仍 6）——全额命中
+    assert bc.player.hp == 80 - 6 + 5  # 6 攻击 - 5 如水格挡
+    # 非平静（WRATH）不触发如水；且 WRATH 承伤 ×2 → 12 伤全额
     m.set_move(m.__class__.DARK_STRIKE)
     bc.player.change_stance(bc, Stance.WRATH)
     bc.end_turn()
-    assert bc.player.hp == 80 - 3 - 6  # WRATH 下无如水格挡
-
+    assert bc.player.hp == 80 - 6 + 5 - 12
 
 def test_wrath_next_turn_enters_wrath():
     bc = BattleContext(seed=309, deck=[STRIKE] * 15)
