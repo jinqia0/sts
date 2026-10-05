@@ -1,0 +1,19 @@
+[project]
+name = "sts"
+version = "0.1.0"
+description = "Slay the Spire 战斗模拟器：Phase 1 最小战斗场景（Ironclad vs Cultist）"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "numpy>=2.5.3",
+    "gymnasium>=1.0.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]

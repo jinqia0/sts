@@ -1,0 +1,11 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# 参考仓库（外部克隆，不纳入本项目）
+sts_lightspeed/
+
+# 工具
+.pytest_cache/
+.DS_Store
