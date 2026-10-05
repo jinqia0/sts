@@ -111,7 +111,10 @@ class PlayerStatus(IntEnum):
     BURST = 47  # 爆发：下一张技能牌结算两次（DOUBLE_TAP 的技能版）
     A_THOUSAND_CUTS = 48  # 千刀万剐：每打出一张牌全体敌人受 1×层 伤
     ACCURACY = 49  # 精准：Shiv 伤害 +层
-    PHANTASMAL_KILLER = 50  # 幻影杀手：下回合首次攻击伤害翻倍（预留，批次 C 接）
+    PHANTASMAL_KILLER = 50  # 幻影杀手：施放时落 DOUBLE_DAMAGE（下回合首攻击翻倍）
+    # ---- 批次 C 接线补充（对齐 lightspeed JustApplied 组命名）----
+    DOUBLE_DAMAGE = 51  # 下一次攻击伤害翻倍（Phantasmal Killer 落地态；触发后移除）
+    DRAW_REDUCTION = 52  # 每回合抽牌 -层（无自动衰减，来源自管理）
 
 
 class MonsterStatus(IntEnum):

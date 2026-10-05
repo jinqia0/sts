@@ -246,6 +246,13 @@ class BattleContext:
         self.set_state(InputState.EXECUTING_ACTIONS)
         self.execute_actions()
 
+    def _gen_shiv(self) -> None:
+        """生成 1 张 Shiv（AFTER_IMAGE/INFINITE_BLADES 状态结算；SHIV 定义
+        在内容层 silent_cards.py，惰性导入沿用 encounters 先例）。"""
+        from sts.content.silent_cards import SHIV
+
+        self.cards.create_temp_card_in_hand(SHIV)
+
     # ---- 选卡界面（对齐 lightspeed CardSelectInfo + chooseXxx 回调族）----
     def open_card_select(
         self,
@@ -335,6 +342,10 @@ class BattleContext:
                     Actions.damage_all_enemy(self.player.statuses.get(PlayerStatus.PANACHE)))
                 c = 5
             self.player.special["panache_counter"] = c
+        # A_THOUSAND_CUTS（Silent 千刀万剐）：每打出一张牌全体 1×层 伤
+        if self.player.statuses.has(PlayerStatus.A_THOUSAND_CUTS):
+            self.add_to_bot(
+                Actions.damage_all_enemy(self.player.statuses.get(PlayerStatus.A_THOUSAND_CUTS)))
         # 逐怪"出牌响应"状态（对齐 onAfterUseCard 的 arr[0] 段，BattleContext.cpp:1941-1959；
         # C++ 只查 arr[0]——Time Eater/SLOW/BEAT_OF_DEATH 均为单怪遭遇，沿用）
         if not item.autoplay:
@@ -416,8 +427,22 @@ class BattleContext:
                 self.add_to_bot(Actions.damage_player(m.statuses.get(MonsterStatus.PAINFUL_STABS)))
 
     def on_use_skill_card(self) -> None:
-        self.player.skills_played_this_turn += 1
+        p = self.player
+        item = self.cur_card_queue_item
+        p.skills_played_this_turn += 1
         self.relics.on_use_skill_card(self)
+        # AFTER_IMAGE（Silent 残像）：每打出技能牌生成 1 张 Shiv
+        if p.statuses.has(PlayerStatus.AFTER_IMAGE):
+            self._gen_shiv()
+        # BURST（Silent 爆发）：本回合下一张技能牌结算两次（DOUBLE_TAP 的
+        # 技能版；触发后递减）
+        if p.statuses.has(PlayerStatus.BURST) and item is not None and not item.autoplay:
+            p.statuses.decrement(PlayerStatus.BURST)
+            replay = CardQueueItem(
+                card=item.card, target=item.target, purge_on_use=True,
+                autoplay=True, energy_on_use=item.energy_on_use,
+            )
+            self.add_to_bot_card(replay)
         # 怪物 ENRAGE：玩家每打出一张技能牌，+层 力量（Gremlin Nob）
         for m in self.monsters.monsters:
             if m.is_targetable() and m.statuses.has(MonsterStatus.ENRAGE):
@@ -484,6 +509,15 @@ class BattleContext:
         p.attacks_played_last_turn = p.attacks_played_this_turn
         self.relics.on_end_turn(self)
         p.apply_end_of_turn_powers(self)
+        # Well-Laid Plans（Silent）：回合末选 1 张手牌保留
+        if p.special.get("wlp"):
+            cands = list(self.cards.hand)
+            if cands:
+                def _retain_chosen(bc2, chosen):
+                    for inst in chosen:
+                        inst.retain = True
+                self.open_card_select(cands, _retain_chosen, pick_count=1,
+                                      can_pick_zero=True, prompt="选择 1 张保留")
         # Burn/Regret/Decay/Doubt/Shame/Pride：以 trigger_on_use=False 入队
         #（对齐 lightspeed callEndTurnActions 的逐张入队；处理时机在
         # on_turn_ending 弃手牌之前）
@@ -512,6 +546,28 @@ class BattleContext:
         self.relics.on_turn_start(self)
         self.restore_retained_cards()  # 保留牌在玩家状态结算后、抽牌前还手
         self.player.apply_start_of_turn_powers(self)
+        # ---- 回合开始的 Silent 状态（PHANTASMAL_KILLER 在此翻 DOUBLE_DAMAGE，
+        # 使"下回合首次攻击翻倍"成立）----
+        s = self.player.statuses
+        if s.has(PlayerStatus.PHANTASMAL_KILLER):
+            s.remove(PlayerStatus.PHANTASMAL_KILLER)
+            s.add(PlayerStatus.DOUBLE_DAMAGE, 1)
+        if s.has(PlayerStatus.NOXIOUS_FUMES):
+            self.add_to_bot(Actions.debuff_all_enemy(MonsterStatus.POISON, s.get(PlayerStatus.NOXIOUS_FUMES), False))
+        if s.has(PlayerStatus.INFINITE_BLADES):
+            if self.player.attacks_played_last_turn > 0:
+                for _ in range(s.get(PlayerStatus.INFINITE_BLADES)):
+                    self._gen_shiv()
+        # 下回合生成槽（Nightmare/Doppelganger）：N 份保留副本入手
+        for card_def, upgraded, count in self.player.special.pop("next_turn_cards", []):
+            for _ in range(count):
+                inst = self.cards.instantiate(card_def)
+                inst.upgraded = upgraded
+                inst.retain = True  # Nightmare 副本保留到打出
+                if len(self.cards.hand) < 10:
+                    self.cards.hand.append(inst)
+                else:
+                    self.cards.move_to_discard_pile(inst)
         # 格挡衰减：BARRICADE 保留全部，CALIPERS 保留 15，否则清零
         if not self.player.statuses.has(PlayerStatus.BARRICADE):
             retain = self.relics.on_block_decay(self)
@@ -539,6 +595,8 @@ class BattleContext:
 
     # ---- 抽牌（对齐 BattleContext::drawCards）----
     def draw_cards(self, count: int) -> None:
+        # DRAW_REDUCTION：每回合抽牌 -层（巫妖形态变体等；无自动衰减）
+        count -= self.player.statuses.get(PlayerStatus.DRAW_REDUCTION)
         if count <= 0 or self.player.statuses.has(PlayerStatus.NO_DRAW):
             return  # NO_DRAW（Battle Trance）：本回合禁止抽牌
         for _ in range(count):
@@ -656,6 +714,13 @@ class BattleContext:
         d += self.player.statuses.get(PlayerStatus.STRENGTH)
         if self.player.statuses.has(PlayerStatus.VIGOR):
             d += self.player.statuses.get(PlayerStatus.VIGOR)
+        # ACCURACY（Silent 精准）：Shiv 伤害 +层；DOUBLE_DAMAGE：首次攻击
+        # 翻倍后移除（Phantasmal Killer 落地态）
+        if item.card is not None and item.card.card.name == "Shiv":
+            d += self.player.statuses.get(PlayerStatus.ACCURACY)
+        if self.player.statuses.has(PlayerStatus.DOUBLE_DAMAGE):
+            d *= 2
+            self.player.statuses.remove(PlayerStatus.DOUBLE_DAMAGE)
         d = self.relics.modify_card_damage(self, item, target_idx, d)
         if self.player.statuses.has(PlayerStatus.WEAK):
             d *= 0.75
