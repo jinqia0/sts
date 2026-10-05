@@ -202,6 +202,8 @@ class BattleContext:
         inst = self.cards.hand[hand_idx]
         if inst.card.unplayable:
             raise ValueError(f"{inst.card.zh}({inst.card.name}) 不可打出")
+        if inst.card.play_condition is not None and not inst.card.play_condition(self, inst):
+            raise ValueError(f"{inst.card.zh}({inst.card.name}) 当前不满足打出条件")
         if self.player.statuses.has(PlayerStatus.ENTANGLED):
             raise ValueError("被缠绕：本回合不能打出卡牌")
         if not self.relics.check_play_allowed(self, inst):

@@ -37,6 +37,7 @@ class CardDef:
     no_trigger_exhausts: bool = False  # 自动结算后进消耗堆而非弃牌堆（Pride）
     on_play_other_lose_hp: int = 0  # 打出其他牌时每张失去的 HP（诅咒 Pain）
     lose_energy_when_drawn: int = 0  # 被抽到时失去的能量（状态卡 Void）
+    play_condition: "callable | None" = None  # 打出条件（Clash）：(bc, inst) -> bool，False 则 play_card 拒绝
 
 
 def _strike_play(bc: BattleContext, item: CardQueueItem) -> None:
@@ -183,3 +184,24 @@ WOUND = CardDef("Wound", "伤口", 0, "Status", "不可打出。回合结束时�
 def starting_deck() -> list[CardDef]:
     """铁甲战士初始牌组：5 打击 / 4 防御 / 1 痛击。"""
     return [STRIKE] * 5 + [DEFEND] * 4 + [BASH]
+
+
+# ---- 怪物施加的状态卡（Acid Slime M/L 的 SLIMED、Sentry 的 DAZED、Hexaghost 的 BURN）----
+
+
+def _slimed_play(bc: BattleContext, item: CardQueueItem) -> None:
+    pass  # 打出仅消耗自身（唯一可打出的状态卡，对齐 lightspeed useNoTriggerCard 之外的正常路径）
+
+
+def _burn_effect(bc: BattleContext, item: CardQueueItem) -> None:
+    up = item.card is not None and item.card.upgraded
+    bc.add_to_bot(Actions.damage_player(4 if up else 2))
+
+
+SLIMED = CardDef("Slimed", "黏液", 1, "Status", "消耗。（被打出时无其他效果）", False, True, _slimed_play)
+DAZED = CardDef("Dazed", "眩晕", 0, "Status", "不可打出。虚无。", False, False, _unplayable_play,
+                unplayable=True, ethereal=True)
+BURN = CardDef("Burn", "灼伤", 0, "Status", "回合结束时受到 2 点伤害。", False, False, _unplayable_play,
+               unplayable=True, no_trigger_effect=_burn_effect)
+VOID = CardDef("Void", "虚空", 0, "Status", "不可打出。虚无。被抽到时失去 1 点能量。", False, False, _unplayable_play,
+               unplayable=True, ethereal=True, lose_energy_when_drawn=1)
