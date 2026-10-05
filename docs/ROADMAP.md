@@ -39,7 +39,15 @@
 - [x] **批次 2 中等内容**（2026-10-05）：30 张中等卡（Power 状态族 14/消耗族/虚无/实例计数/生成）+ 精英 Boss 6 怪（Gremlin Nob/Lagavulin/Guardian/Hexaghost/Mad Gremlin/Taskmaster）——352 全绿
 - [x] **批次 3 困难内容**（2026-10-05）：Whirlwind（X 费）+ 选卡六件（Armaments/Headbutt/Dual Wield 等）+ 分裂怪（L 级史莱姆/Slime Boss）+ Looter/Mugger + RNG 遗物 6 个——425 全绿
 - [x] **批次 4 无色/诅咒/状态卡全量**（2026-10-05）：无色 34 张 + 诅咒 14 张正式化（curses_cards.py）+ RUPTURE 引擎补位 + SADISTIC/PANACHE/SHACKLED 三处接线——545 全绿；**终验：随机策略 21 遭遇×8 种子全跑通无死循环**。铁甲 Act 1 全内容迁移完成（~130 卡 + 27 怪 + ~55 遗物 + 21 遭遇）
-- [ ] **批次 5（另行规划）**：env 观测全词表接线 + 训练侧更新（现有模型届时作废）。已知待办：CARD_INDEX/MONSTER_INDEX 全词表、unplayable 牌的 action mask 缺口（Wound/Burn/Dazed 被 mask 误标合法，靠 env 兜底）、CARD_SELECT/X 费的动作空间表达、ScenarioSpec.deck 卡组采样
+- [x] **全职业扩展（2026-10-06 完成，超出原 Act 1 范围的用户指令）**：
+  - [x] 批次 A 引擎地基：Retain/limbo/手动弃牌管线 + 29 个 Act 2-4 怪物状态 + half_dead 二阶段 + TIME_WARP 提前回合
+  - [x] 批次 B：Act 2 全怪 15 种 + 19 遭遇（HEX 语义对齐修正）
+  - [x] 批次 C：Silent 全卡 75 张（wiki 权威源 + 弃牌/毒/Shiv 管线接线 + 3 处我方接线语义错误修正）
+  - [x] 批次 D：Act 3/4 全怪 20 种 + 18 遭遇（62 种怪全齐：含 Awakened One 二阶段/Time Eater/Corrupt Heart）
+  - [x] 批次 E：Watcher 全卡 83 张 + Stance/Scry/真言子系统（姿态能量语义/WRATH 承伤 ×2/Wave of the Hand/BLOCK_RETURN/Nirvana/保留族增量等 15+ 项接线）
+  - [x] 批次 F：Defect 全卡 75 张 + 充能球子系统（channel/evoke/passive/FOCUS/LOOP/ELECTRO/REBOUND/BIAS/BUFFER，lightspeed 空壳按 Java 原版自建）
+  - 终验：四职业初始牌组 × 58 遭遇 × 456 场随机对局全部正常终局，1245 测试全绿
+- [ ] **批次 5（另行规划）**：env 观测全词表接线 + 训练侧更新（现有模型届时作废）。已知待办：CARD_INDEX/MONSTER_INDEX 全词表（~330 卡/~62 怪）、unplayable 牌的 action mask 缺口（Wound/Burn/Dazed 被 mask 误标合法，靠 env 兜底）、CARD_SELECT/SCRY/X 费的动作空间表达、ScenarioSpec.deck 卡组采样、多职业动作空间差异
 - 决策点：Gremlin 帮逃跑（lightspeed 未实现、真实游戏有）→ 按分布级保真补齐；Normality 诅咒限制（lightspeed 未实现）→ 跳过并注释
 
 原有子项：
