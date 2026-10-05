@@ -507,7 +507,31 @@ class BattleContext:
                 self.add_to_bot(Actions.buff_enemy(m.idx, MonsterStatus.STRENGTH, m.statuses.get(MonsterStatus.ENRAGE)))
 
     def on_use_power_card(self) -> None:
+        p = self.player
+        item = self.cur_card_queue_item
         self.relics.on_use_power_card(self)
+        # Storm（Defect）：打出能力牌时引导 ×层 闪电球
+        n_storm = p.special.get("storm", 0)
+        if n_storm:
+            for _ in range(n_storm):
+                self.add_to_bot(Actions.channel_orb(Orb.LIGHTNING))
+        # Heatsinks：打出能力牌抽 ×层
+        n_heat = p.special.get("heatsinks", 0)
+        if n_heat:
+            self.add_to_bot(Actions.draw_cards(n_heat))
+        # Amplify/Echo Form：能力牌双发（Amplify 本回合下 N 张；Echo Form
+        # 每回合首张——C++ echoFormCardsDoubled 位）
+        double = False
+        if p.special.get("amplify", 0) > 0 and item is not None and not item.autoplay:
+            p.special["amplify"] -= 1
+            double = True
+        if p.special.get("echo_form") and not p.special.get("echo_form_used") and item is not None and not item.autoplay:
+            p.special["echo_form_used"] = True
+            double = True
+        if double:
+            replay = CardQueueItem(card=item.card, target=item.target, purge_on_use=True,
+                                   autoplay=True, energy_on_use=item.energy_on_use)
+            self.add_to_bot_card(replay)
         # CURIOSITY（Awakened One）：玩家每打出能力牌 +层 力量（Monster.cpp:196/289）
         for m in self.monsters.monsters:
             if m.is_targetable() and m.statuses.has(MonsterStatus.CURIOSITY):
@@ -534,6 +558,15 @@ class BattleContext:
                 self.on_card_exhausted(inst)
                 self.log.append(f"{inst.card.zh}({inst.card.name}) 被消耗。")
             else:
+                self.cards.move_to_discard_pile(inst)
+        elif self.player.statuses.has(PlayerStatus.REBOUND):
+            # REBOUND（Defect，BattleContext.cpp:1975-1985/1998-2000）：==1 时
+            # 本回合下一张打出的牌置于抽牌堆顶并移除状态；>1 减到 1
+            if self.player.statuses.get(PlayerStatus.REBOUND) == 1:
+                self.player.statuses.remove(PlayerStatus.REBOUND)
+                self.cards.append_to_draw_top(inst)
+            else:
+                self.player.statuses.set(PlayerStatus.REBOUND, 1)
                 self.cards.move_to_discard_pile(inst)
         else:
             self.cards.move_to_discard_pile(inst)
@@ -626,6 +659,25 @@ class BattleContext:
         self.player.apply_start_of_turn_powers(self)
         # ---- 回合开始的 Silent 状态（PHANTASMAL_KILLER 在此翻 DOUBLE_DAMAGE，
         # 使"下回合首次攻击翻倍"成立）----
+        # Defect special 回合开始钩子；bias_focus 为持续计数（不 pop，
+        # Biased Cognition 每回合 -层）
+        n_bias = self.player.special.get("bias_focus", 0)
+        if n_bias:
+            self.player.statuses.add(PlayerStatus.FOCUS, -n_bias)
+        n_hw = self.player.special.pop("hello_world", 0)
+        if n_hw:
+            from sts.content.defect_cards import random_power_card
+
+            for _ in range(n_hw):
+                self.cards.create_temp_card_in_hand(random_power_card(), False)
+        n_ca = self.player.special.pop("creative_ai", 0)
+        if n_ca:
+            from sts.content.defect_cards import random_power_card
+
+            for _ in range(n_ca):
+                self.cards.create_temp_card_in_hand(random_power_card(), False)
+        # Echo Form：每回合计数复位
+        self.player.special.pop("echo_form_used", None)
         # Blasphemy：下回合开始死亡（special 一次性）
         if self.player.special.pop("blasphemy_die", False):
             self.add_to_bot(Actions.player_lose_hp(99999))
@@ -888,6 +940,10 @@ class BattleContext:
             self.is_battle_over = True
             if self.outcome == Outcome.PLAYER_VICTORY:
                 self.relics.on_victory(self)  # BURNING_BLOOD/MEAT_ON_THE_BONE
+                # Self Repair（Defect）：战斗结束回复 3×层（special 槽）
+                n = self.player.special.pop("self_repair", 0)
+                if n:
+                    self.player.heal(3 * n)
             self.action_queue.clear_post_combat()
             self.card_queue.clear()
             self.log.append("战斗胜利！" if self.outcome == Outcome.PLAYER_VICTORY else "你被击败了……")

@@ -56,11 +56,19 @@ class Player(Combatant):
         self.special: dict[str, int] = {}  # 特殊计数槽（对齐 lightspeed bomb/combust 等）
 
     # ---- Defect 充能球（按 Java 原版自建；lightspeed 空壳）----
+    def _orb_damage_mult(self, m: "Monster") -> float:
+        """LOCK_ON（Bullseye 遗物）：该敌人受到的球伤害 ×1.5。"""
+        return 1.5 if m.statuses.has(MonsterStatus.LOCK_ON) else 1.0
+
     def channel_orb(self, bc: BattleContext, orb: Orb) -> None:
-        """引导一个充能球：满槽时先唤起最老的球再入槽。"""
+        """引导一个充能球：满槽时先唤起最老的球再入槽。统一计数
+        （special["orbs_channeled"]：Blizzard/Thunder Strike 的本场引导数）。"""
         if len(self.orbs) >= self.orb_slots:
             self.evoke_orb(bc)
         self.orbs.append(orb)
+        bc.player.special["orbs_channeled"] = bc.player.special.get("orbs_channeled", 0) + 1
+        self.special["orbs_channeled_type_"] = self.special.get("orbs_channeled_type_", {})
+        self.special["orbs_channeled_type_"][orb.name] = self.special["orbs_channeled_type_"].get(orb.name, 0) + 1
 
     def evoke_orb(self, bc: BattleContext) -> None:
         """唤起最老的充能球（按 Java Orb 类效果）：
@@ -76,6 +84,8 @@ class Player(Combatant):
                 bc.add_to_bot(Actions.damage_all_enemy(dmg))
             else:
                 bc.add_to_bot(Actions.damage_random_enemy(dmg))
+            # LOCK_ON 乘区由伤害目标各自判定（damage_random/all_enemy 无法
+            # 按目标乘——Bullseye 场景在怪物侧 damage 入口乘，见 Monster.damage）
         elif orb == Orb.FROST:
             bc.add_to_bot(Actions.gain_block(max(0, 2 + focus)))
         elif orb == Orb.DARK:
@@ -229,7 +239,11 @@ class Player(Combatant):
 
     def _hp_was_lost(self, bc: BattleContext, amount: int, self_inflicted: bool) -> None:
         """HP 损失的单一漏斗（对齐 Player::hpWasLost，Player.cpp:275-320）：
-        扣血 → RUPTURE（仅自伤）→ 遗物 wasHpLost 段 → 败北判定。"""
+        BUFFER 抵挡 → 扣血 → RUPTURE（仅自伤）→ 遗物段 → 败北判定。"""
+        if self.statuses.has(PlayerStatus.BUFFER):
+            # 缓冲：完全抵挡本次 HP 损失，消耗一层（Player.cpp:195-197）
+            self.statuses.decrement(PlayerStatus.BUFFER)
+            return
         was_bloodied = self.hp * 2 <= self.max_hp  # 扣血前快照
         self.hp = max(0, self.hp - amount)
         if self_inflicted and self.statuses.has(PlayerStatus.RUPTURE):
@@ -301,6 +315,8 @@ class Player(Combatant):
             # 均衡衰减在弃牌之后的回合末统一段（Player.cpp:472-474），
             # 玩家自施无 justApplied
             self.statuses.decrement(PlayerStatus.EQUILIBRIUM)
+        if self.statuses.has(PlayerStatus.REBOUND):
+            self.statuses.remove(PlayerStatus.REBOUND)  # Player.cpp:416-417 回合末移除
         if self.statuses.has(PlayerStatus.DOUBLE_DAMAGE):
             # Phantasmal Killer 落地态：全回合攻击翻倍（wiki "your Attacks
             # deal double damage"），回合末衰减（对齐 C++ DOUBLE_DAMAGE 在
@@ -321,6 +337,9 @@ class Player(Combatant):
         if s.has(PlayerStatus.PANACHE):
             # Panache：每回合计数复位（对齐 Player.cpp:638-639 panacheCounter=5）
             bc.player.special["panache_counter"] = 5
+        if s.has(PlayerStatus.BIAS):
+            # 偏见：每回合开始 FOCUS -层（Biased Cognition；永续）
+            self.statuses.add(PlayerStatus.FOCUS, -s.get(PlayerStatus.BIAS))
         if s.has(PlayerStatus.NEXT_TURN_BLOCK):
             # NEXT_TURN_BLOCK（新状态追加结算）：回合开始按层数获得格挡后
             # 移除（Player.cpp:631-634，GainBlock 动作走 gainBlock 入口）

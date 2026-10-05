@@ -156,7 +156,9 @@ class PlayerStatus(IntEnum):
     REBOUND = 58  # 本回合首张打出的攻击牌额外结算一次（Defect Rebound）
     LOOP = 59  # 回合开始时第一个充能球的被动效果额外触发 ×层（Defect Loop）
     ELECTRO = 60  # 闪电球被动/唤起改为全体（Defect Electrodynamics）
-    STATIC_DISCHARGE = 61  # 受到攻击时引导 1 个闪电球（Defect Static Discharge）
+    STATIC_DISCHARGE = 61  # 受到攻击时引导闪电球 ×层（Defect Static Discharge）
+    BIAS = 62  # 偏见：每回合开始 FOCUS -层（Biased Cognition；永续不清除）
+    BUFFER = 63  # 缓冲：下次 HP 损失被完全抵挡并消耗一层（Defect Buffer）
 
 
 class MonsterStatus(IntEnum):
