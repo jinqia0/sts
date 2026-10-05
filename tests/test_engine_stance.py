@@ -102,3 +102,71 @@ def test_wrath_next_turn_enters_wrath():
     bc.end_turn()
     assert bc.player.stance == Stance.WRATH
     assert not bc.player.statuses.has(PlayerStatus.WRATH_NEXT_TURN)
+
+
+# ---- Watcher 批次 E 补接线回归 ----
+
+
+def test_nirvana_scry_grants_block():
+    from sts.combat import BattleContext
+    from sts.content.cards import STRIKE, WOUND
+
+    bc = BattleContext(seed=320, deck=[STRIKE] * 10)
+    bc.cards.draw_pile.clear()
+    bc.cards.draw_pile.append(bc.cards.instantiate(WOUND))
+    bc.cards.draw_pile.append(bc.cards.instantiate(STRIKE))
+    bc.cards.draw_pile.append(bc.cards.instantiate(STRIKE))
+    bc.player.special["nirvana"] = 3
+    bc.open_scry(3)
+    bc.choose_scry(1)  # 弃 2 张 → +6 格挡
+    assert bc.player.block == 6
+    assert "nirvana" not in bc.player.special
+
+
+def test_swivel_makes_next_attack_free():
+    from sts.combat import BattleContext
+    from sts.content.cards import STRIKE
+
+    bc = BattleContext(seed=321, deck=[STRIKE] * 10)
+    bc.cards.hand.clear()
+    bc.cards.hand.append(bc.cards.instantiate(STRIKE))
+    bc.player.energy = 1
+    bc.player.special["swivel"] = True
+    bc.play_card(0)
+    assert bc.player.energy == 1  # 0 费打出
+    assert "swivel" not in bc.player.special
+
+
+def test_retained_card_increments():
+    from sts.combat import BattleContext
+    from sts.content.watcher_cards import PERSEVERANCE, WINDMILL_STRIKE, SANDS_OF_TIME
+
+    bc = BattleContext(seed=322, deck=[STRIKE] * 10)
+    bc.cards.hand.clear()
+    p = bc.cards.instantiate(PERSEVERANCE)
+    w = bc.cards.instantiate(WINDMILL_STRIKE)
+    sd = bc.cards.instantiate(SANDS_OF_TIME)
+    sd.cost_override = 2
+    for inst in (p, w, sd):
+        bc.cards.hand.append(inst)
+        inst.retain = True
+    bc.end_turn()
+    assert p.misc_data == 2  # 保留一回合 +2
+    assert w.misc_data == 4
+    assert sd.cost == 1  # -1 费
+
+
+def test_establishment_discounts_retained():
+    from sts.combat import BattleContext
+    from sts.content.cards import STRIKE
+    from sts.content.watcher_cards import PROTECT
+
+    bc = BattleContext(seed=323, deck=[STRIKE] * 10)
+    bc.player.special["establishment"] = 1
+    bc.cards.hand.clear()
+    inst = bc.cards.instantiate(PROTECT)
+    bc.cards.hand.append(inst)
+    inst.retain = True
+    cost0 = inst.cost
+    bc.end_turn()
+    assert inst.cost == max(0, cost0 - 1)

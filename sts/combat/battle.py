@@ -231,6 +231,9 @@ class BattleContext:
             cost = inst.cost
             if getattr(inst.card, "dynamic_cost", None) is not None:
                 cost = inst.card.dynamic_cost(self, inst)
+            # Swivel（观者）：下一张攻击牌 0 费（special 一次性）
+            if inst.card.ctype == "Attack" and self.player.special.pop("swivel", False):
+                cost = 0
             # Corruption：技能牌 0 费（打出即消耗的标志在 use_card 置位）
             if inst.card.ctype == "Skill" and self.player.statuses.has(PlayerStatus.CORRUPTION):
                 cost = 0
@@ -333,6 +336,10 @@ class BattleContext:
             self.cards.draw_pile.remove(inst)
             self.cards.move_to_discard_pile(inst)
             self.log.append(f"检视弃置 {inst.card.zh}({inst.card.name})。")
+        # NIRVANA（观者）：每次 Scry 后获得 3/4×弃置数 格挡
+        n_block = self.player.special.pop("nirvana", 0)
+        if n_block and to_discard:
+            self.add_to_bot(Actions.gain_block(n_block * len(to_discard)))
         self.scry_cards = []
         self.set_state(InputState.EXECUTING_ACTIONS)
         self.execute_actions()
@@ -753,6 +760,10 @@ class BattleContext:
         保留；③ 虚无牌消耗；④ 其余弃置。"""
         retained = [c for c in self.cards.hand if c.is_retained]
         if retained:
+            # Establishment（观者）：保留的牌费用 -1（每回合保留时）
+            if self.player.special.get("establishment"):
+                for c in retained:
+                    c.cost_override = max(0, c.cost - 1)
             for c in retained:
                 self.cards.hand.remove(c)
             self.cards.limbo.extend(retained)
@@ -770,8 +781,17 @@ class BattleContext:
                 self.cards.move_to_discard_pile(inst)
 
     def restore_retained_cards(self) -> None:
-        """回合开始：limbo 中的保留牌还手（对齐 BattleContext.cpp:2571-2578）。"""
+        """回合开始：limbo 中的保留牌还手（对齐 BattleContext.cpp:2571-2578）。
+        保留期间触发增量（Watcher 保留族）：Perseverance +2 伤 / Windmill
+        Strike +4 伤 / Sands of Time -1 费。"""
         for inst in self.cards.limbo:
+            name = inst.card.name
+            if name == "Perseverance":
+                inst.misc_data += 2
+            elif name == "Windmill Strike":
+                inst.misc_data += 4
+            elif name == "Sands of Time":
+                inst.cost_override = max(0, inst.cost - 1)
             if len(self.cards.hand) < 10:
                 self.cards.hand.append(inst)
             else:
