@@ -130,6 +130,7 @@ class Player(Combatant):
         if self_inflicted and self.statuses.has(PlayerStatus.RUPTURE):
             bc.add_to_bot(Actions.buff_player(PlayerStatus.STRENGTH, self.statuses.get(PlayerStatus.RUPTURE)))
         bc.relics.on_player_hp_was_lost(bc, amount, was_bloodied)
+        bc.cards.on_player_damaged()  # Blood for Blood 类受击改费（Player.cpp:317 onTookDamage）
         if self.hp <= 0 and bc.outcome == Outcome.UNDECIDED:
             bc.outcome = Outcome.PLAYER_LOSS
         bc.check_combat()

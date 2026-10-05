@@ -40,6 +40,7 @@ class CardDef:
     on_play_other_lose_hp: int = 0  # 打出其他牌时每张失去的 HP（诅咒 Pain）
     lose_energy_when_drawn: int = 0  # 被抽到时失去的能量（状态卡 Void）
     play_condition: "callable | None" = None  # 打出条件（Clash）：(bc, inst) -> bool，False 则 play_card 拒绝
+    cost_delta_on_damage: int = 0  # 玩家每次失去 HP 时该实例的永久费用增减（Blood for Blood：-1）
 
 
 def _strike_play(bc: BattleContext, item: CardQueueItem) -> None:

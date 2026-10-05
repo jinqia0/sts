@@ -199,6 +199,26 @@ class Actions:
         return Action(run)
 
     @staticmethod
+    def play_top_card(exhaust: bool) -> Action:
+        """打出抽牌堆顶的牌（Havoc/Mayhem；对齐 PlayTopCard →
+        playTopCardInDrawPile，BattleContext.cpp:2515-2530）：随机目标、
+        免费（autoplay 项不收能量）、可指定打完消耗；抽牌堆空则先洗
+        弃牌堆再重试。"""
+
+        def run(bc: BattleContext) -> None:
+            if not bc.cards.draw_pile:
+                if not bc.cards.discard_pile:
+                    return
+                bc.add_to_top(Actions.play_top_card(exhaust))  # 后执行
+                bc.add_to_top(Actions.empty_deck_shuffle())  # 先执行（洗牌）
+                return
+            inst = bc.cards.pop_from_draw_pile()
+            item = CardQueueItem(card=inst, random_target=True, exhaust_on_use=exhaust, autoplay=True)
+            bc.add_to_top_card(item)
+
+        return Action(run)
+
+    @staticmethod
     def draw_cards(amount: int) -> Action:
         return Action(lambda bc: bc.draw_cards(amount))
 

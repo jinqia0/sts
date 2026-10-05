@@ -23,17 +23,25 @@ class CardInstance:
     upgraded: bool = False
     unique_id: int = -1
     cost_for_turn: int = -1  # -1 表示未设置（用 card.cost）
+    cost_override: int | None = None  # 永久改费（Blood for Blood 受击 -1；对齐 C++ 的 cost 字段可变性）
     misc_data: int = 0  # 实例计数槽（对齐 lightspeed specialData：Rampage 叠伤/Searing Blow 升级数/Blood for Blood 减费）
 
     @property
     def cost(self) -> int:
-        # 临时改费（如 Madness/Corruption）优先；升级改费（如 Body Slam+）再次；
-        # 否则回退模板费用
+        # 临时改费（如 Madness/Corruption）→ 永久改费（Blood for Blood）→
+        # 升级改费（如 Body Slam+）→ 模板费用
         if self.cost_for_turn >= 0:
             return self.cost_for_turn
+        if self.cost_override is not None:
+            return self.cost_override
         if self.upgraded and self.card.upgraded_cost is not None:
             return self.card.upgraded_cost
         return self.card.cost
+
+    def update_cost(self, delta: int) -> None:
+        """永久改费（对齐 CardInstance::updateCost）：基于当前生效费用增减，下限 0。"""
+        base = self.cost
+        self.cost_override = max(0, base + delta)
 
     def __repr__(self) -> str:
         u = "+" if self.upgraded else ""
@@ -121,6 +129,18 @@ class CardManager:
         self.draw_pile[:] = rest + innate  # 堆顶 = 尾部，多张固有按原顺序被抽到
 
     def reset_attributes_at_end_of_turn(self) -> None:
-        """回合结束时清空卡牌的临时属性（本回合费用等）。"""
+        """回合结束时清空卡牌的临时属性（本回合费用等）。
+
+        cost_override 不清（Blood for Blood 的永久减费跨回合保留）。
+        """
         for c in self.hand + self.draw_pile + self.discard_pile:
             c.cost_for_turn = -1
+
+    def on_player_damaged(self) -> None:
+        """玩家每次失去 HP 时（对齐 CardManager::onTookDamage →
+        CardInstance::tookDamage）：带 cost_delta_on_damage 的实例
+        永久改费（Blood for Blood -1）。三堆全查（对齐 C++ 全堆遍历）。"""
+        for c in self.hand + self.draw_pile + self.discard_pile:
+            d = c.card.cost_delta_on_damage
+            if d:
+                c.update_cost(d)
