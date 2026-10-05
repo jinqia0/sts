@@ -256,18 +256,21 @@ def test_void_loses_energy_when_drawn():
 # ---- 缠绕 / 壁垒 / 格挡钩子 ----
 
 
-def test_entangled_blocks_play_and_clears_at_end_of_turn():
+def test_entangled_blocks_attacks_only_and_clears_at_end_of_turn():
     bc = BattleContext(seed=114)
-    setup_hand(bc, STRIKE)
+    setup_hand(bc, STRIKE, DEFEND)
     bc.player.statuses.add(PlayerStatus.ENTANGLED, 1)
     try:
         bc.play_card(0)
-        assert False, "缠绕中不可出牌"
+        assert False, "缠绕中不可打出攻击牌"
     except ValueError:
         pass
+    # 技能牌不受缠绕限制（对齐本体：Entangle 只拦攻击）
+    bc.play_card(1)  # DEFEND
+    assert bc.player.block == 5
     bc.end_turn()
     assert not bc.player.statuses.has(PlayerStatus.ENTANGLED)
-    # 下回合可正常出牌
+    # 下回合可正常出攻击牌
     setup_hand(bc, STRIKE)
     bc.play_card(0)
     assert not bc.player.statuses.has(PlayerStatus.ENTANGLED)
@@ -676,17 +679,19 @@ def test_relic_ice_cream_keeps_leftover_energy():
 
 
 def test_relic_velvet_choker_blocks_play_at_six_hand():
+    """VELVET_CHOKER：每回合至多打 6 张牌（isCardPlayAllowed L709-712 按
+    cardsPlayedThisTurn 计，非手牌数——批次 1 核对修正）。"""
     bc = BattleContext(seed=147, relics=[RelicId.VELVET_CHOKER])
     assert bc.player.energy == 4  # +1 能量
-    setup_hand(bc, STRIKE, STRIKE, STRIKE, STRIKE, STRIKE, STRIKE)
+    setup_hand(bc, *(SNECKO_FREE,) * 7)  # 0 费攻击桩，绕开能量限制
+    for _ in range(6):
+        bc.play_card(0)
+    assert bc.player.cards_played_this_turn == 6
     try:
         bc.play_card(0)
-        assert False, "手牌 ≥6 应禁出"
+        assert False, "本回合已打 6 张应禁出"
     except ValueError:
         pass
-    # 打出一张后剩 5 张 → 可出
-    bc.cards.hand.pop()
-    bc.play_card(0)
 
 
 def test_relic_orichalcum_not_triggered_with_block():
@@ -719,8 +724,10 @@ def test_relic_strange_spoon_distribution():
 
 
 def test_relic_mutagenic_strength_temporary():
+    """MUTAGENIC_STRENGTH：+3 力量，首回合末 -3（initRelics L288-291）。"""
     bc = BattleContext(seed=150, relics=[RelicId.MUTAGENIC_STRENGTH])
-    assert bc.player.statuses.get(PlayerStatus.STRENGTH) == 1
+    assert bc.player.statuses.get(PlayerStatus.STRENGTH) == 3
+    assert bc.player.statuses.get(PlayerStatus.LOSE_STRENGTH) == 3
     bc.end_turn()
     assert bc.player.statuses.get(PlayerStatus.STRENGTH) == 0  # 首回合末扣回
 

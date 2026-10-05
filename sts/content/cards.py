@@ -10,10 +10,12 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from sts.combat.actions import Actions
-from sts.combat.types import MonsterStatus, PlayerStatus
+from sts.combat.queue import Action
+from sts.combat.types import MonsterStatus, Outcome, PlayerStatus
 
 if TYPE_CHECKING:
     from sts.combat.battle import BattleContext
+    from sts.combat.card_manager import CardInstance
     from sts.combat.queue import CardQueueItem
 
 
@@ -205,3 +207,244 @@ BURN = CardDef("Burn", "灼伤", 0, "Status", "回合结束时受到 2 点伤害
                unplayable=True, no_trigger_effect=_burn_effect)
 VOID = CardDef("Void", "虚空", 0, "Status", "不可打出。虚无。被抽到时失去 1 点能量。", False, False, _unplayable_play,
                unplayable=True, ethereal=True, lose_energy_when_drawn=1)
+
+
+# ---- 简单档迁移（批次 1，2026-10-05）：Actions 工厂与现有状态即可覆盖的 20 张 ----
+# 数值以 lightspeed C++（BattleContext.cpp useAttackCard L958 起 / useSkillCard
+# L1203 起 / Actions.cpp 复合动作）为准对译，wiki 交叉校验；与 wiki 不一致处
+# 在各卡注释中记录。
+
+
+def _clash_condition(bc: BattleContext, inst: CardInstance) -> bool:
+    """对齐 canUseClash（CardInstance.cpp L260）：手牌（含自身）全部为攻击牌。"""
+    return all(c.card.ctype == "Attack" for c in bc.cards.hand)
+
+
+def _clash_play(bc: BattleContext, item: CardQueueItem) -> None:
+    dmg = bc.calculate_card_damage(item, item.target, 18 if item.card.upgraded else 14)
+    bc.add_to_bot(Actions.attack_enemy(item.target, dmg))
+
+
+def _heavy_blade_play(bc: BattleContext, item: CardQueueItem) -> None:
+    up = item.card.upgraded
+    # 对齐 C++ HEAVY_BLADE 分支：base = 14 + (up?4:2)×力量，再走
+    # calculateCardDamage（管线内另加 1×力量）→ 力量总倍率 3/5。
+    # 升级不改基准伤害（14），与 wiki 一致。
+    base = 14 + (4 if up else 2) * bc.player.statuses.get(PlayerStatus.STRENGTH)
+    dmg = bc.calculate_card_damage(item, item.target, base)
+    bc.add_to_bot(Actions.attack_enemy(item.target, dmg))
+
+
+# Perfect Strike 的计数范围（对齐 Cards.h isCardStrikeCard）：战斗内所有
+# "打击"牌（抽牌堆+手牌+弃牌堆；消耗堆已被移出战斗，不计——对齐
+# moveToExhaustPile 的 notifyRemoveFromCombat）。未定义的打击牌保留名字，
+# 定义后自动纳入计数。
+_STRIKE_CARD_NAMES = frozenset({
+    "Strike", "Twin Strike", "Wild Strike", "Pommel Strike", "Perfected Strike",
+    "Swift Strike", "Sneaky Strike", "Meteor Strike", "Thunder Strike", "Windmill Strike",
+})
+
+
+def _count_strikes_in_combat(bc: BattleContext) -> int:
+    cards = bc.cards
+    return sum(
+        1
+        for pile in (cards.draw_pile, cards.hand, cards.discard_pile)
+        for c in pile
+        if c.card.name in _STRIKE_CARD_NAMES
+    )
+
+
+def _perfected_strike_play(bc: BattleContext, item: CardQueueItem) -> None:
+    up = item.card.upgraded
+    # C++ 在 useAttackCard 计算时打出牌仍在手（"hack because we calculate
+    # strikeCount while non purge cards are still in hand"）→ 计数含自身；
+    # 重放体（purge_on_use，如 Double Tap 复制）不在手，不计。
+    count = _count_strikes_in_combat(bc) + (0 if item.purge_on_use else 1)
+    base = 6 + count * (3 if up else 2)
+    dmg = bc.calculate_card_damage(item, item.target, base)
+    bc.add_to_bot(Actions.attack_enemy(item.target, dmg))
+
+
+def _uppercut_play(bc: BattleContext, item: CardQueueItem) -> None:
+    up = item.card.upgraded
+    # C++ 升级版伤害仍为 13（wiki 为 17，以 C++ 为准），升级仅提升虚弱/易伤
+    dmg = bc.calculate_card_damage(item, item.target, 13)
+    bc.add_to_bot(Actions.attack_enemy(item.target, dmg))
+    n = 2 if up else 1
+    bc.add_to_bot(Actions.debuff_enemy(item.target, MonsterStatus.WEAK, n, False))
+    bc.add_to_bot(Actions.debuff_enemy(item.target, MonsterStatus.VULNERABLE, n, False))
+
+
+def _dropkick_play(bc: BattleContext, item: CardQueueItem) -> None:
+    up = item.card.upgraded
+    t = item.target
+
+    def run(bc: BattleContext) -> None:
+        # 对齐 DropkickAction：执行时判断目标易伤、计算伤害；攻击先结算，
+        # 有易伤则 +1 能量、抽 1（战斗已结束时不再执行——对齐胜利清队列）
+        m = bc.monsters.monsters[t]
+        if m.is_dead_or_escaped():
+            return
+        bonus = m.statuses.has(MonsterStatus.VULNERABLE)
+        dmg = bc.calculate_card_damage(item, t, 8 if up else 5)
+        m.attacked(bc, dmg)
+        bc.check_combat()
+        if bonus and bc.outcome == Outcome.UNDECIDED:
+            bc.player.energy += 1
+            bc.draw_cards(1)
+
+    bc.add_to_bot(Action(run))
+
+
+def _hemokinesis_play(bc: BattleContext, item: CardQueueItem) -> None:
+    up = item.card.upgraded
+    # 对齐 C++：先失 2 HP（自伤，触发 RUPTURE）后攻击；伤害在出牌时算好
+    #（失去 HP 不会反过来影响本卡伤害）
+    bc.add_to_bot(Actions.player_lose_hp(2, self_inflicted=True))
+    dmg = bc.calculate_card_damage(item, item.target, 20 if up else 15)
+    bc.add_to_bot(Actions.attack_enemy(item.target, dmg))
+
+
+def _pummel_play(bc: BattleContext, item: CardQueueItem) -> None:
+    up = item.card.upgraded
+    # 对齐 C++ PUMMEL：升级加第 5 段而非加伤（wiki 同；伤害恒 2，
+    # 多段共用同一 dmg）
+    dmg = bc.calculate_card_damage(item, item.target, 2)
+    for _ in range(5 if up else 4):
+        bc.add_to_bot(Actions.attack_enemy(item.target, dmg))
+
+
+def _intimidate_play(bc: BattleContext, item: CardQueueItem) -> None:
+    bc.add_to_bot(Actions.debuff_all_enemy(MonsterStatus.WEAK, 2 if item.card.upgraded else 1, False))
+
+
+def _shockwave_play(bc: BattleContext, item: CardQueueItem) -> None:
+    n = 5 if item.card.upgraded else 3
+    bc.add_to_bot(Actions.debuff_all_enemy(MonsterStatus.WEAK, n, False))
+    bc.add_to_bot(Actions.debuff_all_enemy(MonsterStatus.VULNERABLE, n, False))
+
+
+def _disarm_play(bc: BattleContext, item: CardQueueItem) -> None:
+    # 对齐 C++ DISARM：恒 -2 力量（wiki 升级版 -3，以 C++ 为准）；
+    # DebuffEnemy 语义：吃 ARTIFACT 抵消，负数直达力量（可为负）
+    bc.add_to_bot(Actions.debuff_enemy(item.target, MonsterStatus.STRENGTH, -2, False))
+
+
+def _seeing_red_play(bc: BattleContext, item: CardQueueItem) -> None:
+    # 对齐 C++：+2 能量、升级改费 1→0；lightspeed 的 doesCardExhaust 未收录
+    # SEEING_RED → 不消耗（wiki 为消耗，以 C++ 为准）
+    bc.add_to_bot(Actions.gain_energy(2))
+
+
+def _bloodletting_play(bc: BattleContext, item: CardQueueItem) -> None:
+    # 对齐 C++ BLOODLETTING：失去 3 HP（wiki 为 1，以 C++ 为准；自伤，
+    # 触发 RUPTURE），+2/3 能量
+    bc.add_to_bot(Actions.player_lose_hp(3, self_inflicted=True))
+    bc.add_to_bot(Actions.gain_energy(3 if item.card.upgraded else 2))
+
+
+def _spot_weakness_play(bc: BattleContext, item: CardQueueItem) -> None:
+    n = 4 if item.card.upgraded else 3
+    t = item.target
+
+    def run(bc: BattleContext) -> None:
+        # 对齐 SpotWeaknessAction：执行时读目标意图，为攻击时 +力量
+        m = bc.monsters.monsters[t]
+        if not m.is_dead_or_escaped() and m.current_move.kind == "attack":
+            bc.player.statuses.add(PlayerStatus.STRENGTH, n)
+
+    bc.add_to_bot(Action(run))
+
+
+def _entrench_play(bc: BattleContext, item: CardQueueItem) -> None:
+    def run(bc: BattleContext) -> None:
+        # 对齐 EntrenchAction：执行时格挡翻倍（走 gain_block：NO_BLOCK 拦截
+        # + Juggernaut 触发）
+        bc.player.gain_block(bc, bc.player.block)
+
+    bc.add_to_bot(Action(run))
+
+
+def _limit_break_play(bc: BattleContext, item: CardQueueItem) -> None:
+    # 对齐 doesCardExhaust：LIMIT_BREAK → !upgraded（仅基础版消耗）。
+    # CardDef.exhausts 是模板级静态位，表达不了"按升级分支"，故在 play 里
+    # 直接置 item.exhaust_on_use（use_card 在 play 之前已读过 exhausts，
+    # 此处覆盖即最终值，on_after_use_card 按它落消耗堆）
+    if not item.card.upgraded:
+        item.exhaust_on_use = True
+
+    def run(bc: BattleContext) -> None:
+        # 对齐 LimitBreakAction：执行时力量翻倍
+        n = bc.player.statuses.get(PlayerStatus.STRENGTH)
+        bc.player.statuses.add(PlayerStatus.STRENGTH, n)
+
+    bc.add_to_bot(Action(run))
+
+
+def _bludgeon_play(bc: BattleContext, item: CardQueueItem) -> None:
+    dmg = bc.calculate_card_damage(item, item.target, 42 if item.card.upgraded else 32)
+    bc.add_to_bot(Actions.attack_enemy(item.target, dmg))
+
+
+def _offering_play(bc: BattleContext, item: CardQueueItem) -> None:
+    up = item.card.upgraded
+    # 对齐 C++ OFFERING：失 6 HP（自伤）→ +2 能量 → 抽 3/5
+    bc.add_to_bot(Actions.player_lose_hp(6, self_inflicted=True))
+    bc.add_to_bot(Actions.gain_energy(2))
+    bc.add_to_bot(Actions.draw_cards(5 if up else 3))
+
+
+def _impervious_play(bc: BattleContext, item: CardQueueItem) -> None:
+    bc.add_to_bot(Actions.gain_block(bc.calculate_card_block(40 if item.card.upgraded else 30)))
+
+
+def _reaper_play(bc: BattleContext, item: CardQueueItem) -> None:
+    base = 5 if item.card.upgraded else 4
+
+    def run(bc: BattleContext) -> None:
+        # 对齐 ReaperAction：按索引序逐怪走完整攻击管线（每怪独立算伤），
+        # 吸血量 = 各怪实际掉落的 HP（被格挡吸收的不计）；逐段 attacked
+        # （死亡即触发 die/checkCombat），heal 在循环后入 bot——若中途
+        # 胜利，clearPostCombat 已先行执行，heal 照常落地（与 C++ 时序一致）
+        heal = 0
+        for m in bc.monsters.monsters:
+            if m.is_dead_or_escaped():
+                continue
+            pre_hp = m.hp
+            m.attacked(bc, bc.calculate_card_damage(item, m.idx, base))
+            heal += pre_hp - m.hp
+        if heal > 0:
+            bc.add_to_bot(Actions.heal_player(heal))
+
+    bc.add_to_bot(Action(run))
+
+
+def _sword_boomerang_play(bc: BattleContext, item: CardQueueItem) -> None:
+    # 对齐 C++：3（升级 4）段，每段独立随机目标 + 独立走攻击管线
+    bc.add_to_bot(Actions.attack_random_enemy(3, 4 if item.card.upgraded else 3))
+
+
+CLASH = CardDef("Clash", "冲突", 0, "Attack", "只有在手牌全是攻击牌时才能打出。造成 14 点伤害。",
+                True, False, _clash_play, play_condition=_clash_condition)
+HEAVY_BLADE = CardDef("Heavy Blade", "重刃", 2, "Attack", "造成 14 点伤害。力量额外计入 2 次。", True, False, _heavy_blade_play)
+PERFECTED_STRIKE = CardDef("Perfected Strike", "完美打击", 2, "Attack", "造成 6 点伤害，每有一张“打击”牌额外 +2。", True, False, _perfected_strike_play)
+UPPERCUT = CardDef("Uppercut", "上勾拳", 2, "Attack", "造成 13 点伤害。施加 1 层虚弱和 1 层易伤。", True, False, _uppercut_play)
+DROPKICK = CardDef("Dropkick", "飞踢", 1, "Attack", "造成 5 点伤害。若目标有易伤，获得 1 点能量并抽 1 张牌。", True, False, _dropkick_play)
+HEMOKINESIS = CardDef("Hemokinesis", "血液激发", 1, "Attack", "失去 2 点 HP。造成 15 点伤害。", True, False, _hemokinesis_play)
+PUMMEL = CardDef("Pummel", "连续痛击", 1, "Attack", "造成 2 点伤害 4 次。消耗。", True, True, _pummel_play)
+INTIMIDATE = CardDef("Intimidate", "威吓", 0, "Skill", "所有敌人获得 1 层虚弱。消耗。", False, True, _intimidate_play)
+SHOCKWAVE = CardDef("Shockwave", "震波", 2, "Skill", "所有敌人获得 3 层虚弱和 3 层易伤。消耗。", False, True, _shockwave_play)
+DISARM = CardDef("Disarm", "缴械", 1, "Skill", "敌人失去 2 点力量。消耗。", True, True, _disarm_play)
+SEEING_RED = CardDef("Seeing Red", "怒目而视", 1, "Skill", "获得 2 点能量。", False, False, _seeing_red_play,
+                     upgraded_cost=0)
+BLOODLETTING = CardDef("Bloodletting", "放血", 0, "Skill", "失去 3 点 HP。获得 2 点能量。", False, False, _bloodletting_play)
+SPOT_WEAKNESS = CardDef("Spot Weakness", "洞察弱点", 1, "Skill", "若敌人意图为攻击，获得 3 点力量。", True, False, _spot_weakness_play)
+ENTRENCH = CardDef("Entrench", "堑壕", 2, "Skill", "将当前格挡翻倍。", False, False, _entrench_play,
+                   upgraded_cost=1)
+LIMIT_BREAK = CardDef("Limit Break", "极限突破", 1, "Skill", "力量翻倍。消耗。（升级后不消耗）", False, False, _limit_break_play)
+BLUDGEON = CardDef("Bludgeon", "重击", 3, "Attack", "造成 32 点伤害。", True, False, _bludgeon_play)
+OFFERING = CardDef("Offering", "献祭", 0, "Skill", "失去 6 点 HP。获得 2 点能量。抽 3 张牌。消耗。", False, True, _offering_play)
+IMPERVIOUS = CardDef("Impervious", "金刚不坏", 2, "Skill", "获得 30 点格挡。消耗。", False, True, _impervious_play)
+REAPER = CardDef("Reaper", "收割", 2, "Attack", "对所有敌人造成 4 点伤害。回复等同于未被格挡吸收的伤害的 HP。消耗。", False, True, _reaper_play)
+SWORD_BOOMERANG = CardDef("Sword Boomerang", "回旋剑", 1, "Attack", "对随机敌人造成 3 点伤害 3 次。", False, False, _sword_boomerang_play)

@@ -204,8 +204,9 @@ class BattleContext:
             raise ValueError(f"{inst.card.zh}({inst.card.name}) 不可打出")
         if inst.card.play_condition is not None and not inst.card.play_condition(self, inst):
             raise ValueError(f"{inst.card.zh}({inst.card.name}) 当前不满足打出条件")
-        if self.player.statuses.has(PlayerStatus.ENTANGLED):
-            raise ValueError("被缠绕：本回合不能打出卡牌")
+        if self.player.statuses.has(PlayerStatus.ENTANGLED) and inst.card.ctype == "Attack":
+            # 缠绕只拦攻击牌（对齐 lightspeed CardInstance.cpp:292 的 ATTACK 分支）
+            raise ValueError("被缠绕：本回合不能打出攻击牌")
         if not self.relics.check_play_allowed(self, inst):
             raise ValueError("遗物限制：当前不能打出卡牌")
         if inst.card.needs_target:

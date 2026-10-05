@@ -59,61 +59,80 @@ class Player(Combatant):
             n = self.statuses.get(PlayerStatus.JUGGERNAUT)
             bc.add_to_bot(Actions.damage_random_enemy(5 * n))
 
-    # ---- 玩家受击（对齐 Player::attacked）----
+    # ---- 玩家受击（对齐 Player::attacked，Player.cpp:209-255）----
     def attacked(self, bc: BattleContext, enemy_idx: int, damage: int) -> None:
-        # 遗物先行修正（TUNGSTEN_ROD -1 / TORII ≤5→1），再 INTANGIBLE 钳 1
-        damage = bc.relics.on_incoming_attack_damage(bc, damage)
         if self.statuses.has(PlayerStatus.INTANGIBLE):
-            damage = min(damage, 1)
-        if self.statuses.has(PlayerStatus.FLAME_BARRIER):
-            # 火焰屏障：受攻击即对攻击者反弹（无论是否被格挡吸收）
-            bc.add_to_bot(Actions.damage_enemy(enemy_idx, self.statuses.get(PlayerStatus.FLAME_BARRIER)))
-        if self.statuses.has(PlayerStatus.THORNS):
-            # 反伤（Bronze Scales 等）：受攻击即对攻击者反弹层数伤害
-            bc.add_to_bot(Actions.damage_enemy(enemy_idx, self.statuses.get(PlayerStatus.THORNS)))
+            damage = min(damage, 1)  # C++ 由 attackPlayerHelper 上游钳制，等价
         saved_block = self.block
         self.block = max(0, self.block - damage)
-        damage -= saved_block
+        damage -= saved_block  # damage = 漏过格挡的余量
+        # THORNS / FLAME_BARRIER：无论是否漏格挡都反弹，addToTop
+        #（对齐 Player.cpp:225-233，THORNS 先、FLAME_BARRIER 后）
+        if self.statuses.has(PlayerStatus.THORNS):
+            bc.add_to_top(Actions.damage_enemy(enemy_idx, self.statuses.get(PlayerStatus.THORNS)))
+        if self.statuses.has(PlayerStatus.FLAME_BARRIER):
+            bc.add_to_top(Actions.damage_enemy(enemy_idx, self.statuses.get(PlayerStatus.FLAME_BARRIER)))
         if damage > 0:
-            self.hp = max(0, self.hp - damage)
-            self._on_hp_lost(bc, damage)
-            bc.relics.on_player_hp_was_lost(bc, damage)
-            bc.check_combat()
+            # TORII（漏格挡 ≤5 → 1）→ TUNGSTEN_ROD（-1），对齐 :235-241——
+            # 都作用于格挡吸收之后的余量，不空耗格挡
+            damage = bc.relics.on_incoming_attack_damage(bc, damage)
+            # PLATED_ARMOR：未被格挡的攻击伤害 -1 层（:246-248，仅此路径）
+            if self.statuses.has(PlayerStatus.PLATED_ARMOR):
+                self.statuses.decrement(PlayerStatus.PLATED_ARMOR)
+            self._hp_was_lost(bc, damage, False)
 
     def damage(self, bc: BattleContext, amount: int) -> None:
-        """非攻击 HP 损失（Burn/毒等）。吃格挡但不触发受击类状态。"""
+        """非攻击 HP 损失（Burn/毒等）。吃格挡但不触发受击类状态
+        （对齐 Player::damage，Player.cpp:175-207）。"""
         if self.statuses.has(PlayerStatus.INTANGIBLE):
             amount = min(amount, 1)
         saved_block = self.block
         self.block = max(0, self.block - amount)
         amount -= saved_block
         if amount > 0:
-            self.hp = max(0, self.hp - amount)
-            self._on_hp_lost(bc, amount)
-            bc.relics.on_player_hp_was_lost(bc, amount)
-            bc.check_combat()
+            amount = bc.relics.on_hp_loss_reduce(bc, amount)  # TUNGSTEN_ROD（:201-203）
+            if amount > 0:
+                self._hp_was_lost(bc, amount, False)
 
     def lose_hp(self, bc: BattleContext, amount: int, self_inflicted: bool = False) -> None:
-        """直接 HP 损失：不吃格挡、不吃易伤（献祭类卡/诅咒）。
+        """直接 HP 损失：不吃格挡、不吃易伤（献祭类卡/诅咒；对齐
+        Player::loseHp，Player.cpp:257-273）。
 
         self_inflicted：自伤（Hemokinesis/Offering/Combust）——RUPTURE
-        只在自伤时触发（对齐 lightspeed hpWasLost 的 selfDamage 标志）。
+        只在自伤时触发（hpWasLost 的 selfDamage 标志）。
         """
         if amount <= 0:
             return
+        if self.statuses.has(PlayerStatus.INTANGIBLE):
+            amount = 1
+        amount = bc.relics.on_hp_loss_reduce(bc, amount)  # TUNGSTEN_ROD（:266-271）
+        if amount <= 0:
+            return
+        self._hp_was_lost(bc, amount, self_inflicted)
+
+    def heal(self, amount: int, bc: BattleContext | None = None) -> None:
+        """治疗（对齐 Player::heal，Player.cpp:156-172）：MAGIC_FLOWER 放大
+        ×3//2；RED_SKULL 从半血以下回复过线时 -3 力量。"""
+        if amount <= 0:
+            return
+        if bc is not None:
+            amount = bc.relics.modify_heal(bc, amount)
+        was_bloodied = self.hp * 2 <= self.max_hp
+        self.hp = min(self.max_hp, self.hp + amount)
+        if bc is not None:
+            bc.relics.on_after_heal(bc, was_bloodied)
+
+    def _hp_was_lost(self, bc: BattleContext, amount: int, self_inflicted: bool) -> None:
+        """HP 损失的单一漏斗（对齐 Player::hpWasLost，Player.cpp:275-320）：
+        扣血 → RUPTURE（仅自伤）→ 遗物 wasHpLost 段 → 败北判定。"""
+        was_bloodied = self.hp * 2 <= self.max_hp  # 扣血前快照
         self.hp = max(0, self.hp - amount)
-        self._on_hp_lost(bc, amount)
         if self_inflicted and self.statuses.has(PlayerStatus.RUPTURE):
             bc.add_to_bot(Actions.buff_player(PlayerStatus.STRENGTH, self.statuses.get(PlayerStatus.RUPTURE)))
-        bc.check_combat()
-
-    def heal(self, amount: int) -> None:
-        if amount > 0:
-            self.hp = min(self.max_hp, self.hp + amount)
-
-    def _on_hp_lost(self, bc: BattleContext, amount: int) -> None:
+        bc.relics.on_player_hp_was_lost(bc, amount, was_bloodied)
         if self.hp <= 0 and bc.outcome == Outcome.UNDECIDED:
             bc.outcome = Outcome.PLAYER_LOSS
+        bc.check_combat()
 
     # ---- 玩家回合钩子（对齐 Player.cpp 对应方法）----
     def apply_end_of_turn_powers(self, bc: BattleContext) -> None:
@@ -146,6 +165,11 @@ class Player(Combatant):
             bc.add_to_bot(Actions.remove_player_status(PlayerStatus.ENTANGLED))
         if s.has(PlayerStatus.DOUBLE_TAP):
             bc.add_to_bot(Actions.remove_player_status(PlayerStatus.DOUBLE_TAP))
+        if s.has(PlayerStatus.PLATED_ARMOR):
+            # PLATED_ARMOR（新状态追加结算）：回合末按层数获得格挡，层数保留
+            #（BattleContext.cpp:2068-2070，位于 METALLICIZE 之后；本文件
+            # 顺序约束下追加在方法尾，格挡增益相互可交换）
+            bc.add_to_bot(Actions.gain_block(s.get(PlayerStatus.PLATED_ARMOR)))
 
     def apply_at_end_of_round_powers(self, bc: BattleContext) -> None:
         """afterMonsterTurns 阶段：玩家侧临时状态衰减（debuff 每回合 -1，
@@ -166,6 +190,11 @@ class Player(Combatant):
         s = self.statuses
         if s.has(PlayerStatus.FLAME_BARRIER):
             s.remove(PlayerStatus.FLAME_BARRIER)
+        if s.has(PlayerStatus.NEXT_TURN_BLOCK):
+            # NEXT_TURN_BLOCK（新状态追加结算）：回合开始按层数获得格挡后
+            # 移除（Player.cpp:631-634，GainBlock 动作走 gainBlock 入口）
+            bc.add_to_bot(Actions.gain_block(s.get(PlayerStatus.NEXT_TURN_BLOCK)))
+            s.remove(PlayerStatus.NEXT_TURN_BLOCK)
 
     def apply_start_of_turn_post_draw_powers(self, bc: BattleContext) -> None:
         """玩家回合开始、抽牌之后（对齐 applyStartOfTurnPostDrawPowers）：
@@ -293,13 +322,18 @@ class Monster(Combatant):
             # 完全被格挡吸收的伤害不触发（damageUnblockedHelper 无此分支）。
             bc.add_to_bot(Actions.monster_gain_block(self.idx, self.statuses.get(MonsterStatus.CURL_UP)))
             self.statuses.remove(MonsterStatus.CURL_UP)
-        if from_attack and saved_block > 0 and self.block == 0:
-            # HAND_DRILL：攻击把怪的格挡打空
+        if saved_block > 0 and self.block == 0:
+            # HAND_DRILL：格挡被打空（attacked/damage 两路径都触发，Monster.cpp:433/488）
             bc.relics.on_monster_block_broken(bc, self)
         self.hp = max(0, self.hp - damage)
         if self.hp == 0:
             self.die(bc)
         else:
+            # 沉睡唤醒（对齐 damageUnblockedHelper，Monster.cpp:412-414）：
+            # 受到漏格挡伤害即醒并移除 8 层金属化（Lagavulin）
+            if self.statuses.has(MonsterStatus.ASLEEP):
+                self.statuses.remove(MonsterStatus.ASLEEP)
+                self.statuses.decrement(MonsterStatus.METALLICIZE, 8)
             self.on_hp_lost(bc, damage)
 
     # ---- 死亡（对齐 Monster::die）----

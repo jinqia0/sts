@@ -123,7 +123,7 @@ class Actions:
 
     @staticmethod
     def heal_player(amount: int) -> Action:
-        return Action(lambda bc: bc.player.heal(amount))
+        return Action(lambda bc: bc.player.heal(amount, bc))
 
     @staticmethod
     def monster_gain_block(idx: int, amount: int) -> Action:
