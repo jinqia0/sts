@@ -42,6 +42,7 @@ class Player(Combatant):
         self.cards_played_this_turn = 0
         self.attacks_played_this_turn = 0
         self.skills_played_this_turn = 0
+        self.cards_discarded_this_turn = 0  # 本回合弃牌数（Eviscerate 减费用等）
         # 上一回合快照（ART_OF_WAR / POCKETWATCH 等"上回合行为"遗物用；
         # 初始 0 对齐 lightspeed——首回合视为"上回合没出牌"，触发）
         self.cards_played_last_turn = 0
@@ -174,7 +175,8 @@ class Player(Combatant):
             bc.add_to_bot(Actions.gain_block(s.get(PlayerStatus.PLATED_ARMOR)))
 
     def apply_at_end_of_round_powers(self, bc: BattleContext) -> None:
-        """afterMonsterTurns 阶段：玩家侧临时状态衰减（debuff 每回合 -1，
+        """afterMonsterTurns 阶段：玩家侧临时状态衰减（对齐
+        applyAtEndOfRoundPowers，Player.cpp:442-481；debuff 每回合 -1，
         怪物施加的首轮跳过——just_applied 语义）。"""
         for s in (PlayerStatus.WEAK, PlayerStatus.VULNERABLE, PlayerStatus.FRAIL,
                   PlayerStatus.NO_BLOCK, PlayerStatus.INTANGIBLE):
@@ -183,6 +185,10 @@ class Player(Combatant):
                     self.statuses.set_just_applied(s, False)
                 else:
                     self.statuses.decrement(s)
+        if self.statuses.has(PlayerStatus.EQUILIBRIUM):
+            # 均衡衰减在弃牌之后的回合末统一段（Player.cpp:472-474），
+            # 玩家自施无 justApplied
+            self.statuses.decrement(PlayerStatus.EQUILIBRIUM)
 
     def apply_start_of_turn_powers(self, bc: BattleContext) -> None:
         """玩家回合开始：仅限回合开始的清除类状态。
@@ -246,6 +252,7 @@ class Monster(Combatant):
         self.is_escaping = False  # 逃跑（Looter；逃跑后不可选为目标）
         self.misc_info: int = 0  # 通用实例槽（Guardian 阈值/Wizard 充能/Looter 偷金）
         self.unique_power0: int = 0  # 唯一能力计数槽（Hexaghost 火球计数等）
+        self.half_dead = False  # 二阶段标记（Awakened One 满血复活的"假死"态）
 
     # ---- 意图 ----
     @property
@@ -300,6 +307,14 @@ class Monster(Combatant):
     def on_hp_lost(self, bc: BattleContext, amount: int) -> None:
         """受到未被格挡吸收的伤害后触发（内容层按怪覆盖）。"""
 
+    # ---- 眩晕钩子（PLATED_ARMOR_M/FLIGHT 归零；C++ setMove(X_STUNNED) 的
+    # Python 化：内容层定义 STUNNED_MOVE 类属性并覆盖 take_turn 空过）----
+    STUNNED_MOVE: "MoveDef | None" = None  # type: ignore[assignment]
+
+    def on_stunned(self, bc: BattleContext) -> None:
+        if self.STUNNED_MOVE is not None:
+            self.set_move(self.STUNNED_MOVE)
+
     # ---- 战斗中生成怪物的意图补 roll（extraRollMoveOnTurn 的简化）----
     def roll_spawned_move(self, bc: BattleContext) -> None:
         """生成怪立即 roll 一次意图（生成时机在怪物回合外，需补 roll）。"""
@@ -311,9 +326,14 @@ class Monster(Combatant):
             return
         if damage < 0:
             damage = 0
+        if self.statuses.has(MonsterStatus.INTANGIBLE):
+            damage = min(damage, 1)  # Monster.cpp:418/477
         if self.statuses.has(MonsterStatus.ANGRY):  # onAttacked
             self.statuses.add(MonsterStatus.STRENGTH, self.statuses.get(MonsterStatus.ANGRY))
         self._apply_damage(bc, damage, from_attack=True)
+        if not self.is_dying and self.statuses.has(MonsterStatus.REACTIVE):
+            # 应激（Writhing Mass）：受击后重掷意图（Monster.cpp:375-381）
+            self.roll_move(bc)
 
     def damage(self, bc: BattleContext, damage: int) -> None:
         """非攻击 HP 损失（毒、Thorns 反伤等）。"""
@@ -321,6 +341,8 @@ class Monster(Combatant):
             return
         if damage < 0:
             damage = 0
+        if self.statuses.has(MonsterStatus.INTANGIBLE):
+            damage = min(damage, 1)  # Monster.cpp:55-56
         self._apply_damage(bc, damage, from_attack=False)
 
     def _apply_damage(self, bc: BattleContext, damage: int, from_attack: bool) -> None:
@@ -332,6 +354,29 @@ class Monster(Combatant):
         if from_attack:
             # THE_BOOT：未被格挡吸收的攻击伤害 <5 提到 5
             damage = bc.relics.on_monster_unblocked_attack_damage(bc, damage)
+            # INVINCIBLE（Corrupt Heart，Monster.cpp:348-350）：单次伤害钳
+            # 20+池（misc_info 存剩余池），扣池
+            if self.statuses.has(MonsterStatus.INVINCIBLE):
+                cap = 20 + self.misc_info
+                if damage > cap:
+                    self.misc_info = max(0, cap - 20 + (damage - cap) // 10)
+                    damage = cap
+            # MALLEABLE（Snake Plant 等，Monster.cpp:47-48/369-373）：受击获得
+            # 层格挡且层数+1
+            if self.statuses.has(MonsterStatus.MALLEABLE):
+                n = self.statuses.get(MonsterStatus.MALLEABLE)
+                bc.add_to_bot(Actions.monster_gain_block(self.idx, n))
+                self.statuses.add(MonsterStatus.MALLEABLE, 1)
+            # FLIGHT（Byrd，Monster.cpp:362-367）：每受一次未格挡攻击 -1 层，
+            # 归零落地并眩晕（C++ setMove(BYRD_STUNNED)——钩子方案）
+            if self.statuses.has(MonsterStatus.FLIGHT):
+                self.statuses.decrement(MonsterStatus.FLIGHT)
+                if not self.statuses.has(MonsterStatus.FLIGHT):
+                    self.on_stunned(bc)
+            # ENVENOM 挂点（Monster.cpp:346-348）：未格挡攻击伤害 → 施毒
+            n_poison = bc.player.statuses.get(PlayerStatus.ENVENOM)
+            if n_poison > 0:
+                self.statuses.add(MonsterStatus.POISON, n_poison)
         if from_attack and self.statuses.has(MonsterStatus.CURL_UP):
             # CURL_UP（对齐 lightspeed attackedUnblockedHelper）：首次受到
             # 未被格挡吸收的攻击伤害时，获得 CURL_UP 层数的格挡。格挡动作
@@ -339,9 +384,20 @@ class Monster(Combatant):
             # 完全被格挡吸收的伤害不触发（damageUnblockedHelper 无此分支）。
             bc.add_to_bot(Actions.monster_gain_block(self.idx, self.statuses.get(MonsterStatus.CURL_UP)))
             self.statuses.remove(MonsterStatus.CURL_UP)
+        if from_attack and self.statuses.has(MonsterStatus.PLATED_ARMOR_M):
+            # 重甲怪版（Shelled Parasite，Monster.cpp:352-355）：未格挡攻击
+            # -1 层，归零眩晕（C++ setMove(SHELLED_PARASITE_STUNNED)）
+            self.statuses.decrement(MonsterStatus.PLATED_ARMOR_M)
+            if not self.statuses.has(MonsterStatus.PLATED_ARMOR_M):
+                self.on_stunned(bc)
         if saved_block > 0 and self.block == 0:
             # HAND_DRILL：格挡被打空（attacked/damage 两路径都触发，Monster.cpp:433/488）
             bc.relics.on_monster_block_broken(bc, self)
+        # SHIFTING（Transient，Monster.cpp:393-395）：受击 -damage 力量（全额，
+        # 无封顶）同时 SHACKLED 挂账回合末回补
+        if self.statuses.has(MonsterStatus.SHIFTING) and damage > 0:
+            self.statuses.add(MonsterStatus.STRENGTH, -damage)
+            self.statuses.add(MonsterStatus.SHACKLED, damage)
         self.hp = max(0, self.hp - damage)
         if self.hp == 0:
             self.die(bc)
@@ -355,20 +411,49 @@ class Monster(Combatant):
 
     # ---- 死亡（对齐 Monster::die）----
     def die(self, bc: BattleContext) -> None:
+        if self.half_dead:
+            # 二阶段"假死"（Awakened One）：复活逻辑由内容层 take_turn 处理，
+            # die() 直接过——halfDead 怪不参与存活计数（构造时也不 add）。
+            return
         self.is_dying = True
         group = bc.monsters
-        group.alive_count -= 1
         # THIEVERY（Looter）：死亡时返还偷走的金币
         if self.statuses.has(MonsterStatus.THIEVERY):
             bc.player.gold += self.misc_info
             self.misc_info = 0
             self.statuses.remove(MonsterStatus.THIEVERY)
+        # STASIS（Bronze Orb）：死亡时归还偷走的卡（放入玩家弃牌堆）
+        if getattr(self, "stasis_cards", None):
+            for inst in self.stasis_cards:
+                if inst in bc.cards.draw_pile:
+                    bc.cards.draw_pile.remove(inst)
+                elif inst in bc.cards.discard_pile:
+                    bc.cards.discard_pile.remove(inst)
+                bc.cards.move_to_discard_pile(inst)
+            self.stasis_cards.clear()
+        # MINION_LEADER（Gremlin Leader/Collector 等）：主怪死亡立即判胜
+        #（对齐 Monster.cpp:293 die 的 minionLeader 分支）
+        if self.statuses.has(MonsterStatus.MINION_LEADER):
+            bc.outcome = type(bc.outcome)(1)  # PLAYER_VICTORY
+            bc.check_combat()
+            return
+        # REGROW（Darkling，Monster.cpp:303-306）：死亡→假死，下回合满血复活
+        if self.statuses.has(MonsterStatus.REGROW):
+            self.half_dead = True
+            self.is_dying = False
+            self.hp = self.max_hp
+            return  # 存活数不减；take_turn 内容层处理复活出场
+        group.alive_count -= 1
         if group.alive_count <= 0:
             # 最后一只死亡：战斗直接结束，SPORE_CLOUD/GREMLIN_HORN 不再施加
             #（对齐 lightspeed die()：monstersAlive==0 时先 return）
             bc.outcome = type(bc.outcome)(1)  # PLAYER_VICTORY
             bc.check_combat()
             return
+        # CORPSE_EXPLOSION（Monster.cpp:312-313）：死亡时对全体造成 maxHp×层
+        if self.statuses.has(MonsterStatus.CORPSE_EXPLOSION):
+            bc.add_to_bot(Actions.damage_all_enemy(self.max_hp * self.statuses.get(MonsterStatus.CORPSE_EXPLOSION)))
+            self.statuses.remove(MonsterStatus.CORPSE_EXPLOSION)
         if self.statuses.has(MonsterStatus.SPORE_CLOUD):
             # 孢子云（Fungi Beast，对齐 lightspeed die() 的 SPORE_CLOUD 分支）：
             # 死亡时给玩家 2 层易伤（addToTop，插在当前动作后立即执行）。
@@ -382,7 +467,8 @@ class Monster(Combatant):
 
     # ---- 回合钩子（对齐 Monster.cpp）----
     def apply_start_of_turn_powers(self, bc: BattleContext) -> None:
-        """怪物回合开始（MonsterStartTurnAction）：中毒结算 → 格挡清零 + 起手状态。"""
+        """怪物回合开始（MonsterStartTurnAction）：中毒结算 → LOCK_ON/SLOW
+        衰减 → STUNNED 判定 → 格挡清零 + 起手状态。"""
         s = self.statuses
         if s.has(MonsterStatus.POISON):
             n = s.get(MonsterStatus.POISON)
@@ -391,9 +477,16 @@ class Monster(Combatant):
             if self.hp == 0:
                 self.die(bc)
                 return
+        if s.has(MonsterStatus.LOCK_ON):
+            s.decrement(MonsterStatus.LOCK_ON)  # Monster.cpp:83-84
+        if s.has(MonsterStatus.SLOW):
+            s.remove(MonsterStatus.SLOW)  # Giant Head：回合开始清零（Monster.cpp:79-80）
         self.block = 0
         if s.has(MonsterStatus.METALLICIZE):
             self.block += s.get(MonsterStatus.METALLICIZE)
+        if s.has(MonsterStatus.PLATED_ARMOR_M):
+            # 重甲怪版（Shelled Parasite，Monster.cpp:51-52）：回合末得格挡
+            self.block += s.get(MonsterStatus.PLATED_ARMOR_M)
 
     def apply_end_of_turn_triggers(self, bc: BattleContext) -> None:
         """atEndOfTurnPreEndTurnCards 时机：SHACKLED 力量回补
@@ -406,7 +499,8 @@ class Monster(Combatant):
     def apply_end_of_round_powers(self, bc: BattleContext) -> None:
         """回合末统一结算（对齐 Monster::applyEndOfRoundPowers 的顺序）：
 
-        Ritual（justApplied 首轮跳过）→ WEAK/VULNERABLE 衰减
+        Ritual（justApplied 首轮跳过）→ GENERIC_STRENGTH_UP → REGEN（回血减层）
+        → FADING（倒数归零逃跑）→ WEAK/VULNERABLE 衰减
         （怪物施加的首轮跳过，玩家施加的当轮就递减）。
         """
         s = self.statuses
@@ -415,6 +509,17 @@ class Monster(Combatant):
                 s.set_just_applied(MonsterStatus.RITUAL, False)
             else:
                 s.add(MonsterStatus.STRENGTH, s.get(MonsterStatus.RITUAL))
+        if s.has(MonsterStatus.GENERIC_STRENGTH_UP):
+            s.add(MonsterStatus.STRENGTH, s.get(MonsterStatus.GENERIC_STRENGTH_UP))
+        if s.has(MonsterStatus.REGEN):
+            # Monster.cpp:59-60：回复层数 HP，层数-1
+            self.hp = min(self.max_hp, self.hp + s.get(MonsterStatus.REGEN))
+            s.decrement(MonsterStatus.REGEN)
+        if s.has(MonsterStatus.FADING):
+            # Transient（MonsterSpecific.cpp:1502-1506）：倒数归零逃跑
+            s.decrement(MonsterStatus.FADING)
+            if not s.has(MonsterStatus.FADING):
+                self.escape(bc)
         if s.has(MonsterStatus.WEAK):
             if s.just_applied(MonsterStatus.WEAK):
                 s.set_just_applied(MonsterStatus.WEAK, False)

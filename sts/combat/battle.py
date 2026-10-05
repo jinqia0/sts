@@ -115,6 +115,7 @@ class BattleContext:
         遗物三桶：即时效果（获取序）→ 抽牌前桶（改抽牌数）→ 抽牌 → 抽牌后桶。
         """
         self.turn += 1
+        self.player.cards_discarded_this_turn = 0
         self.player.block = 0
         self.player.apply_start_of_turn_powers(self)
         self._recharge_energy()
@@ -138,6 +139,7 @@ class BattleContext:
         p.cards_played_this_turn = 0
         p.attacks_played_this_turn = 0
         p.skills_played_this_turn = 0
+        p.cards_discarded_this_turn = 0
 
     # ---- 主循环（对齐 BattleContext::executeActions）----
     def execute_actions(self) -> None:
@@ -333,6 +335,24 @@ class BattleContext:
                     Actions.damage_all_enemy(self.player.statuses.get(PlayerStatus.PANACHE)))
                 c = 5
             self.player.special["panache_counter"] = c
+        # 逐怪"出牌响应"状态（对齐 onAfterUseCard 的 arr[0] 段，BattleContext.cpp:1941-1959；
+        # C++ 只查 arr[0]——Time Eater/SLOW/BEAT_OF_DEATH 均为单怪遭遇，沿用）
+        if not item.autoplay:
+            m0 = self.monsters.monsters[0] if self.monsters.monsters else None
+            if m0 is not None and not m0.is_dead_or_escaped():
+                if m0.statuses.has(MonsterStatus.TIME_WARP):
+                    tw = m0.statuses.get(MonsterStatus.TIME_WARP)
+                    if tw >= 11:
+                        # 满 12（11+1）：重置、+2 力量、提前结束回合
+                        m0.statuses.set(MonsterStatus.TIME_WARP, 0)
+                        m0.statuses.add(MonsterStatus.STRENGTH, 2)
+                        self._call_end_turn_early()
+                    else:
+                        m0.statuses.set(MonsterStatus.TIME_WARP, tw + 1)
+                if m0.statuses.has(MonsterStatus.SLOW):
+                    m0.statuses.add(MonsterStatus.SLOW, 1)
+                if m0.statuses.has(MonsterStatus.BEAT_OF_DEATH):
+                    self.add_to_bot(Actions.damage_player(m0.statuses.get(MonsterStatus.BEAT_OF_DEATH)))
         # 类型钩子（对齐 onUseXxxCard：通用攻击/技能/能力触发 + 遗物 + 怪物触发器）
         match inst.card.ctype:
             case "Attack":
@@ -390,6 +410,10 @@ class BattleContext:
         for m in self.monsters.monsters:
             if m.is_targetable() and m.statuses.has(MonsterStatus.SHARP_HIDE):
                 self.add_to_bot(Actions.damage_player(m.statuses.get(MonsterStatus.SHARP_HIDE)))
+        # PAINFUL_STABS（Book of Stabbing）：玩家每打出攻击牌受层伤
+        for m in self.monsters.monsters:
+            if m.is_targetable() and m.statuses.has(MonsterStatus.PAINFUL_STABS):
+                self.add_to_bot(Actions.damage_player(m.statuses.get(MonsterStatus.PAINFUL_STABS)))
 
     def on_use_skill_card(self) -> None:
         self.player.skills_played_this_turn += 1
@@ -401,6 +425,11 @@ class BattleContext:
 
     def on_use_power_card(self) -> None:
         self.relics.on_use_power_card(self)
+        # CURIOSITY（Awakened One）：玩家每打出能力牌 +层 力量（Monster.cpp:196/289）
+        for m in self.monsters.monsters:
+            if m.is_targetable() and m.statuses.has(MonsterStatus.CURIOSITY):
+                self.add_to_bot(
+                    Actions.buff_enemy(m.idx, MonsterStatus.STRENGTH, m.statuses.get(MonsterStatus.CURIOSITY)))
 
     def on_use_status_or_curse_card(self) -> None:
         self.relics.on_use_status_or_curse_card(self)
@@ -481,6 +510,7 @@ class BattleContext:
         self.turn_has_ended = False
 
         self.relics.on_turn_start(self)
+        self.restore_retained_cards()  # 保留牌在玩家状态结算后、抽牌前还手
         self.player.apply_start_of_turn_powers(self)
         # 格挡衰减：BARRICADE 保留全部，CALIPERS 保留 15，否则清零
         if not self.player.statuses.has(PlayerStatus.BARRICADE):
@@ -528,10 +558,16 @@ class BattleContext:
             self.on_card_drawn(inst)
 
     def on_card_drawn(self, inst) -> None:
-        """抽牌触发：Void 扣能 / EVOLVE / FIRE_BREATHING（对齐 CardManager::draw 钩子）。"""
+        """抽牌触发：Void 扣能 / HEX 掉血 / CONFUSED 改费 / EVOLVE /
+        FIRE_BREATHING（对齐 CardManager::draw 钩子 + Player.cpp HEX 段）。"""
         s = self.player.statuses
         if inst.card.lose_energy_when_drawn > 0:
             self.player.energy = max(0, self.player.energy - inst.card.lose_energy_when_drawn)
+        if s.has(PlayerStatus.HEX):
+            self.add_to_bot(Actions.player_lose_hp(1))
+        if s.has(PlayerStatus.CONFUSED):
+            # Snecko/Confused：抽到的牌本回合费用随机 0~3（CardManager.cpp:403-412）
+            inst.cost_for_turn = self.rngs.misc.int_inclusive(0, 3)
         if inst.card.ctype == "Status":
             if s.has(PlayerStatus.EVOLVE):
                 self.draw_cards(s.get(PlayerStatus.EVOLVE))
@@ -547,8 +583,18 @@ class BattleContext:
         self.rngs.shuffle.shuffle(self.cards.draw_pile)
 
     def discard_at_end_of_turn_helper(self) -> None:
-        """回合末弃手牌（RUNIC_PYRAMID 不弃；虚无牌走消耗）。"""
-        keep = self.relics.keeps_hand_at_end_of_turn(self)
+        """回合末弃手牌（对齐 discardAtEndOfTurn，BattleContext.cpp:2465-2499）：
+        ① 保留牌（self_retain/retain）移入 limbo（回合开始经
+        restore_retained_cards 还手）；② RUNIC_PYRAMID/EQUILIBRIUM：其余整手
+        保留；③ 虚无牌消耗；④ 其余弃置。"""
+        retained = [c for c in self.cards.hand if c.is_retained]
+        if retained:
+            for c in retained:
+                self.cards.hand.remove(c)
+            self.cards.limbo.extend(retained)
+            for c in retained:
+                c.retain = False
+        keep = self.relics.keeps_hand_at_end_of_turn(self) or self.player.statuses.has(PlayerStatus.EQUILIBRIUM)
         for inst in list(self.cards.hand):
             if inst.card.ethereal:
                 self.cards.hand.remove(inst)
@@ -558,8 +604,47 @@ class BattleContext:
             elif not keep:
                 self.cards.hand.remove(inst)
                 self.cards.move_to_discard_pile(inst)
-        if not keep:
-            self.cards.hand.clear()
+
+    def restore_retained_cards(self) -> None:
+        """回合开始：limbo 中的保留牌还手（对齐 BattleContext.cpp:2571-2578）。"""
+        for inst in self.cards.limbo:
+            if len(self.cards.hand) < 10:
+                self.cards.hand.append(inst)
+            else:
+                self.cards.move_to_discard_pile(inst)
+        self.cards.limbo.clear()
+
+    # ---- 手动弃牌管线（批次 A：Silent 弃牌族/Tactician/Reflex/Tingsha 用）----
+    def manual_discard(self, inst) -> None:
+        """弃置一张手牌（玩家主动弃牌）：进弃牌堆 + 触发 on_discard（卡牌
+        自带效果/遗物）。"""
+        try:
+            self.cards.hand.remove(inst)
+        except ValueError:
+            pass
+        self.cards.move_to_discard_pile(inst)
+        self.player.cards_discarded_this_turn += 1
+        self.on_manual_discard(inst)
+
+    def on_manual_discard(self, inst) -> None:
+        """弃牌触发（对齐 BattleContext.cpp:2787-2795）：卡牌自带效果
+        （Tactician/Reflex）→ 遗物（Tingsha/Tough Bandages，lightspeed 未实现
+        按 wiki 补）。"""
+        eff = getattr(inst.card, "on_discard_effect", None)
+        if eff is not None:
+            eff(self, inst)
+        self.relics.on_manual_discard(self, inst)
+
+    def _call_end_turn_early(self) -> None:
+        """TIME_WARP 满：提前结束玩家回合（对齐 callEndTurnEarlySequence，
+        BattleContext.cpp:2121-2129）——清空卡队列中的自动播放项并入队重放，
+        然后压入结束回合哨兵。"""
+        while not self.card_queue.is_empty():
+            item = self.card_queue.pop_front()
+            if item.autoplay and not item.purge_on_use:
+                self.add_to_bot(Actions._time_eater_replay(item))
+        self.card_queue.push_back(CardQueueItem.end_turn_item())
+        self.end_turn_queued = True
 
     # ---- 伤害管线 ----
     def calculate_card_damage(self, item: CardQueueItem, target_idx: int, base_damage: int) -> int:

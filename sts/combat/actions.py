@@ -203,6 +203,52 @@ class Actions:
         return Action(run)
 
     @staticmethod
+    def discard_random_from_hand(count: int) -> Action:
+        """随机弃置 N 张手牌（All-Out Attack/Unload 等；misc 流）。"""
+
+        def run(bc: BattleContext) -> None:
+            for _ in range(count):
+                if not bc.cards.hand:
+                    return
+                idx = bc.rngs.misc.int_inclusive(0, len(bc.cards.hand) - 1)
+                bc.manual_discard(bc.cards.hand[idx])
+
+        return Action(run)
+
+    @staticmethod
+    def discard_chosen(count: int) -> Action:
+        """选卡弃 N 张（Prepared/Acrobatics 等）：CARD_SELECT 必选（手牌
+        不足 N 张时空手跳过——open_card_select 的 can_pick_zero 兜底）。"""
+
+        def run(bc: BattleContext) -> None:
+            cands = list(bc.cards.hand)
+            if not cands:
+                return
+
+            def on_choose(bc2, chosen):
+                for inst in chosen:
+                    bc2.manual_discard(inst)
+
+            bc.open_card_select(cands, on_choose, pick_count=count,
+                                can_pick_zero=len(cands) < count, prompt=f"弃置 {count} 张")
+
+        return Action(run)
+
+    @staticmethod
+    def discard_all_hand() -> Action:
+        """弃置全部手牌（Calculated Gamble/Storm of Steel；每张走 manual_discard）。"""
+        return Action(lambda bc: [bc.manual_discard(c) for c in list(bc.cards.hand)])
+
+    @staticmethod
+    def _time_eater_replay(item: CardQueueItem) -> Action:
+        """TIME_WARP 提前回合：卡队列中被清出的自动播放项原样回放。"""
+
+        def run(bc: BattleContext) -> None:
+            bc.add_to_bot_card(item)
+
+        return Action(run)
+
+    @staticmethod
     def play_top_card(exhaust: bool) -> Action:
         """打出抽牌堆顶的牌（Havoc/Mayhem；对齐 PlayTopCard →
         playTopCardInDrawPile，BattleContext.cpp:2515-2530）：随机目标、

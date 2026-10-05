@@ -98,6 +98,20 @@ class PlayerStatus(IntEnum):
     MAGNETISM = 36  # 每回合开始随机无色牌入手 ×层（无色卡 Magnetism；生成逻辑经 special 闭包注入）
     SADISTIC = 37  # 敌人被施加 debuff 时受 层 伤（无色卡 Sadistic Nature；触发段在 debuff_enemy）
     PANACHE = 38  # 每打出 5 张牌对所有敌人造成 层 伤（无色卡 Panache；倒数存 special["panache_counter"]）
+    # ---- Act 2/3 怪物施加的玩家状态（批次 A）----
+    EQUILIBRIUM = 39  # 均衡（Defect Equilibrium 卡）：回合末不弃手牌；回合末衰减（Player.cpp:473-474）
+    HEX = 40  # 巫咒（Chosen）：每抽 1 张牌失去 1 HP
+    CONFUSED = 41  # 混乱（Snecko）：抽到的牌费用随机 0~3（Snecko Eye 遗物同款）
+    SURROUNDED = 42  # 被包围（Spire Shield，预留）
+    # ---- Silent 玩家状态（批次 A 预留，批次 C 接内容）----
+    ENVENOM = 43  # 淬毒：未被格挡的攻击伤害额外施加层中毒（挂点 Monster._apply_damage）
+    AFTER_IMAGE = 44  # 残像：每打出技能牌生成 1 张 Shiv（挂 on_use_skill_card）
+    INFINITE_BLADES = 45  # 无限刀刃：回合开始若上回合出过攻击牌 → 生成 1 Shiv
+    NOXIOUS_FUMES = 46  # 剧毒瘴气：回合开始对所有敌人施加层中毒
+    BURST = 47  # 爆发：下一张技能牌结算两次（DOUBLE_TAP 的技能版）
+    A_THOUSAND_CUTS = 48  # 千刀万剐：每打出一张牌全体敌人受 1×层 伤
+    ACCURACY = 49  # 精准：Shiv 伤害 +层
+    PHANTASMAL_KILLER = 50  # 幻影杀手：下回合首次攻击伤害翻倍（预留，批次 C 接）
 
 
 class MonsterStatus(IntEnum):
@@ -120,8 +134,34 @@ class MonsterStatus(IntEnum):
     SHARP_HIDE = 12  # 玩家每打出攻击牌反伤 局（The Guardian 防御模式）
     THIEVERY = 13  # 偷金（Looter；偷到的金币存 misc_info，死亡时返还）
     ASLEEP = 14  # 沉睡（Lagavulin；受击唤醒，唤醒时移除 METALLICIZE）
-    POISON = 15  # 中毒：回合开始失去层数 HP、层数-1（预留，Act 1 无来源）
+    POISON = 15  # 中毒：回合开始失去层数 HP、层数-1
     THORNS = 16  # 反伤（预留，Act 1 怪无来源）
+    # ---- Act 2/3/4 怪物状态（批次 A，2026-10-06，值接 THORNS 之后顺延）----
+    TIME_WARP = 17  # 时间扭曲（Time Eater）：玩家每出一张牌 +1，满 12 重置+力量+2+提前结束回合
+    INTANGIBLE = 18  # 无实体（怪）：受到的攻击伤害降为 1（Nemesis）
+    REGEN = 19  # 再生（Awakened One）：回合末回复层数 HP，层数-1
+    FADING = 20  # 消逝（Transient）：回合末层数-1，归零逃跑
+    LOCK_ON = 21  # 锁定（Bullseye 遗物）：受 orb 伤害 +50%，回合开始层数-1（预留）
+    MARK = 22  # 标记（Pressure Points）：死亡时清除（预留，观者卡来源）
+    BEAT_OF_DEATH = 23  # 死亡节拍（Corrupt Heart）：玩家每出一张牌受层伤
+    CORPSE_EXPLOSION = 24  # 尸爆（Silent 卡来源）：死亡时对全体造成 maxHp×层
+    PLATED_ARMOR_M = 25  # 重甲（怪版，Shelled Parasite）：回合末按层格挡；受未格挡攻击 -1，归零眩晕
+    MINION = 26  # 召唤物（Gremlin Leader/Collector 等生成）
+    MINION_LEADER = 27  # 召唤主（死亡即判胜）
+    INVINCIBLE = 28  # 无敌（Corrupt Heart）：单次伤害钳 20+剩余池；池随回合恢复
+    REACTIVE = 29  # 应激（Writhing Mass）：受击后重掷意图
+    SLOW = 30  # 迟缓（Giant Head）：玩家每出一张牌 +1；其攻击伤害 +5×层；回合开始清零
+    GENERIC_STRENGTH_UP = 31  # 通用力量成长（Orb Walker：每回合 +层 力量）
+    MALLEABLE = 32  # 可塑（Snake Plant/Writhing Mass）：受击获得层格挡且层数+1
+    FLIGHT = 33  # 飞行（Byrd）：受未格挡攻击 -1 层，落地眩晕
+    CURIOSITY = 34  # 好奇（Awakened One）：玩家每打出能力牌 +层 力量
+    PAINFUL_STABS = 35  # 痛苦刺击（Book of Stabbing）：玩家每打出攻击牌受层伤
+    REGROW = 36  # 重生（Darkling）：死亡→下回合开始满血复活
+    SHIFTING = 37  # 蜕变（Transient）：受击 -层 力量同时记 SHACKLED 回补
+    STASIS = 38  # 静滞（Bronze Orb）：从玩家抽/弃牌堆偷 1 张卡，怪死后归还
+    BLOCK_RETURN = 39  # 格挡返还（预留）
+    CHOKED = 40  # 窒息（Silent Choke 卡来源，预留）
+    STUNNED = 41  # 眩晕（PLATED_ARMOR_M/FLIGHT 归零派生；跳过一回合行动）
 
 
 class Statuses:

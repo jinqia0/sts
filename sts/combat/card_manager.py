@@ -25,6 +25,17 @@ class CardInstance:
     cost_for_turn: int = -1  # -1 表示未设置（用 card.cost）
     cost_override: int | None = None  # 永久改费（Blood for Blood 受击 -1；对齐 C++ 的 cost 字段可变性）
     misc_data: int = 0  # 实例计数槽（对齐 lightspeed specialData：Rampage 叠伤/Searing Blow 升级数/Blood for Blood 减费）
+    retain: bool = False  # 本回合保留（回合末进 limbo；Well-Laid Plans/Nightmare 置位，回合开始清除）
+
+    @property
+    def is_retained(self) -> bool:
+        """回合末保留判定：实例 retain 位或卡牌自带 Retain（对齐 C++
+        hasSelfRetain() || retain）。"""
+        if self.card is None:
+            return self.retain
+        if self.card.self_retain or (self.upgraded and getattr(self.card, "retain_when_upgraded", False)):
+            return True
+        return self.retain
 
     @property
     def cost(self) -> int:
@@ -72,6 +83,7 @@ class CardManager:
         self.draw_pile: list[CardInstance] = []
         self.discard_pile: list[CardInstance] = []
         self.exhaust_pile: list[CardInstance] = []
+        self.limbo: list[CardInstance] = []  # 回合末保留牌的暂存区（对齐 C++ limbo）
 
     # ---- 实例化与移动 ----
     def instantiate(self, card: CardDef) -> CardInstance:

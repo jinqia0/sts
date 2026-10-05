@@ -229,6 +229,9 @@ class RelicId(IntEnum):
     CALIPERS = 87  # 回合开始失去 15 格挡而非全清（L2183-2184）
     # ---- RNG/生成类 ----
     ENCHIRIDION = 88  # 战斗开始：随机 1 张 Power 牌本回合 0 费入手（L140-146）
+    # ---- 批次 A 新增（弃牌遗物；lightspeed 未实现效果，按 wiki 补）----
+    TINGSHA = 89  # 每弃 1 张牌：随机敌人 3 伤
+    TOUGH_BANDAGES = 90  # 每弃 1 张牌：得 3 格挡
 
 
 class RelicContainer:
@@ -875,6 +878,14 @@ class RelicContainer:
                 self.set_counter(RelicId.SUNDIAL, 0)
                 bc.add_to_bot(Actions.gain_energy(2))
         # MELANGE：SCRY 未迁移（批次 3+）
+
+    def on_manual_discard(self, bc: BattleContext, inst: CardInstance) -> None:
+        """弃牌触发遗物（批次 A：Silent 弃牌族用）。TingSha/Tough Bandages
+        在 lightspeed 未实现（仅枚举），按 wiki 补：随机敌人 3 伤 / 得 3 格挡。"""
+        if self.has(RelicId.TINGSHA):
+            bc.add_to_bot(Actions.damage_random_enemy(3))
+        if self.has(RelicId.TOUGH_BANDAGES):
+            bc.add_to_bot(Actions.gain_block(3))
 
     def on_card_exhausted(self, bc: BattleContext, inst: CardInstance) -> None:
         # CHARONS_ASHES：L2819-2821——3 伤 + addToTop（批次 1 修正：
