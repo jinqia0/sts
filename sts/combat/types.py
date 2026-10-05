@@ -96,7 +96,8 @@ class PlayerStatus(IntEnum):
     # ---- 批次 4 新增（无色卡族，接 FOCUS/MANTRA 之后顺延）----
     MAYHEM = 35  # 每回合开始自动打出抽牌堆顶牌 ×层（无色卡 Mayhem）
     MAGNETISM = 36  # 每回合开始随机无色牌入手 ×层（无色卡 Magnetism；生成逻辑经 special 闭包注入）
-    SADISTIC = 37  # 敌人被施加 debuff 时受 层 伤（无色卡 Sadistic Nature；lightspeed 未实现触发段，仅状态落地）
+    SADISTIC = 37  # 敌人被施加 debuff 时受 层 伤（无色卡 Sadistic Nature；触发段在 debuff_enemy）
+    PANACHE = 38  # 每打出 5 张牌对所有敌人造成 层 伤（无色卡 Panache；倒数存 special["panache_counter"]）
 
 
 class MonsterStatus(IntEnum):

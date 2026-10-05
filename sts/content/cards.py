@@ -885,7 +885,7 @@ IMMOLATE = CardDef("Immolate", "焚化", 2, "Attack", "对所有敌人造成 21 
 FEED = CardDef("Feed", "吞噬", 1, "Attack", "造成 10 点伤害。若击杀敌人，最大 HP +3 并回复 3 点 HP。消耗。",
                True, True, _feed_play)
 HAND_OF_GREED = CardDef("Hand of Greed", "贪婪之手", 2, "Attack", "造成 20 点伤害。若击杀敌人，获得 20 金币。",
-                        True, False, _hand_of_greed_play)
+                        True, False, _hand_of_greed_play, colorless=True)  # 无色稀有卡（CardPools srcColorlessCardPool）
 
 
 # ---- 困难档迁移（批次 3，2026-10-06）：X 费 Whirlwind + 选卡族 6 张 ----
@@ -1122,11 +1122,12 @@ BURNING_PACT = CardDef("Burning Pact", "燃烧契约", 1, "Skill",
                        False, False, _burning_pact_play)
 
 
-# ---- 诅咒卡 re-export（正式定义在 curses_cards.py，2026-10-06 批次）----
-# 惰性 re-export（PEP 562）：curses_cards.py 需在模块级导入本文件的 CardDef，
-# 顶部 from-import 会构成 cards→curses→cards 的导入期循环（curses 先导入时
+# ---- 诅咒卡 / 无色卡 re-export（正式定义在 curses_cards.py / colorless_cards.py，
+# 2026-10-06 批次 4）----
+# 惰性 re-export（PEP 562）：两个内容子模块均需在模块级导入本文件的 CardDef，
+# 顶部 from-import 会构成 cards→子模块→cards 的导入期循环（子模块先导入时
 # 本文件尾部拿不到已定义名）；__getattr__ 只在属性缺失时触发，任意导入顺序
-# 均安全。from sts.content.cards import REGRET 等用法保持兼容。
+# 均安全。from sts.content.cards import REGRET / BANDAGE_UP 等用法保持兼容。
 
 
 def __getattr__(name: str):
@@ -1134,4 +1135,8 @@ def __getattr__(name: str):
 
     if hasattr(_curses, name):
         return getattr(_curses, name)
+    import sts.content.colorless_cards as _colorless
+
+    if hasattr(_colorless, name):
+        return getattr(_colorless, name)
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

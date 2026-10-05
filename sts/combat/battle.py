@@ -324,6 +324,15 @@ class BattleContext:
         self.log.append(f"你打出 {inst.card.zh}({inst.card.name})。")
         # 卡牌效果：内容层 play 把原子动作入队（对齐 useXxxCard 的 switch）
         inst.card.play(self, item)
+        # PANACHE：每打出 5 张牌全体伤害（C++ 四处 onUseXxxCard 的 --panacheCounter；
+        # C++ 归零后不重置系 bug，按 wiki"每打出 5 张"重置计数）
+        if self.player.statuses.has(PlayerStatus.PANACHE):
+            c = self.player.special.get("panache_counter", 5) - 1
+            if c <= 0:
+                self.add_to_bot(
+                    Actions.damage_all_enemy(self.player.statuses.get(PlayerStatus.PANACHE)))
+                c = 5
+            self.player.special["panache_counter"] = c
         # 类型钩子（对齐 onUseXxxCard：通用攻击/技能/能力触发 + 遗物 + 怪物触发器）
         match inst.card.ctype:
             case "Attack":

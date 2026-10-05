@@ -192,6 +192,9 @@ class Player(Combatant):
         s = self.statuses
         if s.has(PlayerStatus.FLAME_BARRIER):
             s.remove(PlayerStatus.FLAME_BARRIER)
+        if s.has(PlayerStatus.PANACHE):
+            # Panache：每回合计数复位（对齐 Player.cpp:638-639 panacheCounter=5）
+            bc.player.special["panache_counter"] = 5
         if s.has(PlayerStatus.NEXT_TURN_BLOCK):
             # NEXT_TURN_BLOCK（新状态追加结算）：回合开始按层数获得格挡后
             # 移除（Player.cpp:631-634，GainBlock 动作走 gainBlock 入口）
@@ -393,7 +396,12 @@ class Monster(Combatant):
             self.block += s.get(MonsterStatus.METALLICIZE)
 
     def apply_end_of_turn_triggers(self, bc: BattleContext) -> None:
-        """atEndOfTurnPreEndTurnCards 时机（范围内无，预留）。"""
+        """atEndOfTurnPreEndTurnCards 时机：SHACKLED 力量回补
+        （对齐 Monster.cpp:62-65——Dark Shackles 的临时降力量回合末返还）。"""
+        s = self.statuses
+        if s.has(MonsterStatus.SHACKLED):
+            s.add(MonsterStatus.STRENGTH, s.get(MonsterStatus.SHACKLED))
+            s.remove(MonsterStatus.SHACKLED)
 
     def apply_end_of_round_powers(self, bc: BattleContext) -> None:
         """回合末统一结算（对齐 Monster::applyEndOfRoundPowers 的顺序）：

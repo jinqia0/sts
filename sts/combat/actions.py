@@ -14,7 +14,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from sts.combat.queue import Action, CardQueueItem
-from sts.combat.types import InputState, MonsterStatus
+from sts.combat.types import InputState, MonsterStatus, PlayerStatus
 
 if TYPE_CHECKING:
     from sts.combat.battle import BattleContext
@@ -265,6 +265,11 @@ class Actions:
             m.statuses.add(status, amount)
             if is_source_monster and status.name in ("WEAK", "VULNERABLE"):
                 m.statuses.set_just_applied(status, True)
+            # SADISTIC：debuff 落地（非 ARTIFACT 抵消）触发（对齐 BattleContext.h:292-294；
+            # lightspeed 状态定义有/触发段无——按 wiki 补）
+            if bc.player.statuses.has(PlayerStatus.SADISTIC):
+                bc.add_to_bot(
+                    Actions.damage_enemy(idx, bc.player.statuses.get(PlayerStatus.SADISTIC)))
 
         return Action(run)
 
@@ -274,6 +279,7 @@ class Actions:
         按索引升序落地——lightspeed 用逆序 addToTop 达到同一净顺序）。"""
 
         def run(bc: BattleContext) -> None:
+            sadistic = bc.player.statuses.get(PlayerStatus.SADISTIC)
             for m in bc.monsters.monsters:
                 if m.is_dead_or_escaped():
                     continue
@@ -283,6 +289,8 @@ class Actions:
                 m.statuses.add(status, amount)
                 if is_source_monster and status.name in ("WEAK", "VULNERABLE"):
                     m.statuses.set_just_applied(status, True)
+                if sadistic > 0:
+                    bc.add_to_bot(Actions.damage_enemy(m.idx, sadistic))
 
         return Action(run)
 
