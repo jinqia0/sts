@@ -14,7 +14,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from sts.combat.queue import Action, CardQueueItem
-from sts.combat.types import InputState, MonsterStatus, PlayerStatus
+from sts.combat.types import InputState, MonsterStatus, PlayerStatus, Stance
 
 if TYPE_CHECKING:
     from sts.combat.battle import BattleContext
@@ -275,6 +275,17 @@ class Actions:
     @staticmethod
     def empty_deck_shuffle() -> Action:
         return Action(lambda bc: bc.on_shuffle())
+
+    # ---- 观者姿态 ----
+    @staticmethod
+    def change_stance(new_stance: Stance) -> Action:
+        """切换姿态（钩子链在 Player.change_stance）。"""
+        return Action(lambda bc: bc.player.change_stance(bc, new_stance))
+
+    @staticmethod
+    def gain_mantra(n: int) -> Action:
+        """真言 +N（满 10 进 DIVINITY；结算在 Player.gain_mantra）。"""
+        return Action(lambda bc: bc.player.gain_mantra(bc, n))
 
     # ---- 状态增减（模板的 Python 化：状态作为参数而非模板实参）----
     @staticmethod

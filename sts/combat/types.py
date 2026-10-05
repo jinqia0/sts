@@ -41,6 +41,19 @@ class CardType(Enum):
     CURSE = "Curse"
 
 
+class Stance(Enum):
+    """观者姿态（对齐 lightspeed PlayerStatusEffects.h:125-130 的 Stance 枚举）。
+
+    WRATH：玩家出伤 ×2；DIVINITY：×3（回合开始回 NEUTRAL）；CALM：无加成。
+    伤害乘区在 calculate_card_damage 的虚弱之后（BattleContext.cpp:2706-2710）。
+    """
+
+    NEUTRAL = "Neutral"
+    CALM = "Calm"
+    WRATH = "Wrath"
+    DIVINITY = "Divinity"
+
+
 class PlayerStatus(IntEnum):
     """玩家侧状态（当前在范围内的子集，加卡时扩枚举）。
 
@@ -113,8 +126,14 @@ class PlayerStatus(IntEnum):
     ACCURACY = 49  # 精准：Shiv 伤害 +层
     PHANTASMAL_KILLER = 50  # 幻影杀手：施放时落 DOUBLE_DAMAGE（下回合首攻击翻倍）
     # ---- 批次 C 接线补充（对齐 lightspeed JustApplied 组命名）----
-    DOUBLE_DAMAGE = 51  # 下一次攻击伤害翻倍（Phantasmal Killer 落地态；触发后移除）
+    DOUBLE_DAMAGE = 51  # 下一次攻击伤害翻倍（Phantasmal Killer 落地态；全回合+回合末衰减）
     DRAW_REDUCTION = 52  # 每回合抽牌 -层（无自动衰减，来源自管理）
+    # ---- Watcher 玩家状态（批次 E 前置）----
+    RUSHDOWN = 53  # 猛攻：进入愤怒时抽 2×层 张牌
+    MENTAL_FORTRESS = 54  # 心灵壁垒：每进入一个姿态获得 3×层 格挡
+    LIKE_WATER = 55  # 如水：回合结束时若处于平静获得 3×层 格挡（BattleContext.cpp:2072-2074）
+    DEVOTION = 56  # 奉献：回合开始获得 层 真言
+    WRATH_NEXT_TURN = 57  # 下回合开始进入愤怒（Simmering Fury/Blasphemy? 预留）
 
 
 class MonsterStatus(IntEnum):

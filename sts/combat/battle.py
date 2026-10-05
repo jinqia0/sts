@@ -41,7 +41,7 @@ from sts.combat.card_manager import CardManager
 from sts.combat.entities import Monster, MonsterGroup, Player
 from sts.combat.queue import ActionQueue, CardQueue, CardQueueItem, CardSelectInfo
 from sts.combat.relics import RelicContainer
-from sts.combat.types import InputState, MonsterStatus, Outcome, PlayerStatus
+from sts.combat.types import InputState, MonsterStatus, Outcome, PlayerStatus, Stance
 from sts.rng import RngStreams
 
 ENERGY_PER_TURN = 3
@@ -560,6 +560,10 @@ class BattleContext:
         self.skip_monster_turn = False
         self.turn_has_ended = False
 
+        # DIVINITY 回中性（对齐 BattleContext.cpp:2162-2164：atStartOfTurn 段，
+        # 在遗物之前）
+        if self.player.stance == Stance.DIVINITY:
+            self.player.change_stance(self, Stance.NEUTRAL)
         self.relics.on_turn_start(self)
         self.restore_retained_cards()  # 保留牌在玩家状态结算后、抽牌前还手
         self.player.apply_start_of_turn_powers(self)
@@ -753,6 +757,11 @@ class BattleContext:
         d = self.relics.modify_card_damage(self, item, target_idx, d)
         if self.player.statuses.has(PlayerStatus.WEAK):
             d *= 0.75
+        # 姿态乘区（对齐 BattleContext.cpp:2706-2710：WEAK 之后、易伤之前）
+        if self.player.stance == Stance.WRATH:
+            d *= 2
+        elif self.player.stance == Stance.DIVINITY:
+            d *= 3
         m = self.monsters.monsters[target_idx]
         if m.statuses.has(MonsterStatus.VULNERABLE):
             d *= self.relics.vulnerable_multiplier(self)

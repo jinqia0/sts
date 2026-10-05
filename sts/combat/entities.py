@@ -14,7 +14,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from sts.combat.actions import Actions
-from sts.combat.types import MonsterStatus, Outcome, PlayerStatus, Statuses
+from sts.combat.types import MonsterStatus, Outcome, PlayerStatus, Stance, Statuses
 
 if TYPE_CHECKING:
     from sts.combat.battle import BattleContext
@@ -48,7 +48,32 @@ class Player(Combatant):
         self.cards_played_last_turn = 0
         self.attacks_played_last_turn = 0
         self.energy_per_turn_bonus = 0  # 每回合额外能量（Berserk）
+        self.stance = Stance.NEUTRAL  # 观者姿态（对齐 Player.h:43）
         self.special: dict[str, int] = {}  # 特殊计数槽（对齐 lightspeed bomb/combust 等）
+
+    # ---- 观者姿态（对齐 Stance 枚举 + ChangeStance；C++ 该动作为空壳，
+    # 进入钩子链按 wiki 自建）----
+    def change_stance(self, bc: BattleContext, new: Stance) -> None:
+        """姿态切换统一入口：RUSHDOWN（进愤怒抽牌）→ MENTAL_FORTRESS（进
+        任意姿态得格挡）→ 设 stance。同姿态切换跳过（wiki 语义：No-op）。"""
+        if new == self.stance:
+            return
+        self.stance = new
+        s = self.statuses
+        if new == Stance.WRATH and s.has(PlayerStatus.RUSHDOWN):
+            bc.add_to_bot(Actions.draw_cards(2 * s.get(PlayerStatus.RUSHDOWN)))
+        if s.has(PlayerStatus.MENTAL_FORTRESS):
+            bc.add_to_bot(Actions.gain_block(3 * s.get(PlayerStatus.MENTAL_FORTRESS)))
+
+    def gain_mantra(self, bc: BattleContext, n: int) -> None:
+        """真言获取（对齐 C++ Player.cpp:692 todo 的正确语义）：累计满 10
+        清零并进入 DIVINITY。"""
+        total = self.statuses.get(PlayerStatus.MANTRA) + n
+        if total >= 10:
+            self.statuses.remove(PlayerStatus.MANTRA)
+            bc.add_to_bot(Actions.change_stance(Stance.DIVINITY))
+        else:
+            self.statuses.add(PlayerStatus.MANTRA, n)
 
     # ---- 格挡获得（Juggernaut 等触发钩子的统一入口）----
     def gain_block(self, bc: BattleContext, amount: int) -> None:
@@ -178,6 +203,9 @@ class Player(Combatant):
             #（BattleContext.cpp:2068-2070，位于 METALLICIZE 之后；本文件
             # 顺序约束下追加在方法尾，格挡增益相互可交换）
             bc.add_to_bot(Actions.gain_block(s.get(PlayerStatus.PLATED_ARMOR)))
+        # LIKE_WATER（对齐 BattleContext.cpp:2072-2074）：平静姿态回合末得格挡
+        if s.has(PlayerStatus.LIKE_WATER) and self.stance == Stance.CALM:
+            bc.add_to_bot(Actions.gain_block(s.get(PlayerStatus.LIKE_WATER)))
 
     def apply_at_end_of_round_powers(self, bc: BattleContext) -> None:
         """afterMonsterTurns 阶段：玩家侧临时状态衰减（对齐
@@ -241,6 +269,13 @@ class Player(Combatant):
         s = self.statuses
         if s.has(PlayerStatus.DEMON_FORM):
             bc.add_to_bot(Actions.buff_player(PlayerStatus.STRENGTH, s.get(PlayerStatus.DEMON_FORM)))
+        # DEVOTION（观者奉献）：回合开始（抽牌后）获得 层 真言
+        if s.has(PlayerStatus.DEVOTION):
+            bc.add_to_bot(Actions.gain_mantra(s.get(PlayerStatus.DEVOTION)))
+        # WRATH_NEXT_TURN：下回合开始进入愤怒（Simmering Fury）
+        if s.has(PlayerStatus.WRATH_NEXT_TURN):
+            s.remove(PlayerStatus.WRATH_NEXT_TURN)
+            bc.add_to_bot(Actions.change_stance(Stance.WRATH))
         if s.has(PlayerStatus.BRUTALITY):
             n = s.get(PlayerStatus.BRUTALITY)
             bc.add_to_bot(Actions.player_lose_hp(n, self_inflicted=True))
