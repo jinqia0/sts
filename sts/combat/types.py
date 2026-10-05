@@ -31,6 +31,8 @@ class InputState(Enum):
     EXECUTING_ACTIONS = 0
     PLAYER_NORMAL = 1
     CARD_SELECT = 2
+    # ---- 批次 E 新增（Scry：C++ 仅枚举无实现，按 wiki 自建）----
+    SCRY = 3  # 检视抽牌堆顶 N 张：外部逐张决定保留/弃置（choose_scry）
 
 
 class CardType(Enum):

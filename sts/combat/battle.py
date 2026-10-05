@@ -68,6 +68,7 @@ class BattleContext:
         self.outcome = Outcome.UNDECIDED
         self.input_state = InputState.EXECUTING_ACTIONS
         self.card_select_info: CardSelectInfo | None = None
+        self.scry_cards: list = []  # 当前 Scry 展示的抽牌堆顶牌（按堆顶序）
         self.monster_turn_idx = 6  # 哨兵：非敌方阶段（> 最大怪数 5）
         self.turn = 0
         self.is_battle_over = False
@@ -306,6 +307,35 @@ class BattleContext:
 
     def choose_card(self, idx: int) -> None:
         self.choose_cards([idx])
+
+    # ---- Scry（批次 E：对齐 InputState::SCRY，C++ 无实现按 wiki 自建）----
+    def open_scry(self, count: int) -> None:
+        """检视抽牌堆顶 count 张：不足取全部。展示顺序 = 堆顶优先（抽牌
+        从 draw_pile 尾弹出，故展示 = 尾部倒序）。无牌时直接结束。"""
+        n = min(count, len(self.cards.draw_pile))
+        if n <= 0:
+            return
+        self.scry_cards = self.cards.draw_pile[-n:][::-1]  # [0]=堆顶
+        self.set_state(InputState.SCRY)
+
+    def choose_scry(self, keep_top_n: int) -> None:
+        """完成 Scry：保留堆顶 keep_top_n 张，其余弃置（不触发手动弃牌
+        触发器——Scry 弃牌走独立路径，对齐 wiki"Scry 牌不算被弃"）。
+        keep_top_n 从堆顶数起；弃置的按堆序进弃牌堆。"""
+        if self.input_state != InputState.SCRY:
+            raise ValueError("当前不在检视状态")
+        n = len(self.scry_cards)
+        keep = max(0, min(keep_top_n, n))
+        # scry_cards[0] = 堆顶：保留堆顶 keep 张 = 列表前 keep 个，
+        # 弃置其余（列表后段 = 更深处的牌）
+        to_discard = self.scry_cards[keep:]
+        for inst in to_discard:
+            self.cards.draw_pile.remove(inst)
+            self.cards.move_to_discard_pile(inst)
+            self.log.append(f"检视弃置 {inst.card.zh}({inst.card.name})。")
+        self.scry_cards = []
+        self.set_state(InputState.EXECUTING_ACTIONS)
+        self.execute_actions()
 
     # ---- 卡牌队列处理（对齐 playCardQueueItem / useCard）----
     def play_card_queue_item(self, item: CardQueueItem) -> None:
