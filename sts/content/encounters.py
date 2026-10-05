@@ -48,6 +48,29 @@ Act 2（批次 B，对照 MonsterEncounters.h 的 ACT2 池 + MonsterGroup.cpp
     collector          收藏家（Boss；槽 0/1 预留给火把头）
     champ              勇士（Boss）
 
+Act 3（批次 D，对照 MonsterEncounters.h 的 Act 3 池 + MonsterGroup.cpp
+组合表；普通 10 + 精英 3 + Boss 3 = 16 个遭遇名）：
+    three_darklings    暗裔幼体 ×3（普通弱；half_dead 组）
+    orb_walker         奥术行走者 ×1（普通弱）
+    three_shapes       尖刺体/排斥者/爆爆虫 池无放回抽 3（普通弱）
+    spire_growth       尖塔生长体 ×1（普通强）
+    transient          瞬变体 ×1（普通强）
+    four_shapes        同 shapes 池抽 4（普通强）
+    maw                巨口 ×1（普通强）
+    sphere_and_two_shapes  尖刺体/排斥者 池随机 2 + 球形守卫（普通强）
+    jaw_worm_horde     颚虫 ×3（力量 +3/格挡 +5 起步，跳过首回合特例）
+    writhing_mass      扭结团块 ×1（普通强）
+    giant_head         巨人头（精英）
+    nemesis            复仇者（精英）
+    reptomancer        爬行者法师（精英；槽 1/4 匕首 + 槽 0/3 占位）
+    awakened_one       觉醒者（Boss；邪教徒 ×2 + 觉醒者，half_dead 组）
+    time_eater         时间吞噬者（Boss）
+    donu_and_deca      德卡 + 多努（Boss）
+
+Act 4（批次 D）：
+    shield_and_spear   尖塔之盾 + 尖塔之矛
+    the_heart          腐化之心（最终 Boss）
+
 组合抽样统一走 misc 流（对齐 lightspeed 的 miscRng 用途划分；
 DESIGN.md §3 不做轨迹对齐，分布级等价即可）。
 """
@@ -59,18 +82,28 @@ from typing import TYPE_CHECKING
 from sts.combat.types import MonsterStatus
 from sts.content.cards import starting_deck
 from sts.content.monsters import (
+    _HalfDeadMonsterGroup,
+    _HORDE_PLACEHOLDER,
     AcidSlimeL,
     AcidSlimeM,
     AcidSlimeS,
+    AwakenedOne,
     BlueSlaver,
     BookOfStabbing,
     BronzeAutomaton,
     Byrd,
     Centurion,
     Chosen,
+    CorruptHeart,
     Cultist,
+    Dagger,
+    Darkling,
+    Deca,
+    Donu,
+    Exploder,
     FatGremlin,
     FungiBeast,
+    GiantHead,
     GremlinLeader,
     GremlinNob,
     GREMLIN_POOL,
@@ -83,8 +116,12 @@ from sts.content.monsters import (
     MadGremlin,
     Mugger,
     Mystic,
+    Nemesis,
+    OrbWalker,
     RedLouse,
     RedSlaver,
+    Reptomancer,
+    Repulsor,
     Sentry,
     ShelledParasite,
     ShieldGremlin,
@@ -92,14 +129,22 @@ from sts.content.monsters import (
     SneakyGremlin,
     Snecko,
     SnakePlant,
+    Spiker,
     SpikeSlimeL,
     SpikeSlimeM,
     SpikeSlimeS,
+    SpireGrowth,
+    SpireShield,
+    SpireSpear,
     SphericGuardian,
     Taskmaster,
     TheChamp,
     TheCollector,
     TheGuardian,
+    TheMaw,
+    TimeEater,
+    Transient,
+    WrithingMass,
     _SlotPlaceholder,
 )
 
@@ -376,6 +421,119 @@ def _setup_champ(bc: BattleContext) -> None:
     _spawn(bc, TheChamp)
 
 
+# ---- 批次 D：Act 3 / Act 4 遭遇（对照 MonsterEncounters.h + MonsterGroup.cpp）----
+
+
+# shapes 池（对齐 MonsterGroup::createShapes：Repulsor×2、Exploder×2、
+# Spiker×2，无放回抽样）
+_SHAPE_POOL: list = [Repulsor, Repulsor, Exploder, Exploder, Spiker, Spiker]
+
+
+def _get_ancient_shape(bc: BattleContext) -> type[Monster]:
+    """对齐 MonsterGroup::getAncientShape：{Spiker, Repulsor, Exploder} 抽 1。"""
+    return [Spiker, Repulsor, Exploder][bc.rngs.misc.int_inclusive(0, 2)]
+
+
+def _setup_with_half_dead_group(bc: BattleContext, *monster_classes: type[Monster]) -> None:
+    """half_dead 怪参与回合的组（Darkling/Awakened One）：替换 bc.monsters
+    为 _HalfDeadMonsterGroup（do_monster_turn 对 half_dead 也调 take_turn，
+    对齐 MonsterGroup.cpp:571-589），再按序生成。"""
+    bc.monsters = _HalfDeadMonsterGroup()
+    for idx, cls in enumerate(monster_classes):
+        bc.monsters.add(cls.create(bc, idx))
+    _add_starting_deck(bc)
+
+
+def _setup_three_darklings(bc: BattleContext) -> None:
+    # 对齐 THREE_DARKLINGS：暗裔幼体 ×3（C++ 顺序构造，HP 依序 roll）
+    _setup_with_half_dead_group(bc, Darkling, Darkling, Darkling)
+
+
+def _setup_orb_walker(bc: BattleContext) -> None:
+    _spawn(bc, OrbWalker)
+
+
+def _setup_three_shapes(bc: BattleContext) -> None:
+    _spawn(bc, *_sample_without_replacement(bc, _SHAPE_POOL, 3))
+
+
+def _setup_four_shapes(bc: BattleContext) -> None:
+    _spawn(bc, *_sample_without_replacement(bc, _SHAPE_POOL, 4))
+
+
+def _setup_spire_growth(bc: BattleContext) -> None:
+    _spawn(bc, SpireGrowth)
+
+
+def _setup_transient(bc: BattleContext) -> None:
+    _spawn(bc, Transient)
+
+
+def _setup_maw(bc: BattleContext) -> None:
+    _spawn(bc, TheMaw)
+
+
+def _setup_sphere_and_two_shapes(bc: BattleContext) -> None:
+    # 对齐 SPHERE_AND_TWO_SHAPES：古老形状 ×2（各自独立抽样）+ 球形守卫
+    _spawn(bc, _get_ancient_shape(bc), _get_ancient_shape(bc), SphericGuardian)
+
+
+def _setup_jaw_worm_horde(bc: BattleContext) -> None:
+    # 对齐 JAW_WORM_HORDE：颚虫 ×3 + 力量/格挡加成 + 非 INVALID 占位
+    # 意图（跳过"首回合固定 Chomp"，此后走 roll 分段）
+    _spawn(bc, JawWorm, JawWorm, JawWorm)
+    str_buff = 5 if bc.ascension >= 17 else 4 if bc.ascension >= 2 else 3
+    block_buff = 9 if bc.ascension >= 17 else 6 if bc.ascension >= 2 else 5
+    for m in bc.monsters.monsters:
+        m.statuses.add(MonsterStatus.STRENGTH, str_buff)
+        m.block += block_buff
+        m.set_move(_HORDE_PLACEHOLDER)
+
+
+def _setup_writhing_mass(bc: BattleContext) -> None:
+    _spawn(bc, WrithingMass)
+
+
+def _setup_giant_head(bc: BattleContext) -> None:
+    _spawn(bc, GiantHead)
+
+
+def _setup_nemesis(bc: BattleContext) -> None:
+    _spawn(bc, Nemesis)
+
+
+def _setup_reptomancer(bc: BattleContext) -> None:
+    # 对齐 C++ REPTOMANCER 布局：槽 1/4 各 1 只匕首、槽 2 首领、
+    # 槽 0/3 死亡占位（召唤目标槽）。HP roll 顺序：匕首 → 首领 → 匕首。
+    d1 = Dagger.create(bc, 1)
+    repto = Reptomancer.create(bc, 2)
+    d2 = Dagger.create(bc, 4)
+    _setup_with_group(bc, [_SlotPlaceholder(0), d1, repto, _SlotPlaceholder(3), d2], 3)
+
+
+def _setup_awakened_one(bc: BattleContext) -> None:
+    # 对齐 AWAKENED_ONE：邪教徒 ×2 + 觉醒者（槽 2；half_dead 组）
+    _setup_with_half_dead_group(bc, Cultist, Cultist, AwakenedOne)
+
+
+def _setup_time_eater(bc: BattleContext) -> None:
+    _spawn(bc, TimeEater)
+
+
+def _setup_donu_and_deca(bc: BattleContext) -> None:
+    # 对齐 DONU_AND_DECA：德卡（槽 0）+ 多努（槽 1）
+    _spawn(bc, Deca, Donu)
+
+
+def _setup_shield_and_spear(bc: BattleContext) -> None:
+    # 对齐 SHIELD_AND_SPEAR：尖塔之盾（槽 0）+ 尖塔之矛（槽 1）
+    _spawn(bc, SpireShield, SpireSpear)
+
+
+def _setup_the_heart(bc: BattleContext) -> None:
+    _spawn(bc, CorruptHeart)
+
+
 ENCOUNTERS = {
     "cultist": _setup_cultist,
     "jaw_worm": _setup_jaw_worm,
@@ -417,6 +575,26 @@ ENCOUNTERS = {
     "automaton": _setup_automaton,
     "collector": _setup_collector,
     "champ": _setup_champ,
+    # ---- Act 3（批次 D）----
+    "three_darklings": _setup_three_darklings,
+    "orb_walker": _setup_orb_walker,
+    "three_shapes": _setup_three_shapes,
+    "spire_growth": _setup_spire_growth,
+    "transient": _setup_transient,
+    "four_shapes": _setup_four_shapes,
+    "maw": _setup_maw,
+    "sphere_and_two_shapes": _setup_sphere_and_two_shapes,
+    "jaw_worm_horde": _setup_jaw_worm_horde,
+    "writhing_mass": _setup_writhing_mass,
+    "giant_head": _setup_giant_head,
+    "nemesis": _setup_nemesis,
+    "reptomancer": _setup_reptomancer,
+    "awakened_one": _setup_awakened_one,
+    "time_eater": _setup_time_eater,
+    "donu_and_deca": _setup_donu_and_deca,
+    # ---- Act 4（批次 D）----
+    "shield_and_spear": _setup_shield_and_spear,
+    "the_heart": _setup_the_heart,
 }
 
 

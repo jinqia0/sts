@@ -763,6 +763,9 @@ class BattleContext:
         elif self.player.stance == Stance.DIVINITY:
             d *= 3
         m = self.monsters.monsters[target_idx]
+        # SLOW（Giant Head，:2717-2719）：玩家对该怪伤害 ×(1+0.1×层)
+        if m.statuses.has(MonsterStatus.SLOW):
+            d *= 1 + m.statuses.get(MonsterStatus.SLOW) * 0.1
         if m.statuses.has(MonsterStatus.VULNERABLE):
             d *= self.relics.vulnerable_multiplier(self)
         return max(0, math.floor(d))

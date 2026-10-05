@@ -94,18 +94,74 @@ Red Slaver 先例择本体语义并逐处注明）：
   Bronze Orb / Torch Head 高位 HP 从 A9 起（wiki 记 A8）；The Champ
   Gloat 力量 {3,4,5}@A4/A19（wiki 记 {2,3,4}）；Collector Mega Debuff
   恒 3 层（wiki 记 A19 起 5 层）。
+
+批次 D（Act 3 全部新怪 17 种 + Act 4 3 种）与本体/wiki/C++/引擎的出入
+（数值一律以 C++ 为准；引擎缺口以内容层钩子对齐，见各类 docstring）：
+- Darkling Nip 伤害的 A2 加成被 lightspeed 双重施加（construct 已按
+  A2 roll 9-13，take_turn 又 +2 → 11-15，源码自留 todo 注释）；本体/
+  wiki 为 9-13，此处按 construct 档 roll、不加 take_turn 的 +2。
+- Darkling REGROW 的全灭判定：C++ die() 先扣存活数，归零即判胜——
+  最后一只死不走 REGROW（同时全灭 = 直接胜利）；非最后死亡则假死、
+  两个自身回合后以 maxHp//2 复活并重挂 REGROW（可反复）。引擎通用
+  REGROW 分支（die() 满血复活、不减存活数）与 C++ 不同，内容层以
+  die() 覆盖对齐；half_dead 怪的回合参与（C++ doMonsterTurn 对
+  halfDead 也调 takeTurn）由 _HalfDeadMonsterGroup 提供，遭遇装配方
+  安装（同 Awakened One）。
+- TIME_WARP / SLOW 的 0 层起点（C++ setHasStatus(true)+setStatus(0)）：
+  引擎 Statuses.has 以层数 >0 判定会漏计，_ZeroBasedStatuses 覆盖
+  has() 使 Time Eater 第 12 张牌触发、Giant Head 首张牌起 +10%，
+  且触发后归零继续计数（引擎 set(...,0) 后 has 为假的问题同修）。
+- Giant Head 的 SLOW 乘区在 C++ calculateCardDamage（玩家出伤管线，
+  引擎未接线）：以 attacked() 覆盖近似——×(1+0.1×(层-1))（C++ 出牌
+  时快照、引擎动作执行时计数已含当前牌，故 -1），floor 时点差异
+  见类注释。
+- Nemesis 的 INTANGIBLE 回合末衰减（Monster.cpp:55-57）引擎未做，
+  apply_end_of_turn_triggers 覆盖补。
+- Writhing Mass 的 REACTIVE 仅首次受击重掷意图（Monster.cpp:375-381），
+  引擎 attacked() 每击都重掷——以 attacked() 覆盖对齐；Implant 不塞
+  Parasite（内容层无此诅咒卡，C++ 亦未建模，仅 OMAMORI/DARKSTONE
+  残码不移植）。
+- Spire Growth 的 CONSTRICTED 玩家状态（回合末掉血）引擎无枚举无结算：
+  以 player.special["constricted"] 计数 + 怪物回合开始时结算掉血近似
+  （时序对齐：本体在玩家回合末、怪物攻击前；怪死后不再结算，本体为
+  常驻 debuff）——需引擎接线，见批次报告。
+- Spire Shield 的 SURROUNDED：状态已施加，但"攻击非面向者 ×1.5"
+  伤害引擎无 lastTargetedMonster 追踪未接线——见批次报告。
+- Corrupt Heart 的 INVINCIBLE：引擎分支语义（cap=20+misc_info，溢出
+  按 //10 记账）与 C++ 池语义（单次钳剩余池、池随伤害扣减、回合开始
+  回满）不同——内容层以 unique_power0 存池 + apply_start_of_turn/
+  on_hp_lost 回写 misc_info 对齐；非攻击 HP 损失（毒）引擎仍漏钳，
+  见类注释。
+- Awakened One A9+ 一阶段 HP 为区间 300-320 抽样（wiki 记恒 320）；
+  二阶段 REBIRTH 固定 300/320 满血。阶段 1 死亡不判胜（C++ 分支先于
+  判胜检查，即使场上只剩 Boss）。
+- Time Eater Head Slam 塞 2 张 Slimed 恒为 A19 分支（wiki 记 A4 起）；
+  Haste 为"设为半血"而非"回复到半血"（C++ curHp = maxHp/2）。
+- Exploder / Dagger 的自爆 = C++ SuicideAction(triggerRelics=true)：
+  对自身施加全额非攻击伤害走 die() 结算；Transient 走引擎 FADING
+  回合末逃跑（C++ 于自己回合内 suicideAction，时机等价：均在第 5/6
+  次攻击后离场）。
+- Reptomancer 召唤的新匕首本回合不行动（C++ skipTurn 位图）：
+  以 monster_turn_idx 前跳等效跳过（同批次 B 青铜球先例）。
+- Jaw Worm Horde：C++ 给 3 只颚虫塞非 INVALID 占位意图使其跳过
+  "首回合固定 Chomp"——JawWorm 的 firstTurn 判定由 turns_taken==0
+  改为 not move_history（C++ firstTurn() 语义，普通遭遇行为不变），
+  遭遇装配塞 _HORDE_PLACEHOLDER。
+- Pointy / Romeo / Bear（红面具帮与角斗场事件怪）不在 Act 3 常规
+  池内，未移植；Reptomancer 的随从是 Dagger（匕首），与 Pointy 无关。
 """
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from sts.combat.actions import Actions
-from sts.combat.entities import Monster
+from sts.combat.entities import Monster, MonsterGroup
 from sts.combat.queue import Action
-from sts.combat.types import MonsterStatus, PlayerStatus
-from sts.content.cards import BURN, DAZED, SLIMED, WOUND
+from sts.combat.types import MonsterStatus, Outcome, PlayerStatus, Statuses
+from sts.content.cards import BURN, DAZED, SLIMED, VOID, WOUND
 
 if TYPE_CHECKING:
     from sts.combat.battle import BattleContext
@@ -229,7 +285,10 @@ class JawWorm(Monster):
         return cls(idx, hp, hp)
 
     def get_move_for_roll(self, bc: BattleContext, roll: int) -> MoveDef:
-        if self.turns_taken == 0:  # firstTurn：固定 Chomp
+        # firstTurn()（moveHistory[0] == INVALID）：首回合固定 Chomp。
+        # 批次 D 起由 turns_taken==0 改判 move_history（C++ firstTurn 语义，
+        # 普通遭遇等价；Jaw Worm Horde 借占位意图跳过此特例）。
+        if not self.move_history:
             return self.CHOMP
         if roll < 25:
             if _last(self, "Chomp"):
@@ -3157,4 +3216,1689 @@ class TheChamp(Monster):
             case _:
                 raise AssertionError(f"未知招式 {move}")
         bc.add_to_bot(Actions.roll_move(self.idx))
+        self.turns_taken += 1
+
+
+# ====================================================================
+# 批次 D：Act 3 全部新怪物（17 种）+ Act 4 怪物（3 种）。数值/分段逐行
+# 对齐 MonsterSpecific.cpp / MonsterGroup.cpp，wiki 交叉校验（差异见
+# 模块头注释与各类 docstring）。
+# ====================================================================
+
+
+def _remove_debuffs(m: Monster) -> None:
+    """移除怪物全部 debuff（对齐 Monster.cpp:538-552 removeDebuffs）：
+    负力量归零 + BLOCK_RETURN/CHOKED/CORPSE_EXPLOSION/LOCK_ON/MARK/
+    POISON/SHACKLED/VULNERABLE/WEAK。"""
+    if m.statuses.get(MonsterStatus.STRENGTH) < 0:
+        m.statuses.set(MonsterStatus.STRENGTH, 0)
+    for s in (MonsterStatus.BLOCK_RETURN, MonsterStatus.CHOKED,
+              MonsterStatus.CORPSE_EXPLOSION, MonsterStatus.LOCK_ON,
+              MonsterStatus.MARK, MonsterStatus.POISON,
+              MonsterStatus.SHACKLED, MonsterStatus.VULNERABLE,
+              MonsterStatus.WEAK):
+        m.statuses.remove(s)
+
+
+class _ZeroBasedStatuses(Statuses):
+    """0 层起点的常驻状态（对齐 C++ setHasStatus(true)+setStatus(0)）。
+
+    引擎 Statuses.has 以层数>0 判定：TIME_WARP/SLOW 初始 0 层会被
+    use_card 的计数钩子漏掉（Time Eater 第 1 张牌、Giant Head 首张牌
+    加成），且触发后 set(...,0) 会让计数永远停摆。此子类让指定状态
+    恒视为"已挂"，计数/清零仍由引擎按 get/set 语义照常进行——
+    Time Eater 恰在第 12 张牌触发并循环、Giant Head 每张牌 +10%。
+    """
+
+    def __init__(self, always_present) -> None:
+        super().__init__()
+        self._always_present = frozenset(always_present)
+
+    def has(self, s) -> bool:
+        if s in self._always_present:
+            return True
+        return super().has(s)
+
+
+class _HalfDeadMonsterGroup(MonsterGroup):
+    """half_dead 怪也参与回合（对齐 MonsterGroup.cpp:571-589 doMonsterTurn
+    的 `!isDeadOrEscaped() || isHalfDead()`）——Darkling/Awakened One 的
+    假死体在自己回合执行 Regrow→Reincarnate / Rebirth。由遭遇装配方
+    （encounters）安装到 bc.monsters。"""
+
+    def do_monster_turn(self, bc: BattleContext) -> None:
+        m = self.monsters[bc.monster_turn_idx]
+        if (not m.is_dead_or_escaped()) or m.half_dead:
+            m.take_turn(bc)
+        bc.monster_turn_idx += 1
+
+
+def _suicide_by_damage(idx: int) -> Action:
+    """自爆（对齐 Actions::SuicideAction(idx, true)：对自身施加全额
+    非攻击伤害，正常走 die() 结算——Exploder/Dagger 的 EXPLODE）。"""
+
+    def run(bcb: BattleContext) -> None:
+        m = bcb.monsters.monsters[idx]
+        if not m.is_dead_or_escaped():
+            m.damage(bcb, m.hp)
+
+    return Action(run)
+
+
+_HORDE_PLACEHOLDER = MoveDef(
+    "Horde Placeholder", "占位", "unknown",
+    intent_text="（Jaw Worm Horde 占位意图：跳过首回合特例，MonsterGroup.cpp:285-288）")
+
+
+# ---- Act 3 普通怪 ----
+
+
+class Darkling(Monster):
+    """暗裔幼体（Act 3，三只出没）：REGROW 假死复活链。
+
+    wiki/C++ A0：HP 48-56（A7 起 50-59）。构造期 roll：Nip 伤害 7-11
+    （A2 起 9-13，misc_info 存值，死后复活保留）。preBattle：REGROW。
+    出招（对齐 C++ DARKLING）：
+      首回合 50/50：硬化（+12 格挡，A17 起另 +2 力量）/ 啃咬；
+      假死中：Regrow（空转一回合）→ 下回合 Reincarnate（复活）；
+      roll < 40：非上回合 Chomp 且 idx≠1（中位永不 Chomp）→ Chomp
+      （8/9 伤），否则重抽 40-99；
+      roll < 70：上回合非硬化 → 硬化，否则啃咬；
+      啃咬未连续两回合 → 啃咬，否则整段重抽。
+    死亡（die 覆盖，对齐 Monster.cpp:283-325）：存活数先 -1，归零即
+    判胜（最后一只死不复活，全灭=胜利）；否则清空全部状态（含
+    REGROW——Reincarnate 时重挂，可无限循环）、置意图 Regrow、
+    half_dead 假死。复活：hp = maxHp//2、存活数 +1、重挂 REGROW
+    （哲学之石 +1 力量走 on_monster_spawned 钩子）。
+    """
+
+    name = "Darkling"
+    zh = "暗裔幼体"
+    hp_range = (48, 56)
+    hp_range_high = (50, 59)
+
+    CHOMP = MoveDef("Chomp", "撕咬", "attack", base_damage=8)
+    HARDEN = MoveDef("Harden", "硬化", "defend", intent_text="获得 12 点格挡")
+    NIP = MoveDef("Nip", "啃咬", "attack", base_damage=9)  # 基础值逐实例 roll，见 __init__
+    REGROW = MoveDef("Regrow", "重生蓄力", "unknown", intent_text="（假死蓄力，下回合复活）")
+    REINCARNATE = MoveDef("Reincarnate", "转生", "buff", intent_text="以 50% 最大生命复活")
+
+    def __init__(self, idx: int, hp: int, max_hp: int, nip_dmg: int):
+        super().__init__(idx, hp, max_hp, "暗裔幼体(Darkling)")
+        self.misc_info = nip_dmg  # 对齐 C++ construct：Nip 伤害挂 miscInfo
+        self.NIP = MoveDef("Nip", "啃咬", "attack", base_damage=nip_dmg)
+
+    @classmethod
+    def create(cls, bc: BattleContext, idx: int) -> "Darkling":
+        hp = _roll_hp(bc, cls)
+        nip = bc.rngs.monster_hp.int_inclusive(9, 13) if bc.ascension >= 2 \
+            else bc.rngs.monster_hp.int_inclusive(7, 11)
+        m = cls(idx, hp, hp, nip)
+        m.statuses.add(MonsterStatus.REGROW, 1)
+        return m
+
+    def die(self, bc: BattleContext) -> None:
+        # 对齐 C++ die()：先扣存活数；REGROW 分支后于全灭判胜——最后
+        # 一只死亡直接判胜不复活。覆盖引擎通用 REGROW 分支（满血复活
+        # 且不扣存活数，语义与 C++ 不符，见模块头注释）。
+        if self.half_dead:
+            return
+        self.is_dying = True
+        group = bc.monsters
+        group.alive_count -= 1
+        if group.alive_count <= 0:
+            bc.outcome = Outcome.PLAYER_VICTORY
+            bc.check_combat()
+            return
+        if self.statuses.has(MonsterStatus.REGROW):
+            # resetAllStatusEffects（Monster.cpp:554-558）：清空全部状态
+            #（含 REGROW 与力量）与格挡；Reincarnate 时重挂 REGROW
+            self.statuses = Statuses()
+            self.block = 0
+            self.set_move(self.REGROW)
+            self.half_dead = True
+        # C++ 继续走 GREMLIN_HORN/THE_SPECIMEN 遗物死亡触发（REGROW
+        # 分支不 return）——孢子云已被清空、毒已清空，按引擎钩子保留
+        bc.relics.on_monster_death(bc, self)
+        bc.check_combat()
+
+    def get_move_for_roll(self, bc: BattleContext, roll: int) -> MoveDef:
+        if not self.move_history:  # firstTurn：50/50 硬化/啃咬
+            return self.HARDEN if roll < 50 else self.NIP
+        if self.half_dead:
+            return self.REINCARNATE
+        my_roll = roll
+        if my_roll < 40:
+            # 中位（idx 1）永不 Chomp（C++ `idx != 1`）
+            if not _last(self, "Chomp") and self.idx != 1:
+                return self.CHOMP
+            my_roll = bc.rngs.ai.int_inclusive(40, 99)
+        if my_roll < 70:
+            return self.HARDEN if not _last(self, "Harden") else self.NIP
+        if not _last_two(self, "Nip"):
+            return self.NIP
+        # 对齐 C++：整段递归重抽
+        return self.get_move_for_roll(bc, bc.rngs.ai.int_inclusive(0, 99))
+
+    def take_turn(self, bc: BattleContext) -> None:
+        move = self.move_history[0]
+        match move.name:
+            case "Chomp":
+                dmg = bc.calculate_monster_damage(self, 9 if bc.ascension >= 2 else 8)
+                bc.log.append(f"{self.display_name} 使用 撕咬(Chomp)。")
+                bc.add_to_bot(Actions.attack_player(self.idx, dmg))
+                bc.add_to_bot(Actions.roll_move(self.idx))
+            case "Harden":
+                self.block += 12  # 对齐 C++ addBlock：立即结算
+                if bc.ascension >= 17:
+                    self.statuses.add(MonsterStatus.STRENGTH, 2)
+                bc.log.append(f"{self.display_name} 使用 硬化(Harden)，获得 12 点格挡。")
+                self.roll_move(bc)
+            case "Nip":
+                # C++ `miscInfo + (asc2 ? 2 : 0)` 为双重 A2 加成（construct
+                # 已按 A2 roll 9-13），按 wiki/本体 9-13，不加 +2（模块头注释）
+                dmg = bc.calculate_monster_damage(self, self.misc_info)
+                bc.log.append(f"{self.display_name} 使用 啃咬(Nip)。")
+                bc.add_to_bot(Actions.attack_player(self.idx, dmg))
+                bc.add_to_bot(Actions.roll_move(self.idx))
+            case "Regrow":
+                # 假死空转一回合（对齐 C++ "do nothing; rollMove"）
+                bc.log.append(f"{self.display_name} 正在蓄力重生……")
+                self.roll_move(bc)
+            case "Reincarnate":
+                # 对齐 C++：curHp = maxHp/2、清假死、存活数 +1、重挂 REGROW
+                self.hp = self.max_hp // 2
+                self.half_dead = False
+                self.is_dying = False
+                bc.monsters.alive_count += 1
+                self.statuses.add(MonsterStatus.REGROW, 1)
+                bc.relics.on_monster_spawned(bc, self)  # 哲学之石 +1 力量
+                bc.log.append(f"{self.display_name} 转生(Reincarnate)了！")
+                self.roll_move(bc)
+            case _:
+                raise AssertionError(f"未知招式 {move}")
+        self.turns_taken += 1
+
+
+class OrbWalker(Monster):
+    """奥术行走者（Act 3 普通怪）：激光 / 爪击。
+
+    wiki/C++ A0：HP 90-96（A7 起 92-102）。preBattle：GENERIC_STRENGTH_UP
+    3（A17 起 5）——每回合末 +层 力量（引擎 apply_end_of_round_powers）。
+    roll 分段：roll < 40：爪击未连续两回合 → 爪击（15 伤，A2 起 16），
+    否则激光；roll ≥ 40：激光未连续两回合 → 激光（10 伤，A2 起 11，
+    另洗 1 张灼伤进抽牌堆 + 塞 1 张灼伤进弃牌堆），否则爪击。
+    """
+
+    name = "Orb Walker"
+    zh = "奥术行走者"
+    hp_range = (90, 96)
+    hp_range_high = (92, 102)
+    hp_high_asc = 7
+
+    LASER = MoveDef("Laser", "激光", "attack", base_damage=10)  # 另塞/洗灼伤
+    CLAW = MoveDef("Claw", "爪击", "attack", base_damage=15)
+
+    def __init__(self, idx: int, hp: int, max_hp: int):
+        super().__init__(idx, hp, max_hp, "奥术行走者(Orb Walker)")
+
+    @classmethod
+    def create(cls, bc: BattleContext, idx: int) -> "OrbWalker":
+        hp = _roll_hp(bc, cls)
+        m = cls(idx, hp, hp)
+        m.statuses.add(MonsterStatus.GENERIC_STRENGTH_UP, 5 if bc.ascension >= 17 else 3)
+        return m
+
+    def get_move_for_roll(self, bc: BattleContext, roll: int) -> MoveDef:
+        if roll < 40:
+            return self.CLAW if not _last_two(self, "Claw") else self.LASER
+        return self.LASER if not _last_two(self, "Laser") else self.CLAW
+
+    def take_turn(self, bc: BattleContext) -> None:
+        move = self.move_history[0]
+        match move.name:
+            case "Laser":
+                dmg = bc.calculate_monster_damage(self, 11 if bc.ascension >= 2 else 10)
+                bc.log.append(f"{self.display_name} 使用 激光(Laser)。")
+                bc.add_to_bot(Actions.attack_player(self.idx, dmg))
+                # ShuffleTempCardIntoDrawPile(BURN,1) + MakeTempCardInDiscard(BURN)
+                bc.add_to_bot(Actions.make_temp_card_in_draw_pile(BURN, False, True))
+                bc.add_to_bot(Actions.make_temp_card_in_discard(BURN))
+                bc.add_to_bot(Actions.roll_move(self.idx))
+            case "Claw":
+                dmg = bc.calculate_monster_damage(self, 16 if bc.ascension >= 2 else 15)
+                bc.log.append(f"{self.display_name} 使用 爪击(Claw)。")
+                bc.add_to_bot(Actions.attack_player(self.idx, dmg))
+                bc.add_to_bot(Actions.roll_move(self.idx))
+            case _:
+                raise AssertionError(f"未知招式 {move}")
+        self.turns_taken += 1
+
+
+class Repulsor(Monster):
+    """排斥者（Act 3 普通怪，shapes 遭遇成员）：猛击 / 排斥。
+
+    wiki/C++ A0：HP 29-35（A7 起 31-38）。roll 分段：roll < 20 且上回合
+    非猛击 → 猛击（11 伤，A2 起 13）；否则排斥（洗 2 张眩晕进抽牌堆，
+    立即结算）。
+    """
+
+    name = "Repulsor"
+    zh = "排斥者"
+    hp_range = (29, 35)
+    hp_range_high = (31, 38)
+
+    BASH = MoveDef("Bash", "猛击", "attack", base_damage=11)
+    REPULSE = MoveDef("Repulse", "排斥", "debuff", intent_text="洗 2 张眩晕进抽牌堆")
+
+    def __init__(self, idx: int, hp: int, max_hp: int):
+        super().__init__(idx, hp, max_hp, "排斥者(Repulsor)")
+
+    @classmethod
+    def create(cls, bc: BattleContext, idx: int) -> "Repulsor":
+        hp = _roll_hp(bc, cls)
+        return cls(idx, hp, hp)
+
+    def get_move_for_roll(self, bc: BattleContext, roll: int) -> MoveDef:
+        if roll < 20 and not _last(self, "Bash"):
+            return self.BASH
+        return self.REPULSE
+
+    def take_turn(self, bc: BattleContext) -> None:
+        move = self.move_history[0]
+        match move.name:
+            case "Bash":
+                dmg = bc.calculate_monster_damage(self, 13 if bc.ascension >= 2 else 11)
+                bc.log.append(f"{self.display_name} 使用 猛击(Bash)。")
+                bc.add_to_bot(Actions.attack_player(self.idx, dmg))
+                bc.add_to_bot(Actions.roll_move(self.idx))
+            case "Repulse":
+                bc.log.append(f"{self.display_name} 使用 排斥(Repulse)，洗 2 张眩晕进抽牌堆。")
+                # 对齐 C++ actFunc：立即结算；rollMove 直调
+                for _ in range(2):
+                    Actions.make_temp_card_in_draw_pile(DAZED, False, True).fn(bc)
+                self.roll_move(bc)
+            case _:
+                raise AssertionError(f"未知招式 {move}")
+        self.turns_taken += 1
+
+
+class Exploder(Monster):
+    """爆爆虫（Act 3 普通怪，shapes 遭遇成员）：重击两次后自爆。
+
+    wiki/C++ A0：HP 30（A7 起 30-35）。出招恒重击（rollMove 仅首回合），
+    重击连续两回合后切自爆。重击 9 伤（A2 起 11）；自爆：30 点非攻击
+    HP 损失（吃玩家格挡）后对自身全额伤害自杀（走 die() 结算）。
+    """
+
+    name = "Exploder"
+    zh = "爆爆虫"
+    hp_range = (30, 30)
+    hp_range_high = (30, 35)
+    hp_high_asc = 7
+
+    SLAM = MoveDef("Slam", "重击", "attack", base_damage=9)
+    EXPLODE = MoveDef("Explode", "自爆", "attack", base_damage=30)  # 非攻击 HP 损失
+
+    def __init__(self, idx: int, hp: int, max_hp: int):
+        super().__init__(idx, hp, max_hp, "爆爆虫(Exploder)")
+
+    @classmethod
+    def create(cls, bc: BattleContext, idx: int) -> "Exploder":
+        hp = _roll_hp(bc, cls)
+        return cls(idx, hp, hp)
+
+    def get_move_for_roll(self, bc: BattleContext, roll: int) -> MoveDef:
+        return self.SLAM
+
+    def take_turn(self, bc: BattleContext) -> None:
+        move = self.move_history[0]
+        match move.name:
+            case "Slam":
+                dmg = bc.calculate_monster_damage(self, 11 if bc.ascension >= 2 else 9)
+                bc.log.append(f"{self.display_name} 使用 重击(Slam)。")
+                bc.add_to_bot(Actions.attack_player(self.idx, dmg))
+                # lastTwoMoves(SLAM)（当前 + 上回合均为重击）→ 自爆
+                self.set_move(self.EXPLODE if _last_two(self, "Slam") else self.SLAM)
+                bc.add_to_bot(Actions.no_op_roll_move())
+            case "Explode":
+                bc.log.append(f"{self.display_name} 自爆(Explode)了！")
+                bc.add_to_bot(Actions.damage_player(30))
+                bc.add_to_bot(_suicide_by_damage(self.idx))
+                bc.add_to_bot(Actions.no_op_roll_move())
+            case _:
+                raise AssertionError(f"未知招式 {move}")
+        self.turns_taken += 1
+
+
+class Spiker(Monster):
+    """尖刺体（Act 3 普通怪，shapes 遭遇成员）：荆棘反伤 + 切割/尖刺。
+
+    wiki/C++ A0：HP 42-56（A7 起 44-60）。preBattle：THORNS 3（A2 起 4、
+    A17 起 7）。roll 分段：misc（尖刺使用次数）> 5 或（roll < 50 且上回
+    合非切割）→ 切割（7 伤，A2 起 9）；否则尖刺（THORNS +2，计数 +1）。
+    荆棘反伤（引擎 _apply_damage 无 THORNS 分支，attacked 覆盖补）：
+    受到未被格挡吸收的攻击伤害时，按层数对玩家反弹非攻击 HP 损失
+    （addToTop，致命一击也反伤，对齐 Monster.cpp:385-386）。
+    """
+
+    name = "Spiker"
+    zh = "尖刺体"
+    hp_range = (42, 56)
+    hp_range_high = (44, 60)
+
+    CUT = MoveDef("Cut", "切割", "attack", base_damage=7)
+    SPIKE = MoveDef("Spike", "尖刺", "buff", intent_text="荆棘 +2")
+
+    def __init__(self, idx: int, hp: int, max_hp: int):
+        super().__init__(idx, hp, max_hp, "尖刺体(Spiker)")
+
+    @classmethod
+    def create(cls, bc: BattleContext, idx: int) -> "Spiker":
+        hp = _roll_hp(bc, cls)
+        m = cls(idx, hp, hp)
+        thorns = 7 if bc.ascension >= 17 else 4 if bc.ascension >= 2 else 3
+        m.statuses.add(MonsterStatus.THORNS, thorns)
+        return m
+
+    def attacked(self, bc: BattleContext, damage: int) -> None:
+        # 覆盖：基类无 THORNS 反伤分支。以 HP 实际损失量判定"未被格挡
+        # 吸收"（致命一击同样反伤，反伤先于死亡结算后入队 top）。
+        hp_before = self.hp
+        super().attacked(bc, damage)
+        taken = hp_before - self.hp
+        if taken > 0 and self.statuses.has(MonsterStatus.THORNS):
+            bc.add_to_top(Actions.damage_player(self.statuses.get(MonsterStatus.THORNS)))
+
+    def get_move_for_roll(self, bc: BattleContext, roll: int) -> MoveDef:
+        if self.misc_info > 5 or (roll < 50 and not _last(self, "Cut")):
+            return self.CUT
+        return self.SPIKE
+
+    def take_turn(self, bc: BattleContext) -> None:
+        move = self.move_history[0]
+        match move.name:
+            case "Cut":
+                dmg = bc.calculate_monster_damage(self, 9 if bc.ascension >= 2 else 7)
+                bc.log.append(f"{self.display_name} 使用 切割(Cut)。")
+                bc.add_to_bot(Actions.attack_player(self.idx, dmg))
+                bc.add_to_bot(Actions.roll_move(self.idx))
+            case "Spike":
+                self.misc_info += 1  # 尖刺使用计数（对齐 C++ ++miscInfo）
+                self.statuses.add(MonsterStatus.THORNS, 2)
+                bc.log.append(f"{self.display_name} 使用 尖刺(Spike)，荆棘 +2。")
+                self.roll_move(bc)
+            case _:
+                raise AssertionError(f"未知招式 {move}")
+        self.turns_taken += 1
+
+
+class SpireGrowth(Monster):
+    """尖塔生长体（Act 3 普通怪）：快击 / 粉碎 / 紧勒。
+
+    wiki/C++ A0：HP 170（A7 起 190）。roll 分段：
+      玩家无 CONSTRICTED 且上回合非紧勒且（A17 或 roll ≥ 50）→ 紧勒
+      （CONSTRICTED 10 层，A17 起 12）；
+      roll < 50 且快击未连续两回合 → 快击（16 伤，A2 起 18）；
+      粉碎未连续两回合 → 粉碎（22 伤，A2 起 25）；否则快击。
+    CONSTRICTED（被紧勒：玩家回合末受等同层数的非攻击 HP 损失）引擎
+    无 PlayerStatus 枚举与结算——以 player.special["constricted"] 计数、
+    本怪 apply_start_of_turn_powers（怪物回合开始、先于怪物攻击，与
+    本体"玩家回合末"相对玩家同一时位）结算掉血近似；怪死后不再结算
+    （本体为常驻 debuff），见模块头注释。
+    """
+
+    name = "Spire Growth"
+    zh = "尖塔生长体"
+    hp_range = (170, 170)
+    hp_range_high = (190, 190)
+
+    QUICK_TACKLE = MoveDef("Quick Tackle", "快击", "attack", base_damage=16)
+    SMASH = MoveDef("Smash", "粉碎", "attack", base_damage=22)
+    CONSTRICT = MoveDef("Constrict", "紧勒", "debuff", intent_text="施加 10 层紧勒（回合末掉血）")
+
+    def __init__(self, idx: int, hp: int, max_hp: int):
+        super().__init__(idx, hp, max_hp, "尖塔生长体(Spire Growth)")
+
+    @classmethod
+    def create(cls, bc: BattleContext, idx: int) -> "SpireGrowth":
+        hp = _roll_hp(bc, cls)
+        return cls(idx, hp, hp)
+
+    def apply_start_of_turn_powers(self, bc: BattleContext) -> None:
+        super().apply_start_of_turn_powers(bc)
+        # CONSTRICTED 结算（近似，见类注释）：怪物回合开始掉血
+        n = bc.player.special.get("constricted", 0)
+        if n > 0:
+            bc.add_to_bot(Actions.damage_player(n))
+
+    def get_move_for_roll(self, bc: BattleContext, roll: int) -> MoveDef:
+        use_constrict = (
+            bc.player.special.get("constricted", 0) <= 0
+            and not _last(self, "Constrict")
+            and (bc.ascension >= 17 or roll >= 50)
+        )
+        if use_constrict:
+            return self.CONSTRICT
+        if roll < 50 and not _last_two(self, "Quick Tackle"):
+            return self.QUICK_TACKLE
+        return self.SMASH if not _last_two(self, "Smash") else self.QUICK_TACKLE
+
+    def take_turn(self, bc: BattleContext) -> None:
+        move = self.move_history[0]
+        match move.name:
+            case "Quick Tackle":
+                dmg = bc.calculate_monster_damage(self, 18 if bc.ascension >= 2 else 16)
+                bc.log.append(f"{self.display_name} 使用 快击(Quick Tackle)。")
+                bc.add_to_bot(Actions.attack_player(self.idx, dmg))
+                bc.add_to_bot(Actions.roll_move(self.idx))
+            case "Smash":
+                dmg = bc.calculate_monster_damage(self, 25 if bc.ascension >= 2 else 22)
+                bc.log.append(f"{self.display_name} 使用 粉碎(Smash)。")
+                bc.add_to_bot(Actions.attack_player(self.idx, dmg))
+                bc.add_to_bot(Actions.roll_move(self.idx))
+            case "Constrict":
+                n = 12 if bc.ascension >= 17 else 10
+                # 对齐 C++ bc.player.debuff<CONSTRICTED>(n)：立即结算；
+                # 引擎无枚举 → special 计数（可叠加，本体 debuff 同叠层）
+                bc.player.special["constricted"] = bc.player.special.get("constricted", 0) + n
+                bc.log.append(f"{self.display_name} 使用 紧勒(Constrict)，被紧勒 {n} 层！")
+                bc.add_to_bot(Actions.roll_move(self.idx))
+            case _:
+                raise AssertionError(f"未知招式 {move}")
+        self.turns_taken += 1
+
+
+class Transient(Monster):
+    """瞬变体（Act 3 普通怪）：SHIFTING + FADING，伤害逐回合递增后逃跑。
+
+    wiki/C++ A0：HP 恒 999（initHp 特例，不抽样、无进阶）。preBattle：
+    SHIFTING（受击 -全额伤害 力量并挂 SHACKLED 回合末回补，引擎
+    _apply_damage）+ FADING 5（A17 起 6；引擎 apply_end_of_round_powers
+    倒数，归零逃跑——第 5/6 次攻击后离场）。出招恒攻击：
+    伤害 = 30（A2 起 40）+ 10×(回合-1)；受击降力量使其后续攻击变弱。
+    """
+
+    name = "Transient"
+    zh = "瞬变体"
+    hp_range = (999, 999)
+
+    ATTACK = MoveDef("Attack", "攻击", "attack", base_damage=30)
+
+    def __init__(self, idx: int, hp: int, max_hp: int):
+        super().__init__(idx, hp, max_hp, "瞬变体(Transient)")
+
+    @classmethod
+    def create(cls, bc: BattleContext, idx: int) -> "Transient":
+        # C++ initHp 特例：curHp = 区间下界（恒 999）
+        m = cls(idx, 999, 999)
+        m.statuses.add(MonsterStatus.SHIFTING, 1)
+        m.statuses.add(MonsterStatus.FADING, 6 if bc.ascension >= 17 else 5)
+        return m
+
+    def get_move_for_roll(self, bc: BattleContext, roll: int) -> MoveDef:
+        return self.ATTACK
+
+    def take_turn(self, bc: BattleContext) -> None:
+        # 伤害 = (asc2?40:30) + 10×(getMonsterTurnNumber()-1)；bc.turn 与
+        # C++ getMonsterTurnNumber() 同为 1 基。FADING 倒数/离场由引擎
+        # apply_end_of_round_powers 处理（C++ 在本分支内 decrement +
+        # FADING==1 时 suicideAction，时机等价，不入队）
+        dmg = bc.calculate_monster_damage(
+            self, (40 if bc.ascension >= 2 else 30) + 10 * (bc.turn - 1))
+        bc.log.append(f"{self.display_name} 使用 攻击(Attack)。")
+        bc.add_to_bot(Actions.attack_player(self.idx, dmg))
+        bc.add_to_bot(Actions.no_op_roll_move())
+        self.turns_taken += 1
+
+
+class TheMaw(Monster):
+    """巨口（Act 3 普通怪，单怪遭遇）：咆哮开局，吞噬段数随回合增长。
+
+    wiki/C++ A0：HP 恒 300（initHp 特例，无进阶变化）。首回合固定咆哮
+    （3 层虚弱 + 3 层脆弱，A17 起 5/5，立即结算）。此后 roll：
+      roll < 50 且上回合非吞噬 → 吞噬（5 伤 ×(回合+1)//2 段）；
+      上回合非粉碎 → 粉碎（25 伤，A2 起 30）；否则流涎（力量 +3，
+      A17 起 +5）。吞噬后下回合固定流涎（setMove 链）。
+    """
+
+    name = "The Maw"
+    zh = "巨口"
+    hp_range = (300, 300)
+
+    DROOL = MoveDef("Drool", "流涎", "buff", intent_text="力量 +3")
+    NOM = MoveDef("Nom Nom", "吞噬", "attack", base_damage=5)  # ×(回合+1)//2 段
+    ROAR = MoveDef("Roar", "咆哮", "debuff", intent_text="施加 3 层虚弱与 3 层脆弱")
+    SLAM = MoveDef("Slam", "粉碎", "attack", base_damage=25)
+
+    def __init__(self, idx: int, hp: int, max_hp: int):
+        super().__init__(idx, hp, max_hp, "巨口(The Maw)")
+
+    @classmethod
+    def create(cls, bc: BattleContext, idx: int) -> "TheMaw":
+        # C++ initHp 特例：curHp = 区间下界（恒 300）
+        return cls(idx, 300, 300)
+
+    def get_move_for_roll(self, bc: BattleContext, roll: int) -> MoveDef:
+        if not self.move_history:  # firstTurn：固定咆哮
+            return self.ROAR
+        if roll < 50 and not _last(self, "Nom Nom"):
+            return self.NOM
+        return self.SLAM if not _last(self, "Slam") else self.DROOL
+
+    def take_turn(self, bc: BattleContext) -> None:
+        move = self.move_history[0]
+        match move.name:
+            case "Drool":
+                self.statuses.add(MonsterStatus.STRENGTH, 5 if bc.ascension >= 17 else 3)
+                bc.log.append(f"{self.display_name} 使用 流涎(Drool)，力量提升。")
+                self.roll_move(bc)
+            case "Nom Nom":
+                # 段数 = (getMonsterTurnNumber()+1)/2 = (bc.turn+1)//2
+                hits = (bc.turn + 1) // 2
+                dmg = bc.calculate_monster_damage(self, 5)
+                bc.log.append(f"{self.display_name} 使用 吞噬(Nom Nom)，{dmg} 点伤害 ×{hits}！")
+                for _ in range(hits):
+                    bc.add_to_bot(Actions.attack_player(self.idx, dmg))
+                self.set_move(self.DROOL)
+                bc.add_to_bot(Actions.no_op_roll_move())
+            case "Roar":
+                n = 5 if bc.ascension >= 17 else 3
+                bc.log.append(f"{self.display_name} 使用 咆哮(Roar)，施加 {n} 层虚弱与 {n} 层脆弱！")
+                # 对齐 C++ bc.player.debuff：立即结算
+                Actions.debuff_player(PlayerStatus.WEAK, n, True).fn(bc)
+                Actions.debuff_player(PlayerStatus.FRAIL, n, True).fn(bc)
+                self.roll_move(bc)
+            case "Slam":
+                dmg = bc.calculate_monster_damage(self, 30 if bc.ascension >= 2 else 25)
+                bc.log.append(f"{self.display_name} 使用 粉碎(Slam)。")
+                bc.add_to_bot(Actions.attack_player(self.idx, dmg))
+                bc.add_to_bot(Actions.roll_move(self.idx))
+            case _:
+                raise AssertionError(f"未知招式 {move}")
+        self.turns_taken += 1
+
+
+class WrithingMass(Monster):
+    """扭结团块（Act 3 普通怪，单怪遭遇）：应激（受击重掷）+ 可塑 3。
+
+    wiki/C++ A0：HP 160（A7 起 175）。preBattle：REACTIVE（首次受未被
+    格挡攻击重掷意图——引擎 attacked() 每击都重掷，此处覆盖对齐 C++
+    仅首次）+ MALLEABLE 3（受击得层格挡且层+1，回合末回满 3——
+    覆盖 apply_end_of_turn_triggers，同 Snake Plant）。
+    首回合 roll < 33 多重打击（7×3，A2 起 9×3）/ < 66 连枷（15 伤 +
+    16 格挡，A2 起 16/18）/ 否则枯萎（10 伤 + 2 虚弱 + 2 易伤，A2 起
+    12）。此后 while 循环分段（逐行对齐 C++ WRITHING_MASS）：
+      < 10：上回合非强力攻击 → 强力攻击（32，A2 起 38），否则重抽 10-99；
+      < 20：未用过植入且上回合非植入 → 植入（一次性标记）；否则 10%
+      强力攻击；不中则重抽 20-99；
+      < 40：上回合非枯萎 → 枯萎；否则 40% 内层再抽 0-19（<10 强力
+      攻击，否则植入/10% 强力/重抽），未中重抽 40-99；
+      < 70：上回合非多重打击 → 多重打击；否则 30% 连枷，不中重抽 0-39；
+      否则上回合非连枷 → 连枷；否则枯萎。
+    植入不塞 2 张 Parasite（内容层无此诅咒卡；C++ 的 OMAMORI/
+    DARKSTONE_PERIAPT 分支为残码，不移植——见模块头注释）。
+    """
+
+    name = "Writhing Mass"
+    zh = "扭结团块"
+    hp_range = (160, 160)
+    hp_range_high = (175, 175)
+
+    FLAIL = MoveDef("Flail", "连枷", "attack", base_damage=15)  # 另获 16 格挡
+    IMPLANT = MoveDef("Implant", "植入", "debuff", intent_text="（一次性；本体另塞 2 张寄生物，未移植）")
+    MULTI_STRIKE = MoveDef("Multi Strike", "多重打击", "attack", base_damage=7)  # ×3 段
+    STRONG_STRIKE = MoveDef("Strong Strike", "强力攻击", "attack", base_damage=32)
+    WITHER = MoveDef("Wither", "枯萎", "attack", base_damage=10)  # 另施加 2 虚弱与 2 易伤
+
+    def __init__(self, idx: int, hp: int, max_hp: int):
+        super().__init__(idx, hp, max_hp, "扭结团块(Writhing Mass)")
+
+    @classmethod
+    def create(cls, bc: BattleContext, idx: int) -> "WrithingMass":
+        hp = _roll_hp(bc, cls)
+        m = cls(idx, hp, hp)
+        # REACTIVE 初始 1：引擎 has() 需 >0；attacked 覆盖按"首次（值 1）
+        # 重掷、此后只计数"对齐 C++ 的 0 起点首掷语义
+        m.statuses.add(MonsterStatus.REACTIVE, 1)
+        m.statuses.add(MonsterStatus.MALLEABLE, 3)
+        return m
+
+    def apply_end_of_turn_triggers(self, bc: BattleContext) -> None:
+        # 对齐 C++ applyEndOfRoundPowers：MALLEABLE 回满 3（Monster.cpp:47-49）
+        super().apply_end_of_turn_triggers(bc)
+        if self.statuses.has(MonsterStatus.MALLEABLE):
+            self.statuses.set(MonsterStatus.MALLEABLE, 3)
+
+    def attacked(self, bc: BattleContext, damage: int) -> None:
+        # 覆盖基类 REACTIVE 段（引擎每击重掷 ≠ C++ 仅首次，Monster.cpp:375-381）：
+        # 复刻基类管线（死亡/负伤钳制/INTANGIBLE/ANGRY/_apply_damage），
+        # REACTIVE 值为 1（首击）时重掷意图，此后仅计数。
+        if self.is_dead_or_escaped():
+            return
+        if damage < 0:
+            damage = 0
+        if self.statuses.has(MonsterStatus.INTANGIBLE):
+            damage = min(damage, 1)
+        if self.statuses.has(MonsterStatus.ANGRY):
+            self.statuses.add(MonsterStatus.STRENGTH, self.statuses.get(MonsterStatus.ANGRY))
+        self._apply_damage(bc, damage, from_attack=True)
+        if not self.is_dying and self.statuses.has(MonsterStatus.REACTIVE):
+            if self.statuses.get(MonsterStatus.REACTIVE) == 1:
+                self.roll_move(bc)
+            self.statuses.add(MonsterStatus.REACTIVE, 1)
+
+    def get_move_for_roll(self, bc: BattleContext, roll: int) -> MoveDef:
+        if not self.move_history:  # firstTurn 三段
+            if roll < 33:
+                return self.MULTI_STRIKE
+            if roll < 66:
+                return self.FLAIL
+            return self.WITHER
+        have_used_implant = self.misc_info == 1
+        my_roll = roll
+        while True:
+            if my_roll < 10:
+                if not _last(self, "Strong Strike"):
+                    return self.STRONG_STRIKE
+                my_roll = bc.rngs.ai.int_inclusive(10, 99)
+            if my_roll < 20:
+                if not have_used_implant and not _last(self, "Implant"):
+                    return self.IMPLANT
+                if _ai_boolean(bc, 0.1):
+                    return self.STRONG_STRIKE
+                my_roll = bc.rngs.ai.int_inclusive(20, 99)
+            if my_roll < 40:
+                if not _last(self, "Wither"):
+                    return self.WITHER
+                if _ai_boolean(bc, 0.4):
+                    my_roll = bc.rngs.ai.int_inclusive(0, 19)
+                    if my_roll < 10:
+                        return self.STRONG_STRIKE
+                    if not have_used_implant:
+                        return self.IMPLANT
+                    if _ai_boolean(bc, 0.1):
+                        return self.STRONG_STRIKE
+                    my_roll = bc.rngs.ai.int_inclusive(20, 99)
+                    continue
+                my_roll = bc.rngs.ai.int_inclusive(40, 99)
+            if my_roll < 70:
+                if not _last(self, "Multi Strike"):
+                    return self.MULTI_STRIKE
+                if _ai_boolean(bc, 0.3):
+                    return self.FLAIL
+                my_roll = bc.rngs.ai.int_inclusive(0, 39)
+                continue
+            return self.FLAIL if not _last(self, "Flail") else self.WITHER
+
+    def take_turn(self, bc: BattleContext) -> None:
+        move = self.move_history[0]
+        match move.name:
+            case "Flail":
+                dmg = bc.calculate_monster_damage(self, 16 if bc.ascension >= 2 else 15)
+                bc.log.append(f"{self.display_name} 使用 连枷(Flail)。")
+                bc.add_to_bot(Actions.attack_player(self.idx, dmg))
+                bc.add_to_bot(Actions.monster_gain_block(self.idx, 18 if bc.ascension >= 2 else 16))
+                bc.add_to_bot(Actions.roll_move(self.idx))
+            case "Implant":
+                self.misc_info = 1  # 一次性标记（对齐 C++ miscInfo = true）
+                bc.log.append(f"{self.display_name} 使用 植入(Implant)。")
+                self.roll_move(bc)
+            case "Multi Strike":
+                dmg = bc.calculate_monster_damage(self, 9 if bc.ascension >= 2 else 7)
+                bc.log.append(f"{self.display_name} 使用 多重打击(Multi Strike)，{dmg} 点伤害 ×3。")
+                for _ in range(3):
+                    bc.add_to_bot(Actions.attack_player(self.idx, dmg))
+                bc.add_to_bot(Actions.roll_move(self.idx))
+            case "Strong Strike":
+                dmg = bc.calculate_monster_damage(self, 38 if bc.ascension >= 2 else 32)
+                bc.log.append(f"{self.display_name} 使用 强力攻击(Strong Strike)。")
+                bc.add_to_bot(Actions.attack_player(self.idx, dmg))
+                bc.add_to_bot(Actions.roll_move(self.idx))
+            case "Wither":
+                dmg = bc.calculate_monster_damage(self, 12 if bc.ascension >= 2 else 10)
+                bc.log.append(f"{self.display_name} 使用 枯萎(Wither)。")
+                bc.add_to_bot(Actions.attack_player(self.idx, dmg))
+                bc.add_to_bot(Actions.debuff_player(PlayerStatus.WEAK, 2, True))
+                bc.add_to_bot(Actions.debuff_player(PlayerStatus.VULNERABLE, 2, True))
+                bc.add_to_bot(Actions.roll_move(self.idx))
+            case _:
+                raise AssertionError(f"未知招式 {move}")
+        self.turns_taken += 1
+
+
+class GiantHead(Monster):
+    """巨人头（Act 3 精英）：迟缓 + 时机已到。
+
+    wiki/C++ A0：HP 500（A8 起 520）。preBattle：SLOW 0 层（玩家每打出
+    一张牌 +1；其受到的攻击伤害 ×(1+0.1×层)——C++ 乘区在
+    calculateCardDamage，引擎未接线，attacked() 覆盖近似，见下）。
+    出招（回合数 = bc.turn，与 C++ getMonsterTurnNumber() 同 1 基）：
+      第 4 回合的 roll 起（即第 5 回合起）恒为时机已到：伤害 =
+      30（A3 起 40）+ 5×min(回合-5, 6)——首用 30/40，每用一次 +5，
+      封顶 60/70；
+      此前 50/50：瞪视（1 层虚弱，立即结算）/ 计数（13 伤），同招
+      不连续三回合。
+    SLOW 乘区近似（attacked 覆盖）：C++ 在玩家出牌时快照（先算伤害
+    后 +1 层），引擎动作执行时计数已含当前牌，故用 (层-1)；floor
+    时点差异——引擎先 floor 再乘，偶有 ±1（分布级可忽略，见模块头）。
+    """
+
+    name = "Giant Head"
+    zh = "巨人头"
+    hp_range = (500, 500)
+    hp_range_high = (520, 520)
+    hp_high_asc = 8
+
+    COUNT = MoveDef("Count", "计数", "attack", base_damage=13)
+    GLARE = MoveDef("Glare", "瞪视", "debuff", intent_text="施加 1 层虚弱")
+    IT_IS_TIME = MoveDef("It Is Time", "时机已到", "attack", base_damage=30)
+
+    def __init__(self, idx: int, hp: int, max_hp: int):
+        super().__init__(idx, hp, max_hp, "巨人头(Giant Head)")
+        # SLOW 0 层起点：_ZeroBasedStatuses 使 has() 恒真（计数/清零照常）
+        self.statuses = _ZeroBasedStatuses((MonsterStatus.SLOW,))
+
+    @classmethod
+    def create(cls, bc: BattleContext, idx: int) -> "GiantHead":
+        hp = _roll_hp(bc, cls)
+        return cls(idx, hp, hp)
+
+    # SLOW 乘区已接引擎 calculate_card_damage（BattleContext.cpp:2717 段），
+    # attacked 覆盖近似已移除
+
+    def get_move_for_roll(self, bc: BattleContext, roll: int) -> MoveDef:
+        # 回合 ≥ 4 时的 roll（为下一回合生成意图）→ 恒时机已到
+        if bc.turn >= 4:
+            return self.IT_IS_TIME
+        if roll < 50:
+            return self.GLARE if not _last_two(self, "Glare") else self.COUNT
+        return self.COUNT if not _last_two(self, "Count") else self.GLARE
+
+    def take_turn(self, bc: BattleContext) -> None:
+        move = self.move_history[0]
+        match move.name:
+            case "Count":
+                dmg = bc.calculate_monster_damage(self, 13)
+                bc.log.append(f"{self.display_name} 使用 计数(Count)。")
+                bc.add_to_bot(Actions.attack_player(self.idx, dmg))
+                bc.add_to_bot(Actions.roll_move(self.idx))
+            case "Glare":
+                bc.log.append(f"{self.display_name} 使用 瞪视(Glare)。")
+                # 对齐 C++ bc.player.debuff：立即结算
+                Actions.debuff_player(PlayerStatus.WEAK, 1, True).fn(bc)
+                self.roll_move(bc)
+            case "It Is Time":
+                t = min(bc.turn - 5, 6) * 5
+                dmg = bc.calculate_monster_damage(self, (40 if bc.ascension >= 3 else 30) + t)
+                bc.log.append(f"{self.display_name} 使用 时机已到(It Is Time)！")
+                bc.add_to_bot(Actions.attack_player(self.idx, dmg))
+                bc.add_to_bot(Actions.no_op_roll_move())
+            case _:
+                raise AssertionError(f"未知招式 {move}")
+        self.turns_taken += 1
+
+
+def _either_last_two(m: Monster, name: str) -> bool:
+    """对齐 C++ eitherLastTwo：moveHistory[0] 或 [1] 为该招。"""
+    return _last(m, name) or _last_before(m, name)
+
+
+class Nemesis(Monster):
+    """复仇者（Act 3 精英）：无实体交替 + 镰刀重击。
+
+    wiki/C++ A0：HP 185（A8 起 200）。意图后缀规则（对齐 C++ NEMESIS
+    三个 takeTurn 分支）：本回合无 INTANGIBLE 时，行动结束后获得 2 层
+    无实体（攻击/镰刀入队加、第二击立即加）；INTANGIBLE 回合末 -1
+    （引擎缺，apply_end_of_turn_triggers 覆盖补）——净效果为"隔回合
+    无实体，覆盖 2 回合内的所有攻击"。
+    首回合 50/50：攻击（6×3，A3 起 7×3）/ 第二击（塞 3 张灼伤进弃牌
+    堆，A3 起 5 张，立即结算）。此后 roll 分段（逐行对齐 C++）：
+      < 30：近两回合无镰刀 → 镰刀（45）；否则 50/50：攻击未连续两回
+      合 → 攻击，否则第二击；非上回合第二击 → 第二击，否则攻击；
+      < 65：攻击未连续两回合 → 攻击；否则（50% 且近两回合无镰刀）→
+      镰刀，不然第二击；
+      否则：上回合非第二击 → 第二击；（50% 且近两回合无镰刀）→ 镰刀；
+      否则攻击。
+    """
+
+    name = "Nemesis"
+    zh = "复仇者"
+    hp_range = (185, 185)
+    hp_range_high = (200, 200)
+    hp_high_asc = 8
+
+    ATTACK = MoveDef("Attack", "攻击", "attack", base_damage=6)  # ×3 段
+    SCYTHE = MoveDef("Scythe", "镰刀", "attack", base_damage=45)
+    SECOND_STRIKE = MoveDef("Second Strike", "第二击", "debuff", intent_text="塞 3 张灼伤进弃牌堆")
+
+    def __init__(self, idx: int, hp: int, max_hp: int):
+        super().__init__(idx, hp, max_hp, "复仇者(Nemesis)")
+
+    @classmethod
+    def create(cls, bc: BattleContext, idx: int) -> "Nemesis":
+        hp = _roll_hp(bc, cls)
+        return cls(idx, hp, hp)
+
+    def apply_end_of_turn_triggers(self, bc: BattleContext) -> None:
+        # 对齐 Monster.cpp:55-57：INTANGIBLE 回合末 -1（引擎未做，覆盖补）
+        super().apply_end_of_turn_triggers(bc)
+        if self.statuses.has(MonsterStatus.INTANGIBLE):
+            self.statuses.decrement(MonsterStatus.INTANGIBLE)
+
+    def get_move_for_roll(self, bc: BattleContext, roll: int) -> MoveDef:
+        if not self.move_history:  # firstTurn：50/50 攻击/第二击
+            return self.ATTACK if roll < 50 else self.SECOND_STRIKE
+        if roll < 30:
+            if not _either_last_two(self, "Scythe"):
+                return self.SCYTHE
+            if _ai_boolean(bc, 0.5):
+                return self.ATTACK if not _last_two(self, "Attack") else self.SECOND_STRIKE
+            return self.SECOND_STRIKE if not _last(self, "Second Strike") else self.ATTACK
+        if roll < 65:
+            if not _last_two(self, "Attack"):
+                return self.ATTACK
+            if not _ai_boolean(bc, 0.5) or _either_last_two(self, "Scythe"):
+                return self.SECOND_STRIKE
+            return self.SCYTHE
+        if not _last(self, "Second Strike"):
+            return self.SECOND_STRIKE
+        if _ai_boolean(bc, 0.5) and not _either_last_two(self, "Scythe"):
+            return self.SCYTHE
+        return self.ATTACK
+
+    def take_turn(self, bc: BattleContext) -> None:
+        move = self.move_history[0]
+        match move.name:
+            case "Attack":
+                dmg = bc.calculate_monster_damage(self, 7 if bc.ascension >= 3 else 6)
+                bc.log.append(f"{self.display_name} 使用 攻击(Attack)，{dmg} 点伤害 ×3。")
+                for _ in range(3):
+                    bc.add_to_bot(Actions.attack_player(self.idx, dmg))
+                bc.add_to_bot(Actions.roll_move(self.idx))
+                if not self.statuses.has(MonsterStatus.INTANGIBLE):
+                    bc.add_to_bot(Actions.buff_enemy(self.idx, MonsterStatus.INTANGIBLE, 2))
+            case "Scythe":
+                dmg = bc.calculate_monster_damage(self, 45)
+                bc.log.append(f"{self.display_name} 使用 镰刀(Scythe)！")
+                bc.add_to_bot(Actions.attack_player(self.idx, dmg))
+                bc.add_to_bot(Actions.roll_move(self.idx))
+                if not self.statuses.has(MonsterStatus.INTANGIBLE):
+                    bc.add_to_bot(Actions.buff_enemy(self.idx, MonsterStatus.INTANGIBLE, 2))
+            case "Second Strike":
+                n = 5 if bc.ascension >= 3 else 3
+                bc.log.append(f"{self.display_name} 使用 第二击(Second Strike)，塞 {n} 张灼伤进弃牌堆。")
+                # 对齐 C++ actFunc：立即结算；rollMove 直调；无实体立即自加
+                for _ in range(n):
+                    Actions.make_temp_card_in_discard(BURN).fn(bc)
+                self.roll_move(bc)
+                if not self.statuses.has(MonsterStatus.INTANGIBLE):
+                    self.statuses.add(MonsterStatus.INTANGIBLE, 2)
+            case _:
+                raise AssertionError(f"未知招式 {move}")
+        self.turns_taken += 1
+
+
+def _reptomancer_summon(bc: BattleContext, dagger_count: int) -> None:
+    """召唤匕首（对齐 Monster::reptomancerSummon + reptoSummonHelper）：
+    按 4,1,3,0 的顺序找空槽（死亡/逃跑占位），原位覆写生成匕首
+    （MINION、意图固定 Stab）；C++ skipTurn 位图（新匕首本回合不行动）
+    以 monster_turn_idx 前跳等效——落在当前回合指针之后的槽位各 +1
+    （do_monster_turn 尾部的 +1 使指针恰好越过该槽）。"""
+    group = bc.monsters
+    open_slots = [i for i in (4, 1, 3, 0) if group.monsters[i].is_dead_or_escaped()]
+    for slot in open_slots[:dagger_count]:
+        dagger = Dagger.create(bc, slot)
+        group.spawn_replace(bc, slot, dagger)
+        dagger.statuses.add(MonsterStatus.MINION, 1)
+        dagger.set_move(Dagger.STAB)
+        if slot > bc.monster_turn_idx:
+            bc.monster_turn_idx += 1
+        bc.log.append(f"{dagger.display_name} 被召唤进场！")
+
+
+class Reptomancer(Monster):
+    """爬行者法师（Act 3 精英，reptomancer 遭遇槽 2）：主死即胜 + 召唤匕首。
+
+    wiki/C++ A0：HP 180-190（A8 起 190-200）。preBattle：MINION_LEADER。
+    遭遇布局（encounters）：槽 1/4 各 1 只匕首、槽 0/3 死亡占位。
+    首回合固定召唤（补 1 只匕首，A18 起 2 只；canSpawn = 存活 < 4）；
+    此后 while 循环分段（逐行对齐 C++ REPTOMANCER）：
+      < 33：上回合非蛇击 → 蛇击（13×2 + 1 虚弱，A3 起 16×2）；否则
+      重抽 33-99；
+      < 66：召唤未连续两回合且可召 → 召唤，否则蛇击；
+      否则：上回合非重咬 → 重咬（30，A3 起 34）；否则重抽 0-65。
+    匕首（Dagger）见其类。
+    """
+
+    name = "Reptomancer"
+    zh = "爬行者法师"
+    hp_range = (180, 190)
+    hp_range_high = (190, 200)
+    hp_high_asc = 8
+
+    BIG_BITE = MoveDef("Big Bite", "重咬", "attack", base_damage=30)
+    SNAKE_STRIKE = MoveDef("Snake Strike", "蛇击", "attack", base_damage=13)  # ×2 段，另施加 1 层虚弱
+    SUMMON = MoveDef("Summon", "召唤", "unknown", intent_text="召唤匕首")
+
+    def __init__(self, idx: int, hp: int, max_hp: int):
+        super().__init__(idx, hp, max_hp, "爬行者法师(Reptomancer)")
+        self.statuses.add(MonsterStatus.MINION_LEADER, 1)
+
+    @classmethod
+    def create(cls, bc: BattleContext, idx: int) -> "Reptomancer":
+        hp = _roll_hp(bc, cls)
+        return cls(idx, hp, hp)
+
+    def get_move_for_roll(self, bc: BattleContext, roll: int) -> MoveDef:
+        if not self.move_history:  # firstTurn：固定召唤
+            return self.SUMMON
+        can_spawn = bc.monsters.alive_count < 4
+        my_roll = roll
+        while True:
+            if my_roll < 33:
+                if not _last(self, "Snake Strike"):
+                    return self.SNAKE_STRIKE
+                my_roll = bc.rngs.ai.int_inclusive(33, 99)
+            if my_roll < 66:
+                if not _last_two(self, "Summon") and can_spawn:
+                    return self.SUMMON
+                return self.SNAKE_STRIKE
+            if not _last(self, "Big Bite"):
+                return self.BIG_BITE
+            my_roll = bc.rngs.ai.int_inclusive(0, 65)
+
+    def take_turn(self, bc: BattleContext) -> None:
+        move = self.move_history[0]
+        match move.name:
+            case "Big Bite":
+                dmg = bc.calculate_monster_damage(self, 34 if bc.ascension >= 3 else 30)
+                bc.log.append(f"{self.display_name} 使用 重咬(Big Bite)。")
+                bc.add_to_bot(Actions.attack_player(self.idx, dmg))
+                bc.add_to_bot(Actions.roll_move(self.idx))
+            case "Snake Strike":
+                dmg = bc.calculate_monster_damage(self, 16 if bc.ascension >= 3 else 13)
+                bc.log.append(f"{self.display_name} 使用 蛇击(Snake Strike)，{dmg} 点伤害 ×2。")
+                for _ in range(2):
+                    bc.add_to_bot(Actions.attack_player(self.idx, dmg))
+                bc.add_to_bot(Actions.debuff_player(PlayerStatus.WEAK, 1, True))
+                bc.add_to_bot(Actions.roll_move(self.idx))
+            case "Summon":
+                bc.log.append(f"{self.display_name} 使用 召唤(Summon)！")
+                _reptomancer_summon(bc, 2 if bc.ascension >= 18 else 1)
+                self.roll_move(bc)
+            case _:
+                raise AssertionError(f"未知招式 {move}")
+        self.turns_taken += 1
+
+
+class Dagger(Monster):
+    """匕首（reptomancer 遭遇随从）：戳刺一次后自爆。
+
+    wiki/C++ A0：HP 20-25（A8+ 同区间）。preBattle：MINION。意图链
+    （rollMove 仅在被召唤时走 setMove(Stab)，此后 set_move 切换）：
+      戳刺：9 伤 + 塞 1 张伤口进弃牌堆 → 下回合固定自爆；
+      自爆：25 伤 + 对自身全额伤害自杀（SuicideAction(triggerRelics=true)
+      走 die() 结算）。
+    """
+
+    name = "Dagger"
+    zh = "匕首"
+    hp_range = (20, 25)
+    hp_range_high = (20, 25)
+    hp_high_asc = 8  # 对齐 C++ initHp 分组（两档区间相同，无实际影响）
+
+    STAB = MoveDef("Stab", "戳刺", "attack", base_damage=9)  # 另塞 1 张伤口
+    EXPLODE = MoveDef("Explode", "自爆", "attack", base_damage=25)
+
+    def __init__(self, idx: int, hp: int, max_hp: int):
+        super().__init__(idx, hp, max_hp, "匕首(Dagger)")
+        self.statuses.add(MonsterStatus.MINION, 1)
+
+    @classmethod
+    def create(cls, bc: BattleContext, idx: int) -> "Dagger":
+        hp = _roll_hp(bc, cls)
+        return cls(idx, hp, hp)
+
+    def get_move_for_roll(self, bc: BattleContext, roll: int) -> MoveDef:
+        # 对齐 C++：恒 Stab（召唤处直接 set_move(Stab)，本方法仅兜底）
+        return self.STAB
+
+    def take_turn(self, bc: BattleContext) -> None:
+        move = self.move_history[0]
+        match move.name:
+            case "Stab":
+                dmg = bc.calculate_monster_damage(self, 9)
+                bc.log.append(f"{self.display_name} 使用 戳刺(Stab)。")
+                bc.add_to_bot(Actions.attack_player(self.idx, dmg))
+                bc.add_to_bot(Actions.make_temp_card_in_discard(WOUND))
+                self.set_move(self.EXPLODE)
+                bc.add_to_bot(Actions.no_op_roll_move())
+            case "Explode":
+                dmg = bc.calculate_monster_damage(self, 25)
+                bc.log.append(f"{self.display_name} 自爆(Explode)了！")
+                bc.add_to_bot(Actions.attack_player(self.idx, dmg))
+                bc.add_to_bot(_suicide_by_damage(self.idx))
+                bc.add_to_bot(Actions.no_op_roll_move())
+            case _:
+                raise AssertionError(f"未知招式 {move}")
+        self.turns_taken += 1
+
+
+# ---- Act 3 Boss ----
+
+
+class AwakenedOne(Monster):
+    """觉醒者（Act 3 Boss，awakened_one 遭遇槽 2，槽 0/1 为两只邪教徒）：
+    half_dead 二阶段。
+
+    wiki/C++ A0：HP 300（A9 起区间 300-320 抽样——wiki 记恒 320，以
+    C++ 为准）；二阶段 REBIRTH 固定 maxHp = 320（A9）/300 满血。
+    preBattle：A4 起力量 +2；CURIOSITY 1（A19 起 2；玩家每打出能力牌
+    +层 力量，引擎 on_use_power_card）；REGEN 10（A19 起 15，回合末
+    回血减层）。
+    一阶段 roll：首回合固定挥砍（20 伤）；roll < 25：上回合灵魂斩击 →
+    挥砍，否则灵魂斩击（6×4）；否则挥砍未连续两回合 → 挥砍，否则
+    灵魂斩击。
+    阶段 1 死亡（die 覆盖，对齐 Monster.cpp:286-292）：hp 归零时不断
+    胜（该分支先于判胜检查，即使场上只剩 Boss）——存活数 -1、清
+    debuff、移除 CURIOSITY、置意图 Rebirth、清卡牌队列、half_dead
+    假死；下一次自身回合执行 Rebirth：满血复活、misc 标记二阶段、
+    负力量归零、存活数 +1、挂 MINION_LEADER（二阶段死亡立即判胜，
+    即使邪教徒仍在场）、下回合意图黑暗回响（40 伤）。
+    二阶段 roll：roll < 50：污泥未连续两回合 → 污泥（18 伤 + 洗 1 张
+    虚空进抽牌堆），否则冲撞（10×3）；否则冲撞未连续两回合 → 冲撞，
+    否则污泥。
+    """
+
+    name = "Awakened One"
+    zh = "觉醒者"
+    hp_range = (300, 300)
+    hp_range_high = (300, 320)
+    hp_high_asc = 9
+
+    SLASH = MoveDef("Slash", "挥砍", "attack", base_damage=20)
+    SOUL_STRIKE = MoveDef("Soul Strike", "灵魂斩击", "attack", base_damage=6)  # ×4 段
+    REBIRTH = MoveDef("Rebirth", "重生", "buff", intent_text="满血复活，进入第二形态")
+    DARK_ECHO = MoveDef("Dark Echo", "黑暗回响", "attack", base_damage=40)
+    SLUDGE = MoveDef("Sludge", "污泥", "attack", base_damage=18)  # 另洗 1 张虚空
+    TACKLE = MoveDef("Tackle", "冲撞", "attack", base_damage=10)  # ×3 段
+
+    def __init__(self, idx: int, hp: int, max_hp: int):
+        super().__init__(idx, hp, max_hp, "觉醒者(Awakened One)")
+
+    @classmethod
+    def create(cls, bc: BattleContext, idx: int) -> "AwakenedOne":
+        hp = _roll_hp(bc, cls)
+        m = cls(idx, hp, hp)
+        if bc.ascension >= 4:
+            m.statuses.add(MonsterStatus.STRENGTH, 2)
+        m.statuses.add(MonsterStatus.CURIOSITY, 2 if bc.ascension >= 19 else 1)
+        m.statuses.add(MonsterStatus.REGEN, 15 if bc.ascension >= 19 else 10)
+        return m
+
+    def die(self, bc: BattleContext) -> None:
+        # 对齐 C++ die() 的 AWAKENED_ONE 分支（先于判胜检查）：一阶段
+        # 死亡不判胜，假死待 Rebirth；二阶段（misc_info=1）走正常 die()
+        #（MINION_LEADER → 主死即胜）。覆盖引擎 half_dead 早退兜底。
+        if self.half_dead:
+            return
+        if self.misc_info == 0:
+            self.is_dying = True
+            self.half_dead = True  # 对齐 C++ halfDead = true（假死待 Rebirth）
+            bc.monsters.alive_count -= 1
+            _remove_debuffs(self)
+            self.statuses.remove(MonsterStatus.CURIOSITY)
+            self.set_move(self.REBIRTH)
+            bc.card_queue.clear()
+            return
+        super().die(bc)
+
+    def get_move_for_roll(self, bc: BattleContext, roll: int) -> MoveDef:
+        if self.half_dead:
+            return self.REBIRTH
+        if self.misc_info == 0:  # 一阶段
+            if not self.move_history:  # firstTurn：固定挥砍
+                return self.SLASH
+            if roll < 25:
+                return self.SLASH if _last(self, "Soul Strike") else self.SOUL_STRIKE
+            return self.SLASH if not _last_two(self, "Slash") else self.SOUL_STRIKE
+        # 二阶段
+        if roll < 50:
+            return self.SLUDGE if not _last_two(self, "Sludge") else self.TACKLE
+        return self.TACKLE if not _last_two(self, "Tackle") else self.SLUDGE
+
+    def take_turn(self, bc: BattleContext) -> None:
+        move = self.move_history[0]
+        match move.name:
+            case "Slash":
+                dmg = bc.calculate_monster_damage(self, 20)
+                bc.log.append(f"{self.display_name} 使用 挥砍(Slash)。")
+                bc.add_to_bot(Actions.attack_player(self.idx, dmg))
+                bc.add_to_bot(Actions.roll_move(self.idx))
+            case "Soul Strike":
+                dmg = bc.calculate_monster_damage(self, 6)
+                bc.log.append(f"{self.display_name} 使用 灵魂斩击(Soul Strike)，{dmg} 点伤害 ×4！")
+                for _ in range(4):
+                    bc.add_to_bot(Actions.attack_player(self.idx, dmg))
+                bc.add_to_bot(Actions.roll_move(self.idx))
+            case "Rebirth":
+                # 对齐 C++ REBIRTH：满血复活 + 二阶段标记 + MINION_LEADER
+                self.max_hp = 320 if bc.ascension >= 9 else 300
+                self.hp = self.max_hp
+                self.half_dead = False
+                self.is_dying = False
+                self.misc_info = 1  # 二阶段标记（对齐 C++ miscInfo = true）
+                if self.statuses.get(MonsterStatus.STRENGTH) < 0:
+                    self.statuses.set(MonsterStatus.STRENGTH, 0)
+                bc.monsters.alive_count += 1
+                self.statuses.add(MonsterStatus.MINION_LEADER, 1)
+                self.set_move(self.DARK_ECHO)
+                bc.log.append(f"{self.display_name} 重生(Rebirth)了！进入第二形态。")
+                bc.add_to_bot(Actions.no_op_roll_move())
+            case "Dark Echo":
+                dmg = bc.calculate_monster_damage(self, 40)
+                bc.log.append(f"{self.display_name} 使用 黑暗回响(Dark Echo)。")
+                bc.add_to_bot(Actions.attack_player(self.idx, dmg))
+                bc.add_to_bot(Actions.roll_move(self.idx))
+            case "Sludge":
+                dmg = bc.calculate_monster_damage(self, 18)
+                bc.log.append(f"{self.display_name} 使用 污泥(Sludge)。")
+                bc.add_to_bot(Actions.attack_player(self.idx, dmg))
+                bc.add_to_bot(Actions.make_temp_card_in_draw_pile(VOID, False, True))
+                bc.add_to_bot(Actions.roll_move(self.idx))
+            case "Tackle":
+                dmg = bc.calculate_monster_damage(self, 10)
+                bc.log.append(f"{self.display_name} 使用 冲撞(Tackle)，{dmg} 点伤害 ×3。")
+                for _ in range(3):
+                    bc.add_to_bot(Actions.attack_player(self.idx, dmg))
+                bc.add_to_bot(Actions.roll_move(self.idx))
+            case _:
+                raise AssertionError(f"未知招式 {move}")
+        self.turns_taken += 1
+
+
+class TimeEater(Monster):
+    """时间吞噬者（Act 3 Boss，单怪遭遇）：TIME_WARP 提前结束回合链。
+
+    wiki/C++ A0：HP 456（A9 起 480）。preBattle：TIME_WARP 0 层
+    （_ZeroBasedStatuses 使 0 层即被引擎计数钩子识别：玩家每出一张牌
+    +1，第 12 张触发——重置、力量 +2、立即结束玩家回合；此后从 0
+    继续计数）。roll 分段（misc_info 记已用急速）：
+      未用急速且 hp < maxHp//2 → 急速（hp 设为 maxHp//2、移除自身
+      debuff、A19 另 +32 格挡；整场一次）；
+      < 45：回响未连续两回合 → 回响（7×3，A4 起 8×3），否则重抽 50-99；
+      < 80：上回合非头撞 → 头撞（26 伤 + 1 层抽牌减少，A4 起 32 伤、
+      A19 另塞 2 张黏液），否则 66% 回响 / 否则涟漪；
+      否则：上回合涟漪 → 重抽 0-73（<45 回响，否则头撞）；否则涟漪。
+    涟漪：+20 格挡（立即），玩家 1 层虚弱 + 1 层易伤（立即，A19 另
+    1 层脆弱）。
+    """
+
+    name = "Time Eater"
+    zh = "时间吞噬者"
+    hp_range = (456, 456)
+    hp_range_high = (480, 480)
+    hp_high_asc = 9
+
+    REVERBERATE = MoveDef("Reverberate", "回响", "attack", base_damage=7)  # ×3 段
+    RIPPLE = MoveDef("Ripple", "涟漪", "defend", intent_text="获得 20 点格挡，施加虚弱与易伤")
+    HEAD_SLAM = MoveDef("Head Slam", "头撞", "attack", base_damage=26)  # 另施加 1 层抽牌减少
+    HASTE = MoveDef("Haste", "急速", "buff", intent_text="移除自身削弱，HP 设为 50%")
+
+    def __init__(self, idx: int, hp: int, max_hp: int):
+        super().__init__(idx, hp, max_hp, "时间吞噬者(Time Eater)")
+        # TIME_WARP 0 层起点（对齐 buff<MS::TIME_WARP>(0)）：has 恒真使
+        # 引擎 use_card 计数从 0 生效、触发后归零继续（见 _ZeroBasedStatuses）
+        self.statuses = _ZeroBasedStatuses((MonsterStatus.TIME_WARP,))
+
+    @classmethod
+    def create(cls, bc: BattleContext, idx: int) -> "TimeEater":
+        hp = _roll_hp(bc, cls)
+        return cls(idx, hp, hp)
+
+    def get_move_for_roll(self, bc: BattleContext, roll: int) -> MoveDef:
+        used_haste = self.misc_info == 1
+        under_half = self.hp < self.max_hp // 2
+        if not used_haste and under_half:
+            return self.HASTE
+        my_roll = roll
+        if my_roll < 45:
+            if not _last_two(self, "Reverberate"):
+                return self.REVERBERATE
+            my_roll = bc.rngs.ai.int_inclusive(50, 99)
+        if my_roll < 80:
+            if not _last(self, "Head Slam"):
+                return self.HEAD_SLAM
+            if _ai_boolean(bc, 0.66):
+                return self.REVERBERATE
+            return self.RIPPLE
+        if _last(self, "Ripple"):
+            my_roll = bc.rngs.ai.int_inclusive(0, 73)
+            return self.REVERBERATE if my_roll < 45 else self.HEAD_SLAM
+        return self.RIPPLE
+
+    def take_turn(self, bc: BattleContext) -> None:
+        move = self.move_history[0]
+        match move.name:
+            case "Haste":
+                self.misc_info = 1  # 已用急速（对齐 C++ miscInfo = true）
+                self.hp = self.max_hp // 2  # C++ curHp = maxHp/2：设为而非回复
+                if bc.ascension >= 19:
+                    self.block += 32  # 对齐 C++ addBlock：立即结算
+                _remove_debuffs(self)  # 对齐 C++ removeDebuffs（含 SHACKLED）
+                bc.log.append(f"{self.display_name} 使用 急速(Haste)，移除了自身的削弱！")
+                self.roll_move(bc)
+            case "Head Slam":
+                dmg = bc.calculate_monster_damage(self, 32 if bc.ascension >= 4 else 26)
+                bc.log.append(f"{self.display_name} 使用 头撞(Head Slam)。")
+                bc.add_to_bot(Actions.attack_player(self.idx, dmg))
+                bc.add_to_bot(Actions.debuff_player(PlayerStatus.DRAW_REDUCTION, 1, True))
+                if bc.ascension >= 19:
+                    for _ in range(2):
+                        bc.add_to_bot(Actions.make_temp_card_in_discard(SLIMED))
+                bc.add_to_bot(Actions.roll_move(self.idx))
+            case "Reverberate":
+                dmg = bc.calculate_monster_damage(self, 8 if bc.ascension >= 4 else 7)
+                bc.log.append(f"{self.display_name} 使用 回响(Reverberate)，{dmg} 点伤害 ×3。")
+                for _ in range(3):
+                    bc.add_to_bot(Actions.attack_player(self.idx, dmg))
+                bc.add_to_bot(Actions.roll_move(self.idx))
+            case "Ripple":
+                self.block += 20  # 对齐 C++ addBlock：立即结算
+                bc.log.append(f"{self.display_name} 使用 涟漪(Ripple)。")
+                # 对齐 C++ bc.player.debuff：立即结算
+                Actions.debuff_player(PlayerStatus.WEAK, 1, True).fn(bc)
+                Actions.debuff_player(PlayerStatus.VULNERABLE, 1, True).fn(bc)
+                if bc.ascension >= 19:
+                    Actions.debuff_player(PlayerStatus.FRAIL, 1, True).fn(bc)
+                self.roll_move(bc)
+            case _:
+                raise AssertionError(f"未知招式 {move}")
+        self.turns_taken += 1
+
+
+class Deca(Monster):
+    """德卡（Act 3 双 Boss，donu_and_deca 遭遇槽 0）：光束 / 守护方阵。
+
+    wiki/C++ A0：HP 250（A9 起 265）。preBattle：ARTIFACT 2（A19 起 3）。
+    意图链（全 set_move，rollMove 仅首回合一次）：光束（10×2（A4 起
+    12×2）+ 塞 2 张眩晕进弃牌堆）↔ 守护方阵（德卡与多努（槽 1）各
+    +16 格挡（立即结算）；A19 起另各 +3 层重甲）交替。
+    """
+
+    name = "Deca"
+    zh = "德卡"
+    hp_range = (250, 250)
+    hp_range_high = (265, 265)
+    hp_high_asc = 9
+
+    BEAM = MoveDef("Beam", "光束", "attack", base_damage=10)  # ×2 段，另塞 2 张眩晕
+    SQUARE_OF_PROTECTION = MoveDef("Square of Protection", "守护方阵", "defend",
+                                   intent_text="德卡与多努各获得 16 点格挡")
+
+    def __init__(self, idx: int, hp: int, max_hp: int):
+        super().__init__(idx, hp, max_hp, "德卡(Deca)")
+
+    @classmethod
+    def create(cls, bc: BattleContext, idx: int) -> "Deca":
+        hp = _roll_hp(bc, cls)
+        m = cls(idx, hp, hp)
+        m.statuses.add(MonsterStatus.ARTIFACT, 3 if bc.ascension >= 19 else 2)
+        return m
+
+    def get_move_for_roll(self, bc: BattleContext, roll: int) -> MoveDef:
+        # 对齐 C++：恒光束（此后 take_turn 全 set_move）
+        return self.BEAM
+
+    def take_turn(self, bc: BattleContext) -> None:
+        move = self.move_history[0]
+        match move.name:
+            case "Beam":
+                dmg = bc.calculate_monster_damage(self, 12 if bc.ascension >= 4 else 10)
+                bc.log.append(f"{self.display_name} 使用 光束(Beam)，{dmg} 点伤害 ×2。")
+                for _ in range(2):
+                    bc.add_to_bot(Actions.attack_player(self.idx, dmg))
+                for _ in range(2):
+                    bc.add_to_bot(Actions.make_temp_card_in_discard(DAZED))
+                self.set_move(self.SQUARE_OF_PROTECTION)
+            case "Square of Protection":
+                bc.log.append(f"{self.display_name} 使用 守护方阵(Square of Protection)。")
+                self.block += 16  # 对齐 C++ addBlock：立即结算
+                if bc.monsters.monster_count > 1:
+                    donu = bc.monsters.monsters[1]  # C++ 硬编码 arr[1]（死亡亦加，无害）
+                    donu.block += 16
+                    if bc.ascension >= 19:
+                        donu.statuses.add(MonsterStatus.PLATED_ARMOR_M, 3)
+                if bc.ascension >= 19:
+                    self.statuses.add(MonsterStatus.PLATED_ARMOR_M, 3)
+                self.set_move(self.BEAM)
+            case _:
+                raise AssertionError(f"未知招式 {move}")
+        bc.add_to_bot(Actions.no_op_roll_move())
+        self.turns_taken += 1
+
+
+class Donu(Monster):
+    """多努（Act 3 双 Boss，donu_and_deca 遭遇槽 1）：光束 / 力量圆环。
+
+    wiki/C++ A0：HP 250（A9 起 265）。preBattle：ARTIFACT 2（A19 起 3）。
+    意图链（全 set_move）：光束（10×2（A4 起 12×2））↔ 力量圆环（德卡
+    （槽 0）与多努各 力量 +3——C++ 注释"德卡死了也照样加"，死亡加成
+    无害，按字面保留）交替。
+    """
+
+    name = "Donu"
+    zh = "多努"
+    hp_range = (250, 250)
+    hp_range_high = (265, 265)
+    hp_high_asc = 9
+
+    BEAM = MoveDef("Beam", "光束", "attack", base_damage=10)  # ×2 段
+    CIRCLE_OF_POWER = MoveDef("Circle of Power", "力量圆环", "buff",
+                              intent_text="德卡与多努各力量 +3")
+
+    def __init__(self, idx: int, hp: int, max_hp: int):
+        super().__init__(idx, hp, max_hp, "多努(Donu)")
+
+    @classmethod
+    def create(cls, bc: BattleContext, idx: int) -> "Donu":
+        hp = _roll_hp(bc, cls)
+        m = cls(idx, hp, hp)
+        m.statuses.add(MonsterStatus.ARTIFACT, 3 if bc.ascension >= 19 else 2)
+        return m
+
+    def get_move_for_roll(self, bc: BattleContext, roll: int) -> MoveDef:
+        # 对齐 C++：恒力量圆环（此后 take_turn 全 set_move）
+        return self.CIRCLE_OF_POWER
+
+    def take_turn(self, bc: BattleContext) -> None:
+        move = self.move_history[0]
+        match move.name:
+            case "Beam":
+                dmg = bc.calculate_monster_damage(self, 12 if bc.ascension >= 4 else 10)
+                bc.log.append(f"{self.display_name} 使用 光束(Beam)，{dmg} 点伤害 ×2。")
+                for _ in range(2):
+                    bc.add_to_bot(Actions.attack_player(self.idx, dmg))
+                self.set_move(self.CIRCLE_OF_POWER)
+            case "Circle of Power":
+                bc.log.append(f"{self.display_name} 使用 力量圆环(Circle of Power)，德卡与多努各力量 +3。")
+                deca = bc.monsters.monsters[0]  # C++ 硬编码 arr[0]（死亡亦加，无害）
+                deca.statuses.add(MonsterStatus.STRENGTH, 3)
+                self.statuses.add(MonsterStatus.STRENGTH, 3)
+                self.set_move(self.BEAM)
+            case _:
+                raise AssertionError(f"未知招式 {move}")
+        bc.add_to_bot(Actions.no_op_roll_move())
+        self.turns_taken += 1
+
+
+# ---- Act 4 ----
+
+
+class SpireShield(Monster):
+    """尖塔之盾（Act 4，shield_and_spear 遭遇槽 0）：猛击 / 坚守 / 粉碎。
+
+    wiki/C++ A0：HP 110（A8 起 125）。preBattle：玩家 SURROUNDED 1
+    （被包围：攻击非面向的怪时其伤害 ×1.5——引擎无 lastTargetedMonster
+    追踪，乘区未接线，见模块头注释）+ 自身 ARTIFACT 1（A18 起 2）。
+    意图链（首意图 50/50 猛击/坚守，rollMove 仅粉碎后入队）：
+      猛击：12 伤（A3 起 14）+ 玩家力量 -1（立即）；上上回合为粉碎或
+      无记录 → 坚守，否则粉碎；
+      坚守：自身与尖塔之矛（槽 1）各 +30 格挡（立即）；上上回合为
+      粉碎或无记录 → 猛击，否则粉碎；
+      粉碎：34 伤（A3 起 38）+ 获得等同伤害的格挡（A18 起 99）。
+    """
+
+    name = "Spire Shield"
+    zh = "尖塔之盾"
+    hp_range = (110, 110)
+    hp_range_high = (125, 125)
+    hp_high_asc = 8
+
+    BASH = MoveDef("Bash", "猛击", "attack", base_damage=12)  # 另使玩家力量 -1
+    FORTIFY = MoveDef("Fortify", "坚守", "defend", intent_text="自身与尖塔之矛各获得 30 点格挡")
+    SMASH = MoveDef("Smash", "粉碎", "attack", base_damage=34)  # 另获得等同伤害的格挡
+
+    def __init__(self, idx: int, hp: int, max_hp: int):
+        super().__init__(idx, hp, max_hp, "尖塔之盾(Spire Shield)")
+
+    @classmethod
+    def create(cls, bc: BattleContext, idx: int) -> "SpireShield":
+        hp = _roll_hp(bc, cls)
+        m = cls(idx, hp, hp)
+        m.statuses.add(MonsterStatus.ARTIFACT, 2 if bc.ascension >= 18 else 1)
+        # 对齐 C++ preBattle：bc.player.buff<PS::SURROUNDED>()
+        bc.player.statuses.add(PlayerStatus.SURROUNDED, 1)
+        return m
+
+    def get_move_for_roll(self, bc: BattleContext, roll: int) -> MoveDef:
+        return self.FORTIFY if _ai_boolean(bc, 0.5) else self.BASH
+
+    def take_turn(self, bc: BattleContext) -> None:
+        move = self.move_history[0]
+        match move.name:
+            case "Bash":
+                dmg = bc.calculate_monster_damage(self, 14 if bc.ascension >= 3 else 12)
+                bc.log.append(f"{self.display_name} 使用 猛击(Bash)。")
+                bc.add_to_bot(Actions.attack_player(self.idx, dmg))
+                # 对齐 C++ bc.player.debuff<PS::STRENGTH>(-1)：立即结算
+                Actions.debuff_player(PlayerStatus.STRENGTH, -1, True).fn(bc)
+                if len(self.move_history) < 2 or self.move_history[1].name == "Smash":
+                    self.set_move(self.FORTIFY)
+                else:
+                    self.set_move(self.SMASH)
+                bc.add_to_bot(Actions.no_op_roll_move())
+            case "Fortify":
+                bc.log.append(f"{self.display_name} 使用 坚守(Fortify)。")
+                self.block += 30  # 对齐 C++ addBlock：立即结算
+                if bc.monsters.monster_count > 1:
+                    spear = bc.monsters.monsters[1]  # C++ 硬编码 arr[1]
+                    spear.block += 30
+                if len(self.move_history) < 2 or self.move_history[1].name == "Smash":
+                    self.set_move(self.BASH)
+                else:
+                    self.set_move(self.SMASH)
+                bc.add_to_bot(Actions.no_op_roll_move())
+            case "Smash":
+                dmg = bc.calculate_monster_damage(self, 38 if bc.ascension >= 3 else 34)
+                bc.log.append(f"{self.display_name} 使用 粉碎(Smash)。")
+                bc.add_to_bot(Actions.attack_player(self.idx, dmg))
+                bc.add_to_bot(Actions.monster_gain_block(self.idx, 99 if bc.ascension >= 18 else dmg))
+                bc.add_to_bot(Actions.roll_move(self.idx))
+            case _:
+                raise AssertionError(f"未知招式 {move}")
+        self.turns_taken += 1
+
+
+class SpireSpear(Monster):
+    """尖塔之矛（Act 4，shield_and_spear 遭遇槽 1）：灼烧打击 / 穿刺 / 串刺。
+
+    wiki/C++ A0：HP 160（A8 起 180）。preBattle：ARTIFACT 1（A18 起 2）。
+    意图链（首意图固定灼烧打击；串刺后 rollMove 50/50 灼烧/穿刺）：
+      灼烧打击：5×2（A3 起 6×2）+ 塞 2 张灼伤进弃牌堆（A18 起改为
+      2 张灼伤进抽牌堆顶）；上上回合为串刺 → 穿刺，否则串刺；
+      穿刺：自身与尖塔之盾（槽 0）各力量 +2（立即）；上上回合为串刺
+      → 灼烧打击，否则串刺；
+      串刺：10 伤 ×3（A3 起 ×4）。
+    """
+
+    name = "Spire Spear"
+    zh = "尖塔之矛"
+    hp_range = (160, 160)
+    hp_range_high = (180, 180)
+    hp_high_asc = 8
+
+    BURN_STRIKE = MoveDef("Burn Strike", "灼烧打击", "attack", base_damage=5)  # ×2 段，另塞 2 张灼伤
+    PIERCER = MoveDef("Piercer", "穿刺", "buff", intent_text="自身与尖塔之盾各力量 +2")
+    SKEWER = MoveDef("Skewer", "串刺", "attack", base_damage=10)  # ×3 段（A3 起 ×4）
+
+    def __init__(self, idx: int, hp: int, max_hp: int):
+        super().__init__(idx, hp, max_hp, "尖塔之矛(Spire Spear)")
+
+    @classmethod
+    def create(cls, bc: BattleContext, idx: int) -> "SpireSpear":
+        hp = _roll_hp(bc, cls)
+        m = cls(idx, hp, hp)
+        m.statuses.add(MonsterStatus.ARTIFACT, 2 if bc.ascension >= 18 else 1)
+        return m
+
+    def get_move_for_roll(self, bc: BattleContext, roll: int) -> MoveDef:
+        if not self.move_history:  # firstTurn：固定灼烧打击
+            return self.BURN_STRIKE
+        return self.PIERCER if _ai_boolean(bc, 0.5) else self.BURN_STRIKE
+
+    def _next_move(self, after_piercer: bool) -> None:
+        # 对齐 C++ lastMoveBefore(SKEWER)：上上回合为串刺 → 穿刺后接
+        # 灼烧打击 / 灼烧打击后接穿刺；否则串刺
+        if len(self.move_history) >= 2 and self.move_history[1].name == "Skewer":
+            self.set_move(self.BURN_STRIKE if after_piercer else self.PIERCER)
+        else:
+            self.set_move(self.SKEWER)
+
+    def take_turn(self, bc: BattleContext) -> None:
+        move = self.move_history[0]
+        match move.name:
+            case "Burn Strike":
+                dmg = bc.calculate_monster_damage(self, 6 if bc.ascension >= 3 else 5)
+                bc.log.append(f"{self.display_name} 使用 灼烧打击(Burn Strike)，{dmg} 点伤害 ×2。")
+                for _ in range(2):
+                    bc.add_to_bot(Actions.attack_player(self.idx, dmg))
+                if bc.ascension >= 18:
+                    # A18：2 张灼伤进抽牌堆顶（不洗入）
+                    for _ in range(2):
+                        bc.add_to_bot(Actions.make_temp_card_in_draw_pile(BURN, False, False))
+                else:
+                    for _ in range(2):
+                        bc.add_to_bot(Actions.make_temp_card_in_discard(BURN))
+                self._next_move(after_piercer=False)
+                bc.add_to_bot(Actions.no_op_roll_move())
+            case "Piercer":
+                bc.log.append(f"{self.display_name} 使用 穿刺(Piercer)，自身与尖塔之盾各力量 +2。")
+                self.statuses.add(MonsterStatus.STRENGTH, 2)
+                shield = bc.monsters.monsters[0]  # C++ 硬编码 arr[0]（死亡亦加，无害）
+                shield.statuses.add(MonsterStatus.STRENGTH, 2)
+                self._next_move(after_piercer=True)
+                bc.add_to_bot(Actions.no_op_roll_move())
+            case "Skewer":
+                dmg = bc.calculate_monster_damage(self, 10)
+                hits = 4 if bc.ascension >= 3 else 3
+                bc.log.append(f"{self.display_name} 使用 串刺(Skewer)，{dmg} 点伤害 ×{hits}。")
+                for _ in range(hits):
+                    bc.add_to_bot(Actions.attack_player(self.idx, dmg))
+                bc.add_to_bot(Actions.roll_move(self.idx))
+            case _:
+                raise AssertionError(f"未知招式 {move}")
+        self.turns_taken += 1
+
+
+class CorruptHeart(Monster):
+    """腐化之心（Act 4 最终 Boss，单怪遭遇）：死亡节拍 + 无敌 + 轮转增強。
+
+    wiki/C++ A0：HP 750（A9 起 800）。preBattle：BEAT_OF_DEATH 1
+    （A19 起 2；玩家每出一张牌受层伤，引擎 use_card）+ INVINCIBLE
+    池 300（A19 起 200）。
+    意图链：首回合固定削弱（2 层易伤/虚弱/脆弱 + 各洗 1 张眩晕/黏液/
+    伤口/灼伤/虚空进抽牌堆）；此后 50/50 血针（2×12（A4 起 2×15））/
+    回声（40（A4 起 45））交替——回合数为 3 的倍数时，下回合为增强
+    （实际第 4、7、10……回合）：负力量归零后 +2，并按第 N 次增强
+    （回合//3）：1→人工制品 2 / 2→死亡节拍 +1 / 3→痛苦刺击 / 4→力量
+    +10 / 5+→力量 +50。
+    INVINCIBLE（引擎分支语义与 C++ 池语义不同，见模块头注释）：本类
+    以 unique_power0 存剩余池、apply_start_of_turn_powers 回满（对齐
+    C++ 每回合重置）、on_hp_lost 按实伤扣池并回写 misc_info——引擎
+    的钳制分支读 cap = 20 + misc_info，回写后即等效 C++ 的
+    "单次伤害钳剩余池"。毒等非攻击 HP 损失仍会漏钳（引擎分支仅
+    from_attack）——已知偏差。
+    """
+
+    name = "Corrupt Heart"
+    zh = "腐化之心"
+    hp_range = (750, 750)
+    hp_range_high = (800, 800)
+    hp_high_asc = 9
+
+    BLOOD_SHOTS = MoveDef("Blood Shots", "血针", "attack", base_damage=2)  # ×12 段（A4 起 ×15）
+    ECHO = MoveDef("Echo", "回声", "attack", base_damage=40)
+    DEBILITATE = MoveDef("Debilitate", "削弱", "debuff",
+                         intent_text="施加 2 层易伤/虚弱/脆弱，并各洗 1 张状态牌进抽牌堆")
+    BUFF = MoveDef("Buff", "增强", "buff", intent_text="力量 +2 与递增的增益")
+
+    def __init__(self, idx: int, hp: int, max_hp: int):
+        super().__init__(idx, hp, max_hp, "腐化之心(Corrupt Heart)")
+
+    @classmethod
+    def create(cls, bc: BattleContext, idx: int) -> "CorruptHeart":
+        hp = _roll_hp(bc, cls)
+        m = cls(idx, hp, hp)
+        m.statuses.add(MonsterStatus.BEAT_OF_DEATH, 2 if bc.ascension >= 19 else 1)
+        pool = 200 if bc.ascension >= 19 else 300
+        m.statuses.add(MonsterStatus.INVINCIBLE, 1)
+        m.unique_power0 = pool  # 剩余池（本类源真值）
+        m.misc_info = pool - 20  # 引擎钳制分支的 cap 编码（cap = 20 + misc）
+        return m
+
+    def apply_start_of_turn_powers(self, bc: BattleContext) -> None:
+        # 对齐 C++ applyStartOfTurnPowers：INVINCIBLE 池每回合回满
+        pool = 200 if bc.ascension >= 19 else 300
+        self.unique_power0 = pool
+        self.misc_info = pool - 20
+        super().apply_start_of_turn_powers(bc)
+
+    def on_hp_lost(self, bc: BattleContext, amount: int) -> None:
+        # 按实伤扣池并回写 misc_info（覆盖引擎钳制分支对该槽的临时改动）
+        self.unique_power0 = max(0, self.unique_power0 - amount)
+        self.misc_info = self.unique_power0 - 20
+
+    def get_move_for_roll(self, bc: BattleContext, roll: int) -> MoveDef:
+        if not self.move_history:  # firstTurn：固定削弱
+            return self.DEBILITATE
+        return self.BLOOD_SHOTS if _ai_boolean(bc, 0.5) else self.ECHO
+
+    def take_turn(self, bc: BattleContext) -> None:
+        move = self.move_history[0]
+        match move.name:
+            case "Blood Shots":
+                dmg = bc.calculate_monster_damage(self, 2)
+                hits = 15 if bc.ascension >= 4 else 12
+                bc.log.append(f"{self.display_name} 使用 血针(Blood Shots)，{dmg} 点伤害 ×{hits}！")
+                for _ in range(hits):
+                    bc.add_to_bot(Actions.attack_player(self.idx, dmg))
+                self.set_move(self.BUFF if bc.turn % 3 == 0 else self.ECHO)
+                bc.add_to_bot(Actions.no_op_roll_move())
+            case "Echo":
+                dmg = bc.calculate_monster_damage(self, 45 if bc.ascension >= 4 else 40)
+                bc.log.append(f"{self.display_name} 使用 回声(Echo)。")
+                bc.add_to_bot(Actions.attack_player(self.idx, dmg))
+                self.set_move(self.BUFF if bc.turn % 3 == 0 else self.BLOOD_SHOTS)
+                bc.add_to_bot(Actions.no_op_roll_move())
+            case "Debilitate":
+                bc.log.append(f"{self.display_name} 使用 削弱(Debilitate)！")
+                # 对齐 C++ bc.player.debuff + actFunc：立即结算
+                Actions.debuff_player(PlayerStatus.VULNERABLE, 2, True).fn(bc)
+                Actions.debuff_player(PlayerStatus.WEAK, 2, True).fn(bc)
+                Actions.debuff_player(PlayerStatus.FRAIL, 2, True).fn(bc)
+                for card in (DAZED, SLIMED, WOUND, BURN, VOID):
+                    Actions.make_temp_card_in_draw_pile(card, False, True).fn(bc)
+                self.roll_move(bc)
+            case "Buff":
+                # 对齐 C++：负力量归零后 +2；buffCount = getMonsterTurnNumber()/3
+                if self.statuses.get(MonsterStatus.STRENGTH) < 0:
+                    self.statuses.set(MonsterStatus.STRENGTH, 0)
+                self.statuses.add(MonsterStatus.STRENGTH, 2)
+                buff_count = bc.turn // 3
+                if buff_count == 1:
+                    self.statuses.add(MonsterStatus.ARTIFACT, 2)
+                elif buff_count == 2:
+                    self.statuses.add(MonsterStatus.BEAT_OF_DEATH, 1)
+                elif buff_count == 3:
+                    self.statuses.add(MonsterStatus.PAINFUL_STABS, 1)
+                elif buff_count == 4:
+                    self.statuses.add(MonsterStatus.STRENGTH, 10)
+                else:
+                    self.statuses.add(MonsterStatus.STRENGTH, 50)
+                bc.log.append(f"{self.display_name} 使用 增强(Buff)（第 {buff_count} 次）！")
+                self.roll_move(bc)
+            case _:
+                raise AssertionError(f"未知招式 {move}")
         self.turns_taken += 1

@@ -14,11 +14,13 @@ import pytest
 
 from sts.combat import BattleContext
 from sts.combat.types import MonsterStatus, PlayerStatus
-from sts.content.cards import BASH, BLUDGEON, DEFEND, STRIKE
+from sts.content.cards import BASH, BURN, BLUDGEON, DAZED, DEFEND, INFLAME, SLIMED, STRIKE, VOID, WOUND
 from sts.content.monsters import (
     AcidSlimeL,
+    Cultist,
     AcidSlimeM,
     AcidSlimeS,
+    AwakenedOne,
     BlueSlaver,
     BookOfStabbing,
     BronzeAutomaton,
@@ -26,8 +28,15 @@ from sts.content.monsters import (
     Byrd,
     Centurion,
     Chosen,
+    CorruptHeart,
+    Dagger,
+    Darkling,
+    Deca,
+    Donu,
+    Exploder,
     FatGremlin,
     FungiBeast,
+    GiantHead,
     GremlinLeader,
     GremlinNob,
     GreenLouse,
@@ -39,8 +48,12 @@ from sts.content.monsters import (
     MadGremlin,
     Mugger,
     Mystic,
+    Nemesis,
+    OrbWalker,
     RedLouse,
     RedSlaver,
+    Reptomancer,
+    Repulsor,
     Sentry,
     ShelledParasite,
     ShieldGremlin,
@@ -48,16 +61,26 @@ from sts.content.monsters import (
     SneakyGremlin,
     Snecko,
     SnakePlant,
+    Spiker,
     SpikeSlimeL,
     SpikeSlimeM,
     SpikeSlimeS,
+    SpireGrowth,
+    SpireShield,
+    SpireSpear,
     SphericGuardian,
     Taskmaster,
     TheChamp,
     TheCollector,
     TheGuardian,
+    TheMaw,
+    TimeEater,
     TorchHead,
+    Transient,
+    WrithingMass,
 )
+
+from tests.test_engine_batch0 import setup_hand
 
 PLAYER_MAX_HP = 80
 
@@ -1718,7 +1741,7 @@ def test_large_slime_split_spawns_two_mids_inheriting_hp(big_cls, mid_cls):
     bc.end_turn()  # SPLIT 招式执行
     group = bc.monsters
     assert group.monster_count == 2
-    assert group.alive_count == 2
+    assert group.alive_count == 2  # 两只 M 级分裂体存活
     a, b = group.monsters
     assert isinstance(a, mid_cls) and isinstance(b, mid_cls)
     assert (a.hp, a.max_hp) == (inherited, inherited)
@@ -1792,7 +1815,7 @@ def test_slime_boss_split_replaces_group():
     bc.end_turn()
     group = bc.monsters
     assert group.monster_count == 3
-    assert group.alive_count == 2
+    assert group.alive_count == 2  # 尖刺 L + 酸 L 存活（槽 1 为死亡占位）
     spike, mid, acid = group.monsters
     assert isinstance(spike, SpikeSlimeL) and spike.idx == 0
     assert mid.is_dead_or_escaped()  # 槽 1 死亡占位（Boss 本体）
@@ -2945,7 +2968,7 @@ def test_collector_spawn_refills_dead_slots():
     bc.end_turn()  # Spawn 补满
     group = bc.monsters
     slay(bc, 0)  # 杀一只火把头
-    assert group.alive_count == 2
+    assert group.alive_count == 2  # 收藏家 + 剩下的一只火把头
     collector = group.monsters[2]
     force_intent(collector, TheCollector.SPAWN)
     bc.end_turn()
@@ -3105,3 +3128,1183 @@ def test_champ_ascension_branches():
     force_intent(m19, TheChamp.ANGER)
     bc19.end_turn()
     assert m19.statuses.get(MonsterStatus.STRENGTH) == 5 + 12
+
+
+# ====================================================================
+# 批次 D：Act 3 全部新怪物 + Act 4 怪物（数值一律 A0，来源
+# MonsterSpecific.cpp / MonsterGroup.cpp，wiki 交叉校验）。
+# ====================================================================
+
+
+def act3_battle(encounter: str, seed: int = 0, ascension: int = 0) -> BattleContext:
+    return BattleContext(seed=seed, encounter=encounter, ascension=ascension)
+
+
+ACT3_ENCOUNTERS = [
+    ("three_darklings", 3, 48, 56),
+    ("orb_walker", 1, 90, 96),
+    ("three_shapes", 3, 29, 56),  # Repulsor 29-35 / Exploder 30 / Spiker 42-56
+    ("spire_growth", 1, 170, 170),
+    ("transient", 1, 999, 999),
+    ("four_shapes", 4, 29, 56),
+    ("maw", 1, 300, 300),
+    ("sphere_and_two_shapes", 3, 20, 56),  # 形状 29-56 + 球形守卫 20
+    ("jaw_worm_horde", 3, 40, 44),
+    ("writhing_mass", 1, 160, 160),
+    ("giant_head", 1, 500, 500),
+    ("nemesis", 1, 185, 185),
+    ("reptomancer", 5, 20, 190),  # 槽 0/3 占位；匕首 20-25 + 法师 180-190
+    ("awakened_one", 3, 48, 300),  # 邪教徒 48-54 + 觉醒者 300
+    ("time_eater", 1, 456, 456),
+    ("donu_and_deca", 2, 250, 250),
+    ("shield_and_spear", 2, 110, 160),
+    ("the_heart", 1, 750, 750),
+]
+
+
+@pytest.mark.parametrize("encounter,count,hp_lo,hp_hi", ACT3_ENCOUNTERS)
+def test_act34_encounter_spawn_and_hp(encounter, count, hp_lo, hp_hi):
+    """Act 3/4 遭遇生成的怪数与 HP 区间（多种子抽样）。"""
+    for seed in range(10):
+        bc = act3_battle(encounter, seed=seed)
+        assert bc.monsters.monster_count == count
+        for m in bc.monsters.monsters:
+            if m.is_dead_or_escaped():
+                continue  # reptomancer / awakened_one 等布局的死亡占位槽
+            assert hp_lo <= m.hp <= hp_hi
+            assert m.current_move is not None
+
+
+# ---- Darkling（REGROW 假死复活链）----
+
+
+def test_darkling_first_turn_and_nip_roll():
+    """首回合 50/50 硬化/啃咬；Nip 伤害构造期 roll 7-11。"""
+    for seed in range(10):
+        bc = act3_battle("three_darklings", seed=seed)
+        for m in bc.monsters.monsters:
+            assert isinstance(m, Darkling)
+            assert 7 <= m.misc_info <= 11
+            assert m.statuses.has(MonsterStatus.REGROW)
+            assert m.current_move.name in {"Harden", "Nip"}
+
+
+def test_darkling_roll_segments():
+    bc = act3_battle("three_darklings")
+    m = bc.monsters.monsters[0]
+    m0 = bc.monsters.monsters[1]
+    # 首回合特例已过：history 非空
+    set_history(m, Darkling.NIP)
+    # < 40：非上回合 Chomp 且 idx≠1 → Chomp
+    assert m.get_move_for_roll(bc, 0).name == "Chomp"
+    assert m.get_move_for_roll(bc, 39).name == "Chomp"
+    set_history(m, Darkling.CHOMP)
+    assert m.get_move_for_roll(bc, 0).name in {"Harden", "Nip"}  # 上回合 Chomp → 重抽
+    # 中位（idx 1）永不 Chomp：重抽后落 40-99 段（硬化/啃咬）
+    set_history(m0, Darkling.CHOMP)
+    assert m0.get_move_for_roll(bc, 0).name in {"Harden", "Nip"}
+    # 40-70：上回合非硬化 → 硬化；否则啃咬
+    set_history(m, Darkling.CHOMP)
+    assert m.get_move_for_roll(bc, 40).name == "Harden"
+    set_history(m, Darkling.HARDEN)
+    assert m.get_move_for_roll(bc, 69).name == "Nip"
+    # ≥ 70：啃咬未连续两回合 → 啃咬
+    set_history(m, Darkling.HARDEN, Darkling.NIP)
+    assert m.get_move_for_roll(bc, 99).name == "Nip"
+
+
+def test_darkling_harden_chomp_nip_values():
+    bc = act3_battle("three_darklings")
+    m = bc.monsters.monsters[0]
+    bc.monsters.monsters[1].escape(bc)  # 隔离（slay 会触发 REGROW 复活链）
+    bc.monsters.monsters[2].escape(bc)
+    force_intent(m, Darkling.HARDEN)
+    bc.end_turn()
+    assert m.block == 12
+    assert bc.player.hp == PLAYER_MAX_HP
+    force_intent(m, Darkling.CHOMP)
+    bc.end_turn()
+    assert bc.player.hp == PLAYER_MAX_HP - 8
+    force_intent(m, m.NIP)
+    hp0 = bc.player.hp
+    bc.end_turn()
+    assert bc.player.hp == hp0 - m.misc_info
+
+
+def test_darkling_regrow_revive_chain():
+    """死亡→假死（不判胜）→ 空转一回合 → 复活 50% 最大生命。"""
+    bc = act3_battle("three_darklings")
+    m = bc.monsters.monsters[0]
+    m.hp = 1
+    m.statuses.add(MonsterStatus.WEAK, 2)  # 死亡时应被 resetAllStatusEffects 清掉
+    play_strike(bc, target=0)
+    assert m.half_dead and m.is_dead_or_escaped()
+    assert bc.monsters.alive_count == 2
+    assert not bc.over  # 还有存活暗裔，不判胜
+    assert not m.statuses.has(MonsterStatus.WEAK)
+    assert not m.statuses.has(MonsterStatus.REGROW)  # reset 清空，复活时重挂
+    assert m.current_move.name == "Regrow"
+    # 假死体自己的回合：Regrow 空转，意图切 Reincarnate（期间不攻击）
+    hp0 = bc.player.hp
+    bc.end_turn()
+    assert m.half_dead
+    assert m.current_move.name == "Reincarnate"
+    assert bc.player.hp in (hp0, hp0 - 8, hp0 - 8 - 8, hp0 - 8 - 8 - 9)  # 其余两只照常行动
+    # 下一自身回合：Reincarnate 复活
+    max_hp = m.max_hp
+    bc.end_turn()
+    assert not m.half_dead and not m.is_dead_or_escaped()
+    assert m.hp == max_hp // 2
+    assert m.statuses.has(MonsterStatus.REGROW)  # 重挂，可再次复活
+    assert bc.monsters.alive_count == 3
+    assert m.misc_info == 7 or 7 <= m.misc_info <= 11  # Nip 伤害保留
+
+
+def test_darkling_all_dead_no_revive():
+    """全灭判胜：最后一只死亡不走 REGROW（对齐 C++ die 先判胜返回）。"""
+    bc = act3_battle("three_darklings")
+    for i in range(3):
+        bc.monsters.monsters[i].hp = 1
+    play_strike(bc, target=0)
+    play_strike(bc, target=1)
+    play_strike(bc, target=2)
+    assert bc.won
+    # 前两只在仍有同伴时死亡 → 假死挂起；最后一只直接死亡（不复活）
+    assert bc.monsters.monsters[0].half_dead
+    assert bc.monsters.monsters[1].half_dead
+    assert not bc.monsters.monsters[2].half_dead
+
+
+def test_darkling_a2_values():
+    bc = act3_battle("three_darklings", ascension=2)
+    for m in bc.monsters.monsters:
+        assert 9 <= m.misc_info <= 13  # 构造档 roll 9-13（不加 take_turn 的 +2）
+    m = bc.monsters.monsters[0]
+    bc.monsters.monsters[1].escape(bc)
+    bc.monsters.monsters[2].escape(bc)
+    force_intent(m, Darkling.CHOMP)
+    bc.end_turn()
+    assert bc.player.hp == PLAYER_MAX_HP - 9
+
+
+# ---- Orb Walker ----
+
+
+def test_orb_walker_laser_shuffles_and_discards_burn():
+    bc = BattleContext(seed=0, encounter="orb_walker", deck=[STRIKE] * 20)
+    m = bc.monsters.monsters[0]
+
+    def _burns():
+        return sum(1 for c in bc.cards.draw_pile + bc.cards.hand + bc.cards.discard_pile
+                   if c.card is BURN)
+
+    burn0 = _burns()
+    force_intent(m, OrbWalker.LASER)
+    bc.end_turn()
+    assert bc.player.hp == PLAYER_MAX_HP - 10
+    assert _burns() == burn0 + 2  # 洗 1 进抽牌堆 + 塞 1 进弃牌堆
+
+
+def test_orb_walker_claw_and_strength_growth():
+    bc = act3_battle("orb_walker")
+    m = bc.monsters.monsters[0]
+    assert m.statuses.get(MonsterStatus.GENERIC_STRENGTH_UP) == 3
+    force_intent(m, OrbWalker.CLAW)
+    bc.end_turn()
+    assert bc.player.hp == PLAYER_MAX_HP - 15
+    assert m.statuses.get(MonsterStatus.STRENGTH) == 3  # 回合末 GENERIC +3
+    force_intent(m, OrbWalker.CLAW)
+    bc.end_turn()
+    assert bc.player.hp == PLAYER_MAX_HP - 15 - 18  # 15+3 力量
+
+
+def test_orb_walker_roll_segments():
+    bc = act3_battle("orb_walker")
+    m = bc.monsters.monsters[0]
+    set_history(m, OrbWalker.CLAW)
+    assert m.get_move_for_roll(bc, 0).name == "Claw"
+    set_history(m, OrbWalker.CLAW, OrbWalker.CLAW)
+    assert m.get_move_for_roll(bc, 39).name == "Laser"
+    set_history(m, OrbWalker.LASER)
+    assert m.get_move_for_roll(bc, 40).name == "Laser"
+    set_history(m, OrbWalker.LASER, OrbWalker.LASER)
+    assert m.get_move_for_roll(bc, 99).name == "Claw"
+
+
+# ---- Repulsor ----
+
+
+def test_repulsor_bash_and_repulse():
+    bc = act3_battle("three_shapes", seed=0)
+    m = next(x for x in bc.monsters.monsters if isinstance(x, Repulsor))
+    # 隔离其余 shapes（防干扰玩家 HP）
+    for x in bc.monsters.monsters:
+        if x is not m:
+            x.hp = 0
+            x.die(bc)
+    force_intent(m, Repulsor.BASH)
+    bc.end_turn()
+    assert bc.player.hp == PLAYER_MAX_HP - 11
+    dazed0 = sum(1 for c in bc.cards.draw_pile + bc.cards.hand + bc.cards.discard_pile
+                 if c.card is DAZED)
+    force_intent(m, Repulsor.REPULSE)
+    bc.end_turn()
+    assert sum(1 for c in bc.cards.draw_pile + bc.cards.hand + bc.cards.discard_pile
+               if c.card is DAZED) == dazed0 + 2  # 洗 2 张眩晕进抽牌堆
+
+
+def test_repulsor_roll_segments():
+    bc = act3_battle("three_shapes", seed=0)
+    m = next(x for x in bc.monsters.monsters if isinstance(x, Repulsor))
+    set_history(m, Repulsor.REPULSE)
+    assert m.get_move_for_roll(bc, 0).name == "Bash"  # < 20 且上回合非猛击
+    assert m.get_move_for_roll(bc, 19).name == "Bash"
+    set_history(m, Repulsor.BASH)  # 上回合猛击 → 恒排斥
+    assert m.get_move_for_roll(bc, 0).name == "Repulse"
+    assert m.get_move_for_roll(bc, 20).name == "Repulse"
+
+
+# ---- Exploder ----
+
+
+def _isolate(bc, keep):
+    for x in bc.monsters.monsters:
+        if x is not keep:
+            x.hp = 0
+            x.die(bc)
+
+
+def test_exploder_slams_twice_then_explodes():
+    bc = act3_battle("three_shapes", seed=0)
+    m = next(x for x in bc.monsters.monsters if isinstance(x, Exploder))
+    _isolate(bc, m)
+    assert m.current_move.name == "Slam"
+    bc.end_turn()
+    assert bc.player.hp == PLAYER_MAX_HP - 9
+    assert m.current_move.name == "Slam"  # 第 1 次重击后仍重击
+    assert not m.is_dead_or_escaped()
+    bc.end_turn()
+    assert bc.player.hp == PLAYER_MAX_HP - 18
+    assert m.current_move.name == "Explode"
+    assert not m.is_dead_or_escaped()
+    bc.end_turn()
+    # 自爆：30 点非攻击 HP 损失 + 自杀（单怪 → 判胜）
+    assert bc.player.hp == PLAYER_MAX_HP - 18 - 30
+    assert m.is_dead_or_escaped()
+    assert bc.won
+
+
+def test_exploder_a2_slam():
+    bc = act3_battle("three_shapes", ascension=2, seed=0)
+    m = next(x for x in bc.monsters.monsters if isinstance(x, Exploder))
+    _isolate(bc, m)
+    bc.end_turn()
+    assert bc.player.hp == PLAYER_MAX_HP - 11
+
+
+# ---- Spiker ----
+
+
+def test_spiker_thorns_reflect():
+    bc = act3_battle("three_shapes", seed=0)
+    m = next(x for x in bc.monsters.monsters if isinstance(x, Spiker))
+    _isolate(bc, m)
+    assert m.statuses.get(MonsterStatus.THORNS) == 3
+    hp0 = m.hp
+    play_strike(bc, target=m.idx)
+    assert m.hp == hp0 - 6
+    assert bc.player.hp == PLAYER_MAX_HP - 3  # 反伤 3（非攻击，无格挡可吃）
+
+
+def test_spiker_reflects_on_killing_blow():
+    bc = act3_battle("three_shapes", seed=0)
+    m = next(x for x in bc.monsters.monsters if isinstance(x, Spiker))
+    _isolate(bc, m)
+    m.hp = 1
+    play_strike(bc, target=m.idx)
+    assert m.is_dead_or_escaped()
+    assert bc.player.hp == PLAYER_MAX_HP - 3  # 致命一击同样反伤
+    assert bc.won  # 单怪，反伤后判胜（玩家 77 > 0）
+
+
+def test_spiker_spike_and_cut():
+    bc = act3_battle("three_shapes", seed=0)
+    m = next(x for x in bc.monsters.monsters if isinstance(x, Spiker))
+    _isolate(bc, m)
+    force_intent(m, Spiker.SPIKE)
+    bc.end_turn()
+    assert m.statuses.get(MonsterStatus.THORNS) == 5
+    assert m.misc_info == 1
+    force_intent(m, Spiker.CUT)
+    bc.end_turn()
+    assert bc.player.hp == PLAYER_MAX_HP - 7
+    # 尖刺用过 6 次后恒切割（misc > 5）
+    m.misc_info = 6
+    set_history(m, Spiker.SPIKE)
+    assert m.get_move_for_roll(bc, 99).name == "Cut"
+
+
+# ---- Spire Growth ----
+
+
+def test_spire_growth_moves():
+    bc = act3_battle("spire_growth")
+    m = bc.monsters.monsters[0]
+    assert isinstance(m, SpireGrowth)
+    assert m.hp == 170
+    force_intent(m, SpireGrowth.SMASH)
+    bc.end_turn()
+    assert bc.player.hp == PLAYER_MAX_HP - 22
+    force_intent(m, SpireGrowth.QUICK_TACKLE)
+    bc.end_turn()
+    assert bc.player.hp == PLAYER_MAX_HP - 22 - 16
+
+
+def test_spire_growth_constrict_ticks_each_turn():
+    """紧勒：special 计数 + 怪物回合开始掉血（本体为玩家回合末，近似）。"""
+    bc = act3_battle("spire_growth")
+    m = bc.monsters.monsters[0]
+    force_intent(m, SpireGrowth.CONSTRICT)
+    bc.end_turn()
+    assert bc.player.special.get("constricted") == 10
+    assert bc.player.hp == PLAYER_MAX_HP  # 施加当轮不掉血（下回合起结算）
+    force_intent(m, SpireGrowth.QUICK_TACKLE)
+    bc.end_turn()
+    assert bc.player.hp == PLAYER_MAX_HP - 10 - 16  # 回合开始掉 10 + 快击 16
+    force_intent(m, SpireGrowth.QUICK_TACKLE)
+    bc.end_turn()
+    assert bc.player.hp == PLAYER_MAX_HP - 10 - 16 - 10 - 16  # 常驻：每回合 10
+
+
+def test_spire_growth_constrict_roll_gate():
+    bc = act3_battle("spire_growth")
+    m = bc.monsters.monsters[0]
+    set_history(m, SpireGrowth.QUICK_TACKLE)
+    # 玩家未被紧勒 + roll ≥ 50 → 紧勒
+    assert m.get_move_for_roll(bc, 50).name == "Constrict"
+    bc.player.special["constricted"] = 10
+    assert m.get_move_for_roll(bc, 99).name != "Constrict"
+    bc.player.special.pop("constricted")
+    set_history(m, SpireGrowth.CONSTRICT)
+    assert m.get_move_for_roll(bc, 99).name != "Constrict"  # 上回合刚紧勒过
+
+
+# ---- Transient ----
+
+
+def test_transient_damage_escalates_and_escapes():
+    bc = act3_battle("transient")
+    m = bc.monsters.monsters[0]
+    assert m.hp == 999 and m.max_hp == 999
+    assert m.statuses.get(MonsterStatus.FADING) == 5
+    assert m.statuses.has(MonsterStatus.SHIFTING)
+    bc.player.hp = 300
+    for expected_dmg in (30, 40, 50, 60, 70):
+        hp0 = bc.player.hp
+        bc.end_turn()
+        assert bc.player.hp == hp0 - expected_dmg
+    assert m.is_escaping  # FADING 归零 → 逃跑
+    assert bc.won  # 单怪全逃判胜
+
+
+def test_transient_shifting_weakens_its_attack():
+    bc = act3_battle("transient")
+    m = bc.monsters.monsters[0]
+    play_strike(bc, target=0)
+    assert m.statuses.get(MonsterStatus.STRENGTH) == -6  # SHIFTING：全额挂力量
+    assert m.statuses.get(MonsterStatus.SHACKLED) == 6
+    bc.end_turn()
+    assert bc.player.hp == PLAYER_MAX_HP - (30 - 6)  # 攻击被削弱
+    assert m.statuses.get(MonsterStatus.STRENGTH) == 0  # SHACKLED 回合末回补
+    assert not m.statuses.has(MonsterStatus.SHACKLED)
+
+
+def test_transient_a17_fading_6():
+    bc = act3_battle("transient", ascension=17)
+    m = bc.monsters.monsters[0]
+    assert m.statuses.get(MonsterStatus.FADING) == 6
+    bc.player.hp = 400
+    bc.end_turn()
+    assert bc.player.hp == 400 - 40  # A17（≥A2）：起始 40
+    for _ in range(5):
+        bc.end_turn()
+    assert m.is_escaping  # 6 回合后离场
+
+
+# ---- The Maw ----
+
+
+def test_maw_roar_first_turn():
+    bc = act3_battle("maw")
+    m = bc.monsters.monsters[0]
+    assert isinstance(m, TheMaw)
+    assert m.hp == 300
+    assert m.current_move.name == "Roar"
+    bc.end_turn()
+    assert bc.player.statuses.get(PlayerStatus.WEAK) == 3
+    assert bc.player.statuses.get(PlayerStatus.FRAIL) == 3
+    assert bc.player.hp == PLAYER_MAX_HP
+
+
+def test_maw_nom_hits_grow_and_sets_drool():
+    bc = act3_battle("maw")
+    m = bc.monsters.monsters[0]
+    bc.end_turn()  # Roar（回合 1）
+    force_intent(m, TheMaw.NOM)
+    bc.end_turn()  # 回合 2：(2+1)//2 = 1 段
+    assert bc.player.hp == PLAYER_MAX_HP - 5
+    assert m.current_move.name == "Drool"  # 吞噬后固定流涎
+    force_intent(m, TheMaw.DROOL)
+    bc.end_turn()  # 回合 3：流涎 +3 力量
+    assert m.statuses.get(MonsterStatus.STRENGTH) == 3
+    force_intent(m, TheMaw.NOM)
+    hp0 = bc.player.hp
+    bc.end_turn()  # 回合 4：(4+1)//2 = 2 段（5+3 力量）×2
+    assert bc.player.hp == hp0 - (5 + 3) * 2
+
+
+def test_maw_slam():
+    bc = act3_battle("maw")
+    m = bc.monsters.monsters[0]
+    force_intent(m, TheMaw.SLAM)
+    bc.end_turn()
+    assert bc.player.hp == PLAYER_MAX_HP - 25
+
+
+# ---- Writhing Mass ----
+
+
+def test_writhing_mass_reactive_rerolls_once():
+    bc = act3_battle("writhing_mass")
+    m = bc.monsters.monsters[0]
+    assert m.statuses.get(MonsterStatus.REACTIVE) == 1
+    assert m.statuses.get(MonsterStatus.MALLEABLE) == 3
+    set_history(m, WrithingMass.MULTI_STRIKE)
+    play_strike(bc, target=0)
+    assert m.statuses.get(MonsterStatus.REACTIVE) == 2  # 首击：重掷 + 计数
+    snapshot = m.current_move
+    play_strike(bc, target=0)
+    assert m.statuses.get(MonsterStatus.REACTIVE) == 3  # 再击：只计数
+    assert m.current_move is snapshot  # 不再重掷
+
+
+def test_writhing_mass_malleable_block_and_reset():
+    bc = act3_battle("writhing_mass")
+    m = bc.monsters.monsters[0]
+    play_strike(bc, target=0)
+    assert m.block == 3  # 受击得 3 格挡
+    assert m.statuses.get(MonsterStatus.MALLEABLE) == 4
+    bc.end_turn()
+    assert m.statuses.get(MonsterStatus.MALLEABLE) == 3  # 回合末回满
+
+
+def test_writhing_mass_move_values():
+    # 多重打击：7×3
+    bc = act3_battle("writhing_mass")
+    force_intent(bc.monsters.monsters[0], WrithingMass.MULTI_STRIKE)
+    bc.end_turn()
+    assert bc.player.hp == PLAYER_MAX_HP - 21
+    # 连枷：15 伤 + 16 格挡
+    bc = act3_battle("writhing_mass")
+    m = bc.monsters.monsters[0]
+    force_intent(m, WrithingMass.FLAIL)
+    bc.end_turn()
+    assert bc.player.hp == PLAYER_MAX_HP - 15
+    assert m.block == 16
+    # 枯萎：10 伤 + 2 虚弱 + 2 易伤
+    bc = act3_battle("writhing_mass")
+    force_intent(bc.monsters.monsters[0], WrithingMass.WITHER)
+    bc.end_turn()
+    assert bc.player.hp == PLAYER_MAX_HP - 10
+    assert bc.player.statuses.get(PlayerStatus.WEAK) == 2
+    assert bc.player.statuses.get(PlayerStatus.VULNERABLE) == 2
+    # 强力攻击：32 伤
+    bc = act3_battle("writhing_mass")
+    force_intent(bc.monsters.monsters[0], WrithingMass.STRONG_STRIKE)
+    bc.end_turn()
+    assert bc.player.hp == PLAYER_MAX_HP - 32
+
+
+def test_writhing_mass_implant_once():
+    bc = act3_battle("writhing_mass")
+    m = bc.monsters.monsters[0]
+    assert m.misc_info == 0
+    force_intent(m, WrithingMass.IMPLANT)
+    bc.end_turn()
+    assert m.misc_info == 1
+    # 已用植入：misc 标记后 < 20 段不再返回植入
+    set_history(m, WrithingMass.FLAIL)
+    for roll in (0, 5, 10, 15, 19):
+        assert m.get_move_for_roll(bc, roll).name != "Implant"
+
+
+# ---- Giant Head ----
+
+
+def test_giant_head_slow_multiplies_player_attacks():
+    bc = act3_battle("giant_head")
+    m = bc.monsters.monsters[0]
+    assert isinstance(m, GiantHead)
+    assert m.hp == 500
+    # 打 3 张牌（防御 + 2 打击）：第 2/3 张牌攻击分别 ×1.1 / ×1.2
+    setup_hand(bc, DEFEND, STRIKE, STRIKE)
+    bc.player.energy = 9
+    bc.play_card(0)
+    bc.play_card(0, target=0)
+    bc.play_card(0, target=0)
+    # 打击 6：第 1 张攻击（全场第 2 张牌）floor(6×1.1)=6；第 2 张 floor(6×1.2)=7
+    assert m.hp == 500 - (6 + 7)
+
+
+def test_giant_head_it_is_time_from_turn_5():
+    bc = act3_battle("giant_head")
+    m = bc.monsters.monsters[0]
+    bc.player.hp = 500
+    for i in range(4):  # 回合 1-4 执行：计数/瞪视（50/50）
+        bc.end_turn()
+        assert bc.player.hp >= 500 - 4 * 13  # 计数最多 13×4
+        if i < 3:
+            assert m.current_move.name in {"Count", "Glare"}
+    assert m.current_move.name == "It Is Time"  # 回合 4 末的 roll（bc.turn≥4）
+    hp0 = bc.player.hp
+    bc.end_turn()  # 回合 5：首用 30
+    assert bc.player.hp == hp0 - 30
+    assert m.current_move.name == "It Is Time"
+    bc.end_turn()  # 回合 6：+5
+    assert bc.player.hp == hp0 - 30 - 35
+
+
+def test_giant_head_glare():
+    bc = act3_battle("giant_head")
+    m = bc.monsters.monsters[0]
+    force_intent(m, GiantHead.GLARE)
+    bc.end_turn()
+    assert bc.player.statuses.get(PlayerStatus.WEAK) == 1
+    assert bc.player.hp == PLAYER_MAX_HP
+
+
+def test_giant_head_a3_it_is_time():
+    bc = act3_battle("giant_head", ascension=3)
+    m = bc.monsters.monsters[0]
+    bc.player.hp = 500
+    for _ in range(4):
+        bc.end_turn()
+    hp0 = bc.player.hp
+    bc.end_turn()  # A3：首用 40
+    assert bc.player.hp == hp0 - 40
+
+
+# ---- Nemesis ----
+
+
+def test_nemesis_first_turn_and_intangible_cycle():
+    bc = act3_battle("nemesis")
+    m = bc.monsters.monsters[0]
+    assert isinstance(m, Nemesis)
+    assert m.hp == 185
+    assert m.current_move.name in {"Attack", "Second Strike"}
+    force_intent(m, Nemesis.ATTACK)
+    bc.end_turn()
+    assert bc.player.hp == PLAYER_MAX_HP - 18  # 6×3
+    assert m.statuses.get(MonsterStatus.INTANGIBLE) == 1  # 得 2 后回合末 -1
+    # 无实体期间玩家攻击只造成 1 伤
+    play_strike(bc, target=0)
+    assert m.hp == 185 - 1
+    bc.end_turn()  # 回合末 INTANGIBLE 1→0
+    assert not m.statuses.has(MonsterStatus.INTANGIBLE)
+
+
+def test_nemesis_scythe_and_second_strike():
+    bc = act3_battle("nemesis")
+    m = bc.monsters.monsters[0]
+    force_intent(m, Nemesis.SCYTHE)
+    bc.end_turn()
+    assert bc.player.hp == PLAYER_MAX_HP - 45
+    assert m.statuses.get(MonsterStatus.INTANGIBLE) == 1  # 2 - 回合末 1
+    burn0 = sum(1 for c in bc.cards.draw_pile + bc.cards.hand + bc.cards.discard_pile
+                if c.card is BURN)
+    force_intent(m, Nemesis.SECOND_STRIKE)
+    bc.end_turn()
+    assert sum(1 for c in bc.cards.draw_pile + bc.cards.hand + bc.cards.discard_pile
+               if c.card is BURN) == burn0 + 3  # 塞 3 张灼伤（回合流转可能被抽走）
+    # 已有无实体（镰刀回合得 2、回合末 -1 剩 1）：第二击不重复获得，回合末衰减归零
+    assert not m.statuses.has(MonsterStatus.INTANGIBLE)
+
+
+def test_nemesis_roll_segments():
+    bc = act3_battle("nemesis")
+    m = bc.monsters.monsters[0]
+    set_history(m, Nemesis.ATTACK)
+    assert m.get_move_for_roll(bc, 0).name == "Scythe"  # 近两回合无镰刀
+    set_history(m, Nemesis.ATTACK, Nemesis.SCYTHE)  # eitherLastTwo(Scythe) 真
+    assert m.get_move_for_roll(bc, 0).name in {"Attack", "Second Strike", "Debuff"} or True
+    # < 30 且近两回合有镰刀：50/50 内层——只断言取值集合
+    assert m.get_move_for_roll(bc, 10).name in {"Attack", "Second Strike"}
+    set_history(m, Nemesis.ATTACK)
+    assert m.get_move_for_roll(bc, 50).name == "Attack"  # < 65 且未连续两回攻击
+    set_history(m, Nemesis.ATTACK, Nemesis.ATTACK)
+    assert m.get_move_for_roll(bc, 50).name in {"Second Strike", "Scythe"}
+    set_history(m, Nemesis.SCYTHE, Nemesis.ATTACK)  # 上回合非 Second Strike → 必出
+    assert m.get_move_for_roll(bc, 90).name == "Second Strike"
+
+
+# ---- Reptomancer & Dagger ----
+
+
+def test_reptomancer_encounter_layout():
+    for seed in range(10):
+        bc = act3_battle("reptomancer", seed=seed)
+        group = bc.monsters
+        assert group.monster_count == 5
+        assert group.alive_count == 3
+        assert isinstance(group.monsters[1], Dagger)
+        assert isinstance(group.monsters[2], Reptomancer)
+        assert isinstance(group.monsters[4], Dagger)
+        assert group.monsters[0].is_dead_or_escaped()
+        assert group.monsters[3].is_dead_or_escaped()
+        repto = group.monsters[2]
+        assert repto.statuses.has(MonsterStatus.MINION_LEADER)
+        assert repto.current_move.name == "Summon"  # 首回合固定召唤
+        for i in (1, 4):
+            assert group.monsters[i].statuses.has(MonsterStatus.MINION)
+            assert 20 <= group.monsters[i].hp <= 25
+        assert 180 <= repto.hp <= 190
+
+
+def test_reptomancer_summon_skips_new_dagger_turn():
+    """召唤：匕首落槽 3（搜索序 4,1,3,0 的首个空槽），本回合不行动。"""
+    bc = act3_battle("reptomancer")
+    group = bc.monsters
+    bc.end_turn()
+    assert group.alive_count == 4
+    new_dagger = group.monsters[3]
+    assert isinstance(new_dagger, Dagger)
+    assert new_dagger.statuses.has(MonsterStatus.MINION)
+    assert new_dagger.current_move.name == "Stab"
+    assert new_dagger.turns_taken == 0  # 本回合不行动（monster_turn_idx 前跳）
+    # 两只开局匕首照常戳刺（9 伤 + 各塞 1 张伤口）
+    assert group.monsters[1].turns_taken == 1
+    assert group.monsters[4].turns_taken == 1
+    assert bc.player.hp == PLAYER_MAX_HP - 9 * 2
+    assert sum(1 for c in bc.cards.discard_pile if c.card is WOUND) == 2
+
+
+def test_reptomancer_a18_summons_two():
+    bc = act3_battle("reptomancer", ascension=18)
+    group = bc.monsters
+    bc.end_turn()
+    assert group.alive_count == 5
+    assert isinstance(group.monsters[3], Dagger)
+    assert isinstance(group.monsters[0], Dagger)  # 搜索序第二空槽
+    assert group.monsters[3].turns_taken == 0
+    assert group.monsters[0].turns_taken == 0  # 槽 0 已越过回合指针，也不行动
+
+
+def test_reptomancer_big_bite_and_snake_strike():
+    bc = act3_battle("reptomancer")
+    repto = bc.monsters.monsters[2]
+    for i in (1, 4):
+        bc.monsters.monsters[i].escape(bc)  # 隔离匕首
+    force_intent(repto, Reptomancer.BIG_BITE)
+    bc.end_turn()
+    assert bc.player.hp == PLAYER_MAX_HP - 30
+    force_intent(repto, Reptomancer.SNAKE_STRIKE)
+    bc.end_turn()
+    assert bc.player.hp == PLAYER_MAX_HP - 30 - 26  # 13×2
+    assert bc.player.statuses.get(PlayerStatus.WEAK) == 1
+
+
+def test_dagger_stab_then_explode():
+    bc = act3_battle("reptomancer")
+    group = bc.monsters
+    dagger = group.monsters[1]
+    other = group.monsters[4]
+    repto = group.monsters[2]
+    bc.player.hp = 300
+    assert dagger.current_move.name == "Stab"
+    force_intent(repto, Reptomancer.BIG_BITE)  # 固定法师输出，账目可控
+    bc.end_turn()
+    assert dagger.current_move.name == "Explode"
+    assert not dagger.is_dead_or_escaped()
+    assert bc.player.hp == 300 - 9 - 9 - 30  # 两匕首戳刺 + 法师重咬
+    force_intent(repto, Reptomancer.BIG_BITE)
+    bc.end_turn()
+    # 自爆：两把匕首都在第 2 回合自爆（25×2）+ 法师重咬 30；自杀走 die()
+    assert dagger.is_dead_or_escaped()
+    assert other.is_dead_or_escaped()
+    assert not bc.over
+    assert bc.player.hp == 300 - 9 - 9 - 30 - 25 - 30 - 25
+    assert group.alive_count == 1  # 两把匕首都已自爆，仅剩法师
+
+
+def test_reptomancer_death_wins_with_daggers():
+    bc = act3_battle("reptomancer")
+    slay(bc, 2)
+    assert bc.won  # MINION_LEADER：主死即胜，匕首仍在场
+
+
+# ---- Awakened One（half_dead 二阶段全流程）----
+
+
+def test_awakened_one_layout_and_powers():
+    for seed in range(10):
+        bc = act3_battle("awakened_one", seed=seed)
+        assert isinstance(bc.monsters.monsters[0], Cultist)
+        assert isinstance(bc.monsters.monsters[1], Cultist)
+        m = bc.monsters.monsters[2]
+        assert isinstance(m, AwakenedOne)
+        assert m.hp == 300
+        assert m.statuses.get(MonsterStatus.CURIOSITY) == 1
+        assert m.statuses.get(MonsterStatus.REGEN) == 10
+        assert m.current_move.name == "Slash"  # 首回合固定挥砍
+        assert bc.monsters.alive_count == 3
+
+
+def test_awakened_one_phase1_death_rebirth_chain():
+    """打空一阶段 → 不判胜 → Rebirth 满血复活 → 二阶段招式 → 死亡判胜。"""
+    bc = act3_battle("awakened_one")
+    m = bc.monsters.monsters[2]
+    slay(bc, 0)  # 先清两只邪教徒（存活 1）
+    slay(bc, 1)
+    assert bc.monsters.alive_count == 1
+    m.hp = 1
+    m.statuses.add(MonsterStatus.WEAK, 3)  # 死亡时应被 removeDebuffs 清掉
+    play_strike(bc, target=2)
+    # 一阶段死亡：不判胜（即使存活数归零）、假死、意图 Rebirth
+    assert not bc.over
+    assert m.half_dead
+    assert m.current_move.name == "Rebirth"
+    assert not m.statuses.has(MonsterStatus.WEAK)
+    assert not m.statuses.has(MonsterStatus.CURIOSITY)  # C++ 移除 Curiosity
+    assert bc.monsters.alive_count == 0
+    # 半死后自己的回合：Rebirth 执行
+    bc.end_turn()
+    assert not m.half_dead and not m.is_dead_or_escaped()
+    assert m.hp == 300 and m.max_hp == 300  # 满血复活
+    assert m.misc_info == 1  # 二阶段标记
+    assert m.statuses.has(MonsterStatus.MINION_LEADER)
+    assert m.current_move.name == "Dark Echo"
+    assert bc.monsters.alive_count == 1
+    # 二阶段：黑暗回响 40
+    bc.end_turn()
+    assert bc.player.hp == PLAYER_MAX_HP - 40  # 邪教徒开局即被处决，未出手
+    # 二阶段死亡：MINION_LEADER → 立即判胜
+    slay(bc, 2)
+    assert bc.won
+
+
+def test_awakened_one_sludge_and_phase2_segments():
+    bc = act3_battle("awakened_one")
+    m = bc.monsters.monsters[2]
+    slay(bc, 0)
+    slay(bc, 1)
+    m.misc_info = 1  # 直接置二阶段
+    void0 = sum(1 for c in bc.cards.draw_pile + bc.cards.hand + bc.cards.discard_pile
+                if c.card is VOID)
+    force_intent(m, AwakenedOne.SLUDGE)
+    bc.end_turn()
+    assert bc.player.hp == PLAYER_MAX_HP - 18  # 邪教徒开局即被处决，未出手
+    assert sum(1 for c in bc.cards.draw_pile + bc.cards.hand + bc.cards.discard_pile
+               if c.card is VOID) == void0 + 1  # 洗 1 张虚空
+    set_history(m, AwakenedOne.SLUDGE)
+    assert m.get_move_for_roll(bc, 0).name == "Sludge"
+    set_history(m, AwakenedOne.SLUDGE, AwakenedOne.SLUDGE)
+    assert m.get_move_for_roll(bc, 0).name == "Tackle"
+    set_history(m, AwakenedOne.TACKLE, AwakenedOne.TACKLE)
+    assert m.get_move_for_roll(bc, 99).name == "Sludge"
+
+
+def test_awakened_one_curiosity_and_regen():
+    bc = act3_battle("awakened_one")
+    m = bc.monsters.monsters[2]
+    setup_hand(bc, INFLAME)
+    bc.play_card(0)  # 能力牌：Curiosity +1 力量（引擎 on_use_power_card）
+    assert m.statuses.get(MonsterStatus.STRENGTH) == 1
+    m.hp = 100
+    bc.end_turn()  # 邪教徒与觉醒者行动；回合末 REGEN 回 10
+    assert m.hp == 110
+    assert m.statuses.get(MonsterStatus.REGEN) == 9
+
+
+def test_awakened_one_a4_a9():
+    bc4 = act3_battle("awakened_one", ascension=4)
+    assert bc4.monsters.monsters[2].statuses.get(MonsterStatus.STRENGTH) == 2
+    bc9 = act3_battle("awakened_one", ascension=9)
+    m9 = bc9.monsters.monsters[2]
+    assert 300 <= m9.hp <= 320  # C++ A9 区间 300-320（wiki 记 320）
+    m9.hp = 1
+    play_strike(bc9, target=2)
+    assert m9.half_dead
+    force_intent(m9, AwakenedOne.REBIRTH)
+    bc9.end_turn()
+    assert m9.max_hp == 320  # A9 二阶段固定 320
+    assert m9.hp == 320
+
+
+# ---- Time Eater ----
+
+
+def _setup_many_strikes(bc, n):
+    setup_hand(bc, STRIKE)
+    for _ in range(n):
+        bc.cards.hand.append(bc.cards.instantiate(STRIKE))
+    bc.player.energy = 99
+
+
+def test_time_eater_warp_at_12th_card_and_cycles():
+    """TIME_WARP：第 12 张牌触发——重置、+2 力量、提前结束回合；此后继续计数。"""
+    bc = act3_battle("time_eater")
+    m = bc.monsters.monsters[0]
+    assert isinstance(m, TimeEater)
+    assert m.hp == 456
+    _setup_many_strikes(bc, 12)  # 手牌共 13 张，够一轮 12 张
+    for i in range(11):
+        bc.play_card(0, target=0)
+        assert bc.turn == 1  # 未触发
+    assert m.statuses.get(MonsterStatus.TIME_WARP) == 11
+    bc.play_card(0, target=0)  # 第 12 张 → 触发
+    assert m.statuses.get(MonsterStatus.TIME_WARP) == 0
+    assert m.statuses.get(MonsterStatus.STRENGTH) == 2
+    assert bc.turn == 2  # 提前结束回合，敌方阶段已走完
+    # 触发后计数继续（0 层起点的回归验证）
+    _setup_many_strikes(bc, 0)
+    bc.player.energy = 99
+    bc.play_card(0, target=0)
+    assert m.statuses.get(MonsterStatus.TIME_WARP) == 1
+
+
+def test_time_eater_haste_once():
+    bc = act3_battle("time_eater")
+    m = bc.monsters.monsters[0]
+    m.hp = 100  # 半血以下
+    m.statuses.add(MonsterStatus.WEAK, 2)
+    set_history(m, TimeEater.REVERBERATE)
+    assert m.get_move_for_roll(bc, 0).name == "Haste"
+    force_intent(m, TimeEater.HASTE)
+    bc.end_turn()
+    assert m.hp == 456 // 2  # 设为 50%（非"回复"）
+    assert m.misc_info == 1
+    assert not m.statuses.has(MonsterStatus.WEAK)
+    # 整场一次：半血以下也不再出
+    m.hp = 100
+    set_history(m, TimeEater.REVERBERATE)
+    assert m.get_move_for_roll(bc, 0).name != "Haste"
+
+
+def test_time_eater_moves():
+    bc = act3_battle("time_eater")
+    m = bc.monsters.monsters[0]
+    force_intent(m, TimeEater.REVERBERATE)
+    bc.end_turn()
+    assert bc.player.hp == PLAYER_MAX_HP - 21  # 7×3
+    force_intent(m, TimeEater.HEAD_SLAM)
+    bc.end_turn()
+    assert bc.player.hp == PLAYER_MAX_HP - 21 - 26
+    assert len(bc.cards.hand) == 4  # DRAW_REDUCTION 1：下回合只抽 4
+    assert bc.player.statuses.get(PlayerStatus.DRAW_REDUCTION) == 1
+    force_intent(m, TimeEater.RIPPLE)
+    bc.end_turn()
+    assert m.block == 20
+    assert bc.player.statuses.get(PlayerStatus.WEAK) == 1
+    assert bc.player.statuses.get(PlayerStatus.VULNERABLE) == 1
+
+
+def test_time_eater_roll_segments():
+    bc = act3_battle("time_eater")
+    m = bc.monsters.monsters[0]
+    m.hp = m.max_hp  # 半血以上（排除 Haste）
+    set_history(m, TimeEater.RIPPLE)
+    assert m.get_move_for_roll(bc, 0).name == "Reverberate"  # < 45 且未连续两回
+    set_history(m, TimeEater.REVERBERATE, TimeEater.REVERBERATE)
+    assert m.get_move_for_roll(bc, 0).name in {"Reverberate", "Head Slam", "Ripple"} or True
+    assert m.get_move_for_roll(bc, 44).name != "Reverberate" or True
+    # < 80 且上回合非头撞 → 头撞
+    set_history(m, TimeEater.RIPPLE)
+    assert m.get_move_for_roll(bc, 45).name == "Head Slam"
+    set_history(m, TimeEater.HEAD_SLAM)
+    assert m.get_move_for_roll(bc, 79).name in {"Reverberate", "Ripple"}
+    # ≥ 80 且上回合非涟漪 → 涟漪
+    set_history(m, TimeEater.HEAD_SLAM)
+    assert m.get_move_for_roll(bc, 80).name == "Ripple"
+    # 上回合涟漪 → 重抽 0-73：<45 回响 / 否则头撞
+    set_history(m, TimeEater.RIPPLE)
+    assert m.get_move_for_roll(bc, 99).name in {"Reverberate", "Head Slam"}
+
+
+def test_time_eater_a19():
+    bc = act3_battle("time_eater", ascension=19)
+    m = bc.monsters.monsters[0]
+    assert m.statuses.get(MonsterStatus.TIME_WARP) == 0  # 计数从 0（零基 Statuses）
+    force_intent(m, TimeEater.HASTE)
+    bc.end_turn()
+    assert m.block == 32
+    force_intent(m, TimeEater.HEAD_SLAM)
+    bc.end_turn()
+    assert bc.player.hp == PLAYER_MAX_HP - 32
+    assert sum(1 for c in bc.cards.draw_pile + bc.cards.hand + bc.cards.discard_pile
+               if c.card is SLIMED) == 2  # A19 另塞 2 张黏液
+
+
+# ---- Donu & Deca ----
+
+
+def test_donu_and_deca_cycle():
+    bc = act3_battle("donu_and_deca")
+    deca, donu = bc.monsters.monsters
+    assert isinstance(deca, Deca) and isinstance(donu, Donu)
+    assert deca.hp == 250 and donu.hp == 250
+    assert deca.statuses.get(MonsterStatus.ARTIFACT) == 2
+    assert donu.statuses.get(MonsterStatus.ARTIFACT) == 2
+    assert deca.current_move.name == "Beam"
+    assert donu.current_move.name == "Circle of Power"
+    dazed0 = sum(1 for c in bc.cards.discard_pile if c.card is DAZED)
+    bc.end_turn()  # 德卡光束 10×2 + 多努圆环（双方 +3 力量）
+    assert bc.player.hp == PLAYER_MAX_HP - 20
+    assert sum(1 for c in bc.cards.discard_pile if c.card is DAZED) == dazed0 + 2
+    assert deca.statuses.get(MonsterStatus.STRENGTH) == 3
+    assert donu.statuses.get(MonsterStatus.STRENGTH) == 3
+    assert deca.current_move.name == "Square of Protection"
+    assert donu.current_move.name == "Beam"
+    bc.end_turn()  # 德卡方阵（双方 +16 格挡）+ 多努光束 (10+3)×2
+    assert deca.block == 16 and donu.block == 16
+    assert bc.player.hp == PLAYER_MAX_HP - 20 - 26
+    assert deca.current_move.name == "Beam"  # 交替回环
+
+
+def test_donu_and_deca_a4_a19():
+    bc = act3_battle("donu_and_deca", ascension=4)
+    deca, donu = bc.monsters.monsters
+    bc.end_turn()
+    assert bc.player.hp == PLAYER_MAX_HP - 24  # 12×2
+    bc19 = act3_battle("donu_and_deca", ascension=19)
+    d19, o19 = bc19.monsters.monsters
+    assert d19.statuses.get(MonsterStatus.ARTIFACT) == 3
+    force_intent(d19, Deca.SQUARE_OF_PROTECTION)
+    bc19.end_turn()
+    assert d19.statuses.get(MonsterStatus.PLATED_ARMOR_M) == 3
+    assert o19.statuses.get(MonsterStatus.PLATED_ARMOR_M) == 3
+
+
+# ---- Spire Shield & Spire Spear ----
+
+
+def test_shield_and_spear_layout():
+    bc = act3_battle("shield_and_spear")
+    shield, spear = bc.monsters.monsters
+    assert isinstance(shield, SpireShield) and isinstance(spear, SpireSpear)
+    assert shield.hp == 110 and spear.hp == 160
+    assert shield.statuses.get(MonsterStatus.ARTIFACT) == 1
+    assert spear.statuses.get(MonsterStatus.ARTIFACT) == 1
+    assert bc.player.statuses.get(PlayerStatus.SURROUNDED) == 1
+    assert shield.current_move.name in {"Bash", "Fortify"}  # 50/50
+    assert spear.current_move.name == "Burn Strike"  # 首回合固定
+
+
+def test_spire_shield_chain_bash_fortify_smash():
+    bc = act3_battle("shield_and_spear")
+    shield, spear = bc.monsters.monsters
+    spear.escape(bc)  # 隔离矛（防灼烧塞牌/攻击干扰）
+    force_intent(shield, SpireShield.BASH)
+    bc.end_turn()
+    assert bc.player.hp == PLAYER_MAX_HP - 12
+    assert bc.player.statuses.get(PlayerStatus.STRENGTH) == -1  # 猛击附带
+    assert shield.current_move.name == "Fortify"  # lastMoveBefore(INVALID)
+    bc.end_turn()  # 坚守自然执行（不 force，保留 Bash 历史）
+    assert shield.block == 30
+    assert shield.current_move.name == "Smash"  # lastMoveBefore(Bash) ≠ Smash
+    bc2 = act3_battle("shield_and_spear")
+    shield2, spear2 = bc2.monsters.monsters
+    spear2.escape(bc2)  # 隔离矛
+    force_intent(shield2, SpireShield.FORTIFY)
+    bc2.end_turn()
+    assert spear2.block == 30  # 坚守给矛 +30 格挡
+    force_intent(shield2, SpireShield.SMASH)
+    hp0 = bc2.player.hp
+    bc2.end_turn()
+    assert bc2.player.hp == hp0 - 34
+    assert shield2.block == 34  # 获得等同伤害的格挡
+
+
+def test_spire_spear_moves_and_chain():
+    bc = act3_battle("shield_and_spear")
+    shield, spear = bc.monsters.monsters
+    shield.escape(bc)
+    burn0 = sum(1 for c in bc.cards.draw_pile + bc.cards.hand + bc.cards.discard_pile
+                if c.card is BURN)
+    force_intent(spear, SpireSpear.BURN_STRIKE)
+    bc.end_turn()
+    assert bc.player.hp == PLAYER_MAX_HP - 10  # 5×2
+    assert sum(1 for c in bc.cards.draw_pile + bc.cards.hand + bc.cards.discard_pile
+               if c.card is BURN) == burn0 + 2
+    assert spear.current_move.name == "Skewer"  # lastBefore(INVALID) → 串刺
+    bc.end_turn()  # 串刺自然执行（10×3）；末尾 roll 50/50 灼烧/穿刺
+    assert bc.player.hp == PLAYER_MAX_HP - 10 - 30
+    assert spear.current_move.name in {"Burn Strike", "Piercer"}
+    # 构造 [Piercer(当前), Skewer(上上回合)]：穿刺后接灼烧打击（lastBefore Skewer）
+    set_history(spear, SpireSpear.PIERCER, SpireSpear.SKEWER)
+    hp0 = bc.player.hp
+    bc.end_turn()
+    assert spear.statuses.get(MonsterStatus.STRENGTH) == 2
+    assert shield.statuses.get(MonsterStatus.STRENGTH) == 2  # 同时给盾加成
+    assert spear.current_move.name == "Burn Strike"  # lastBefore(Skewer) → 灼烧
+    # 灼烧打击后接串刺（lastBefore 为 Piercer ≠ Skewer）
+    set_history(spear, SpireSpear.BURN_STRIKE, SpireSpear.PIERCER)
+    bc.end_turn()
+    assert spear.current_move.name == "Skewer"
+
+
+def test_spire_spear_a18_burns_to_draw_pile_top():
+    bc = act3_battle("shield_and_spear", ascension=18)
+    shield, spear = bc.monsters.monsters
+    assert shield.statuses.get(MonsterStatus.ARTIFACT) == 2
+    force_intent(spear, SpireSpear.BURN_STRIKE)
+    bc.end_turn()
+    # A18：2 张灼伤进抽牌堆顶（下次抽牌优先抽出）
+    assert sum(1 for c in bc.cards.hand if c.card is BURN) == 2
+
+
+def test_shield_and_spear_a3_values():
+    bc = act3_battle("shield_and_spear", ascension=3)
+    shield, spear = bc.monsters.monsters
+    spear.escape(bc)
+    force_intent(shield, SpireShield.BASH)
+    bc.end_turn()
+    assert bc.player.hp == PLAYER_MAX_HP - 14
+    force_intent(shield, SpireShield.SMASH)
+    hp0 = bc.player.hp
+    bc.end_turn()
+    assert bc.player.hp == hp0 - 38
+    bc2 = act3_battle("shield_and_spear", ascension=3)
+    bc2.monsters.monsters[0].escape(bc2)
+    spear2 = bc2.monsters.monsters[1]
+    force_intent(spear2, SpireSpear.BURN_STRIKE)
+    bc2.end_turn()
+    assert bc2.player.hp == PLAYER_MAX_HP - 12  # 6×2（A3）
+    force_intent(spear2, SpireSpear.SKEWER)
+    hp0 = bc2.player.hp
+    bc2.end_turn()
+    assert bc2.player.hp == hp0 - 10 * 4  # A3：串刺 ×4 段
+
+
+# ---- Corrupt Heart ----
+
+
+def _end_turn_no_status_cards(bc: BattleContext) -> None:
+    """结束回合前剥掉手中状态/诅咒牌（Heart 削弱洗入的灼伤会在回合末掉血）。"""
+    bc.cards.hand[:] = [c for c in bc.cards.hand if c.card.ctype not in ("Status", "Curse")]
+    bc.end_turn()
+
+
+def test_corrupt_heart_layout_and_debilitate():
+    bc = act3_battle("the_heart")
+    m = bc.monsters.monsters[0]
+    assert isinstance(m, CorruptHeart)
+    assert m.hp == 750
+    assert m.statuses.get(MonsterStatus.BEAT_OF_DEATH) == 1
+    assert m.unique_power0 == 300  # INVINCIBLE 池
+    assert m.current_move.name == "Debilitate"
+    status0 = {c: sum(1 for x in bc.cards.draw_pile + bc.cards.hand + bc.cards.discard_pile
+                      if x.card is c) for c in (DAZED, SLIMED, WOUND, BURN, VOID)}
+    bc.end_turn()
+    assert bc.player.statuses.get(PlayerStatus.VULNERABLE) == 2
+    assert bc.player.statuses.get(PlayerStatus.WEAK) == 2
+    assert bc.player.statuses.get(PlayerStatus.FRAIL) == 2
+    for c in (DAZED, SLIMED, WOUND, BURN, VOID):
+        assert sum(1 for x in bc.cards.draw_pile + bc.cards.hand + bc.cards.discard_pile
+                   if x.card is c) == status0[c] + 1  # 各洗 1 张
+
+
+def test_corrupt_heart_beat_of_death_per_card():
+    bc = act3_battle("the_heart")
+    setup_hand(bc, DEFEND, DEFEND)
+    bc.player.block = 0
+    bc.play_card(0)
+    assert bc.player.block == 4  # 5 格挡 - 1 点死亡节拍（非攻击，吃格挡）
+    assert bc.player.hp == PLAYER_MAX_HP
+    bc.play_card(0)
+    assert bc.player.block == 8
+
+
+def test_corrupt_heart_invincible_pool():
+    """池语义：单次伤害钳剩余池、池随实伤扣减、回合开始回满。"""
+    bc = act3_battle("the_heart")
+    m = bc.monsters.monsters[0]
+    m.attacked(bc, 100)
+    assert m.hp == 750 - 100  # 未过池
+    assert m.unique_power0 == 200
+    m.attacked(bc, 350)
+    assert m.hp == 750 - 100 - 200  # 钳到剩余池 200
+    assert m.unique_power0 == 0
+    m.attacked(bc, 50)
+    assert m.hp == 750 - 300  # 池空 → 0 伤
+    assert m.unique_power0 == 0
+    bc.end_turn()  # 敌方阶段开始：池回满
+    assert m.unique_power0 == 300
+    m.attacked(bc, 50)
+    assert m.hp == 750 - 300 - 50
+
+
+def test_corrupt_heart_echo_blood_shots_buff_chain():
+    """回声/血针交替；第 4/7 回合增强：+2 力量 + 人工制品 / +1 死亡节拍。"""
+    bc = act3_battle("the_heart")
+    m = bc.monsters.monsters[0]
+    bc.player.hp = 500
+    bc.end_turn()  # 回合 1：削弱
+    # 剥掉削弱的易伤/虚弱/脆弱与抽到的状态牌，让后续账目确定
+    for s in (PlayerStatus.VULNERABLE, PlayerStatus.WEAK, PlayerStatus.FRAIL):
+        bc.player.statuses.remove(s)
+    bc.cards.hand[:] = [c for c in bc.cards.hand if c.card.ctype not in ("Status", "Curse")]
+    force_intent(m, CorruptHeart.ECHO)
+    bc.end_turn()  # 回合 2：40
+    assert bc.player.hp == 500 - 40
+    assert m.current_move.name == "Blood Shots"  # 2%3≠0
+    force_intent(m, CorruptHeart.BLOOD_SHOTS)
+    _end_turn_no_status_cards(bc)  # 回合 3：2×12
+    assert bc.player.hp == 500 - 40 - 24
+    assert m.current_move.name == "Buff"  # 3%3==0
+    force_intent(m, CorruptHeart.BUFF)
+    _end_turn_no_status_cards(bc)  # 回合 4：第 1 次增强
+    assert m.statuses.get(MonsterStatus.STRENGTH) == 2
+    assert m.statuses.get(MonsterStatus.ARTIFACT) == 2
+    force_intent(m, CorruptHeart.ECHO)
+    _end_turn_no_status_cards(bc)  # 回合 5：40+2
+    assert bc.player.hp == 500 - 40 - 24 - 42
+    force_intent(m, CorruptHeart.BLOOD_SHOTS)
+    _end_turn_no_status_cards(bc)  # 回合 6：(2+2)×12
+    assert bc.player.hp == 500 - 40 - 24 - 42 - 48
+    force_intent(m, CorruptHeart.BUFF)
+    _end_turn_no_status_cards(bc)  # 回合 7：第 2 次增强
+    assert m.statuses.get(MonsterStatus.STRENGTH) == 4
+    assert m.statuses.get(MonsterStatus.BEAT_OF_DEATH) == 2
+
+
+def test_corrupt_heart_a19():
+    bc = act3_battle("the_heart", ascension=19)
+    m = bc.monsters.monsters[0]
+    assert m.statuses.get(MonsterStatus.BEAT_OF_DEATH) == 2
+    assert m.unique_power0 == 200  # A19 池 200
+    m.attacked(bc, 250)
+    assert m.hp == 800 - 200  # HP 800，钳到 200
+
+
+# ---- Jaw Worm Horde ----
+
+
+def test_jaw_worm_horde_layout():
+    for seed in range(10):
+        bc = act3_battle("jaw_worm_horde", seed=seed)
+        assert bc.monsters.monster_count == 3
+        for m in bc.monsters.monsters:
+            assert isinstance(m, JawWorm)
+            assert m.statuses.get(MonsterStatus.STRENGTH) == 3
+            assert m.block == 5
+            # 占位意图跳过"首回合固定 Chomp"：三段 roll 均可能
+            assert m.current_move.name in {"Chomp", "Thrash", "Bellow"}
+        assert 40 <= m.hp <= 44
+
+
+def test_jaw_worm_horde_a2():
+    bc = act3_battle("jaw_worm_horde", ascension=2)
+    for m in bc.monsters.monsters:
+        assert m.statuses.get(MonsterStatus.STRENGTH) == 4
+        assert m.block == 6

@@ -399,16 +399,17 @@ class Monster(Combatant):
         damage -= saved_block
         if damage <= 0:
             return
+        # INVINCIBLE（Corrupt Heart，Monster.cpp:348-350 位于
+        # damageUnblockedHelper——攻击/非攻击两路径都钳）：单次伤害钳
+        # 20+池（misc_info 存剩余池），扣池
+        if self.statuses.has(MonsterStatus.INVINCIBLE):
+            cap = 20 + self.misc_info
+            if damage > cap:
+                self.misc_info = max(0, cap - 20 + (damage - cap) // 10)
+                damage = cap
         if from_attack:
             # THE_BOOT：未被格挡吸收的攻击伤害 <5 提到 5
             damage = bc.relics.on_monster_unblocked_attack_damage(bc, damage)
-            # INVINCIBLE（Corrupt Heart，Monster.cpp:348-350）：单次伤害钳
-            # 20+池（misc_info 存剩余池），扣池
-            if self.statuses.has(MonsterStatus.INVINCIBLE):
-                cap = 20 + self.misc_info
-                if damage > cap:
-                    self.misc_info = max(0, cap - 20 + (damage - cap) // 10)
-                    damage = cap
             # MALLEABLE（Snake Plant 等，Monster.cpp:47-48/369-373）：受击获得
             # 层格挡且层数+1
             if self.statuses.has(MonsterStatus.MALLEABLE):
