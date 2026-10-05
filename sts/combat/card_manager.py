@@ -116,12 +116,16 @@ class CardManager:
         self.draw_pile.insert(idx, inst)
 
     def create_temp_card_in_hand(self, card: CardDef, upgraded: bool = False) -> None:
-        """临时牌入手（Power Through 的伤口 / Infernal Blade 的随机攻击）。"""
-        if len(self.hand) >= MAX_HAND_SIZE:
-            return  # 手牌满：生成牌直接消失（对齐本体手牌上限）
+        """临时牌入手（Power Through 的伤口 / Infernal Blade 的随机攻击）。
+
+        满手进弃牌堆（对齐 moveToHandHelper else 分支，BattleContext.cpp:2531-2539）。
+        """
         inst = self.instantiate(card)
         inst.upgraded = upgraded
-        self.hand.append(inst)
+        if len(self.hand) < MAX_HAND_SIZE:
+            self.hand.append(inst)
+        else:
+            self.discard_pile.append(inst)
 
     def append_to_draw_top(self, inst: CardInstance) -> None:
         """把实例放到抽牌堆顶（Headbutt/Warcry 的置顶效果）。

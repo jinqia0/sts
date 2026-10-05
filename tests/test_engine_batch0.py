@@ -809,3 +809,17 @@ def test_play_top_card_factory_resolves_target_and_free():
     assert m.hp < hp0  # 免费打出并造成伤害
     assert bc.player.energy == energy0
     assert any(c.card is STRIKE for c in bc.cards.exhaust_pile), "顶牌打完消耗"
+
+
+def test_temp_card_in_hand_full_goes_to_discard():
+    """临时牌满手进弃牌堆（对齐 moveToHandHelper else 分支）。"""
+    from sts.content.cards import WOUND as W  # noqa: N813
+    from sts.combat.actions import Actions as A  # noqa: N813
+
+    bc = BattleContext(seed=170)
+    setup_hand(bc, *[STRIKE] * 10)  # 满 10 张
+    assert len(bc.cards.hand) == 10
+    bc.add_to_bot(A.make_temp_card_in_hand(W))
+    run_queue(bc)
+    assert len(bc.cards.hand) == 10
+    assert any(c.card is W for c in bc.cards.discard_pile)
