@@ -108,9 +108,13 @@ class Actions:
         return Action(run)
 
     @staticmethod
-    def damage_player(damage: int) -> Action:
+    def damage_player(damage: int, self_inflicted: bool = False) -> Action:
+        """非攻击 HP 损失（吃格挡）。self_inflicted：Burn/Decay 的回合末结算
+        在 C++ 传 selfDamage=true（DamagePlayer 第二参，Actions.cpp:91-95），
+        会触发 RUPTURE——对齐之。"""
+
         def run(bc: BattleContext) -> None:
-            bc.player.damage(bc, damage)
+            bc.player.damage(bc, damage, self_inflicted)
 
         return Action(run)
 

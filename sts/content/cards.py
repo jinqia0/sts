@@ -2,6 +2,11 @@
 
 每张卡 = 不可变模板（CardDef）+ play()（把效果分解为原子动作入队）。
 数值来源 slaythespire.wiki.gg（A0 基准）；升级版数值用 self.upgraded 分支。
+
+拆分（批次 4，2026-10-06）：诅咒卡在 curses_cards.py、全部无色卡在
+colorless_cards.py（本文件 Hand of Greed 除外），均经本文件尾部 __getattr__
+惰性 re-export，既有 `from sts.content.cards import X` 路径不变。状态卡
+（WOUND/BURN/DAZED/SLIMED/VOID）留驻本文件。
 """
 
 from __future__ import annotations
@@ -47,6 +52,8 @@ class CardDef:
     # ---- 中等档迁移新增（批次 2）----
     innate_when_upgraded: bool = False  # 仅升级版固有（Brutality+；引擎 move_innate_to_top 需接线读此位，见批次 2 报告）
     on_exhaust_effect: "callable | None" = None  # 被消耗时触发 (bc, inst) -> None（Sentinel +能量；引擎 on_card_exhausted 已接线读取，内容层 _exhaust_from_hand 的显式调用以效果侧守卫防双重）
+    # ---- 无色卡批次新增（批次 4，2026-10-06）----
+    colorless: bool = False  # 无色卡标记（生成池筛选：Jack of All Trades/Transmutation/Magnetism 的 CombatColorlessCardPool 对应物）
 
 
 def _strike_play(bc: BattleContext, item: CardQueueItem) -> None:
@@ -208,7 +215,12 @@ def _slimed_play(bc: BattleContext, item: CardQueueItem) -> None:
 
 def _burn_effect(bc: BattleContext, item: CardQueueItem) -> None:
     up = item.card is not None and item.card.upgraded
-    bc.add_to_bot(Actions.damage_player(4 if up else 2))
+    # 回合末结算标记：Regret 重建 C++ regretCardCount（入队时完整手牌数）
+    # 时需识别本回合末已离手的 no-trigger 卡（curses_cards.py 详述）。
+    # 延迟导入避免 cards→curses 导入期循环。
+    from sts.content.curses_cards import mark_no_trigger_processed
+    mark_no_trigger_processed(bc, item.card)
+    bc.add_to_bot(Actions.damage_player(4 if up else 2, self_inflicted=True))
 
 
 SLIMED = CardDef("Slimed", "黏液", 1, "Status", "消耗。（被打出时无其他效果）", False, True, _slimed_play)
@@ -1108,3 +1120,18 @@ EXHUME = CardDef("Exhume", "发掘", 1, "Skill",
 BURNING_PACT = CardDef("Burning Pact", "燃烧契约", 1, "Skill",
                        "消耗 1 张手牌。抽 2 张牌。（升级抽 3 张）",
                        False, False, _burning_pact_play)
+
+
+# ---- 诅咒卡 re-export（正式定义在 curses_cards.py，2026-10-06 批次）----
+# 惰性 re-export（PEP 562）：curses_cards.py 需在模块级导入本文件的 CardDef，
+# 顶部 from-import 会构成 cards→curses→cards 的导入期循环（curses 先导入时
+# 本文件尾部拿不到已定义名）；__getattr__ 只在属性缺失时触发，任意导入顺序
+# 均安全。from sts.content.cards import REGRET 等用法保持兼容。
+
+
+def __getattr__(name: str):
+    import sts.content.curses_cards as _curses
+
+    if hasattr(_curses, name):
+        return getattr(_curses, name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

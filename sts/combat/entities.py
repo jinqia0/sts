@@ -81,9 +81,10 @@ class Player(Combatant):
                 self.statuses.decrement(PlayerStatus.PLATED_ARMOR)
             self._hp_was_lost(bc, damage, False)
 
-    def damage(self, bc: BattleContext, amount: int) -> None:
+    def damage(self, bc: BattleContext, amount: int, self_inflicted: bool = False) -> None:
         """非攻击 HP 损失（Burn/毒等）。吃格挡但不触发受击类状态
-        （对齐 Player::damage，Player.cpp:175-207）。"""
+        （对齐 Player::damage，Player.cpp:175-207）。self_inflicted：Burn/
+        Decay 的回合末结算传 true（C++ DamagePlayer 第二参）→ 触发 RUPTURE。"""
         if self.statuses.has(PlayerStatus.INTANGIBLE):
             amount = min(amount, 1)
         saved_block = self.block
@@ -92,7 +93,7 @@ class Player(Combatant):
         if amount > 0:
             amount = bc.relics.on_hp_loss_reduce(bc, amount)  # TUNGSTEN_ROD（:201-203）
             if amount > 0:
-                self._hp_was_lost(bc, amount, False)
+                self._hp_was_lost(bc, amount, self_inflicted)
 
     def lose_hp(self, bc: BattleContext, amount: int, self_inflicted: bool = False) -> None:
         """直接 HP 损失：不吃格挡、不吃易伤（献祭类卡/诅咒；对齐
