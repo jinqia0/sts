@@ -17,8 +17,9 @@
     O_PSTAT               10      玩家状态层数（PlayerStatus 固定枚举序）
     O_HAND_SLOT           60      手牌槽×(占用,类型one-hot×3,费,需目标)
     O_HAND_COUNT          128     手牌构成计数（与 CARD_INDEX 对齐）
-    O_ENEMY               95      敌人槽×(hp,max_hp,block,存活,
-                                  意图类型one-hot×5,意图数值,状态×9)
+    O_ENEMY               255     敌人槽×(hp,max_hp,block,存活,
+                                  意图类型one-hot×5,意图数值,状态×9,
+                                  种类one-hot×32)
     O_PILE_DRAW 等         384     抽/弃/消耗堆的每种卡计数
     O_TURN                1       回合数
 
@@ -83,11 +84,33 @@ PLAYER_STATUS_ORDER = tuple(sorted(PlayerStatus, key=lambda s: s.value))
 MONSTER_STATUS_ORDER = tuple(sorted(MonsterStatus, key=lambda s: s.value))
 INTENT_KINDS = ("attack", "buff", "debuff", "defend", "unknown")
 
+# ---- 怪物种类的稳定词表（玩家可见：怪的名字/立绘，白名单内）----
+# 与 CARD_INDEX 同规则：扩怪只向后追加，已分配索引永不重排。
+# 32 位覆盖全游戏怪池（一代 70+ 种）绰绰有余。
+MONSTER_VOCAB_SIZE = 32
+MONSTER_INDEX: dict[str, int] = {
+    "Cultist": 0,
+    "Jaw Worm": 1,
+    "Red Louse": 2,
+    "Green Louse": 3,
+    "Acid Slime (S)": 4,
+    "Spike Slime (S)": 5,
+    "Fungi Beast": 6,
+}
+
+
+def monster_index(name: str) -> int | None:
+    """怪名 → 词表索引；未收录返回 None（该段全零，不崩）。"""
+    return MONSTER_INDEX.get(name)
+
+
 # ---- 观测布局（段大小与偏移集中定义，_get_obs 与上界表共用）----
 _N_PLAYER = 6
 _N_PSTAT = len(PLAYER_STATUS_ORDER)
 _N_SLOT_FEAT = 6  # (占用, Attack, Skill, Power, 费用, 需目标)
-_N_ENEMY_FEAT = 4 + len(INTENT_KINDS) + 1 + len(MONSTER_STATUS_ORDER)  # = 19
+_N_ENEMY_FEAT = (
+    4 + len(INTENT_KINDS) + 1 + len(MONSTER_STATUS_ORDER) + MONSTER_VOCAB_SIZE
+)  # = 19 + 32
 
 # 手牌槽内偏移
 _S_OCC, _S_ATTACK, _S_SKILL, _S_POWER, _S_COST, _S_TARGET = range(6)
@@ -96,6 +119,7 @@ _E_HP, _E_MAXHP, _E_BLOCK, _E_ALIVE = 0, 1, 2, 3
 _E_INTENT = 4
 _E_INTENT_VAL = _E_INTENT + len(INTENT_KINDS)
 _E_STATUS = _E_INTENT_VAL + 1
+_E_SPECIES = _E_STATUS + len(MONSTER_STATUS_ORDER)  # 种类 one-hot 段
 
 O_PLAYER = 0
 O_PSTAT = O_PLAYER + _N_PLAYER
@@ -126,6 +150,7 @@ def _build_maximums() -> list[int]:
         caps += [1] * len(INTENT_KINDS)  # 意图类型 one-hot
         caps += [CAP_INTENT_DAMAGE]  # 意图数值
         caps += [CAP_STATUS] * len(MONSTER_STATUS_ORDER)
+        caps += [1] * MONSTER_VOCAB_SIZE  # 种类 one-hot
     caps += [CAP_CARD_COUNT] * CARD_VOCAB_SIZE * 3  # 抽/弃/消耗三堆
     caps += [CAP_TURN]
     assert len(caps) == OBS_DIM
@@ -313,6 +338,12 @@ class StsBattleEnv(gym.Env):
                     )
             for k, s in enumerate(MONSTER_STATUS_ORDER):
                 obs[b + _E_STATUS + k] = min(m.statuses.get(s), CAP_STATUS)
+            # 怪物种类 one-hot（玩家可见：名字/立绘）。Monster 子类的
+            # name 属性即词表 key。未收录的怪该段全零，模型按特征兜底
+            # ——扩怪时把名字加进 MONSTER_INDEX 即可
+            spec = monster_index(m.name)
+            if spec is not None:
+                obs[b + _E_SPECIES + spec] = 1
 
         # 三堆构成（无序计数）：抽/弃/消耗的顺序都是黑名单信息（§4.2），
         # 这里只数「每种卡剩几张」——物理上不可能泄露顺序

@@ -27,6 +27,7 @@
 - [x] 训练脚本：`scripts/train.py`（MaskablePPO，训练种子 ≥10_000，周期评估种子 70..99，总体 + 分遭遇双口径对照 random/heuristic）
 - [x] 两个 baseline：随机策略、简单启发式（斩杀优先/集火残血/格挡补足），`sts/baselines.py`，评估种子 0..99
 - [x] **结果（2026-10-05，模型 models/weak_pool_1m_hp76.zip）**：1M 步 MaskablePPO 平均剩余 HP **76.0**/80，超 random（62.0）+14、超 heuristic（75.5）+0.5；分遭遇 3 胜（louses 77.1 / slimes_s 78.9 / fungi 79.7）1 平 1 负（jaw_worm 68.9 vs 72.9，唯一需跨回合规划的怪，小 MLP + 无记忆快照观测的能力上限附近）。300k 版对照 74.6 存 weak_v2_300k.zip
+- [~] EXP-02（见 docs/EXPERIMENTS.md）：观测加怪物种类 one-hot（691→851 维，词表 MONSTER_INDEX 稳定 ID），重训 1M 步验证 jaw_worm 短板是否补上——进行中
 - 验收：训练策略胜率显著超过两个 baseline ✅
 
 ### 第 3 步：扩内容 + 奖励实验

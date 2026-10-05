@@ -13,6 +13,7 @@ from sts.env import (
     CARD_INDEX,
     HAND_SLOT_BASE,
     N_ACTIONS,
+    N_TARGET_SLOTS,
     OBSERVATION_MAXIMUMS,
     OBS_DIM,
     O_PILE_DISCARD,
@@ -313,3 +314,44 @@ def test_fixed_encounter_unaffected():
     for s in (1, 2, 3):
         _obs, info = env.reset(seed=s)
         assert info["encounter"] == "cultist"
+
+
+# ---- 怪物种类 one-hot（MONSTER_INDEX 词表）----
+
+
+def test_species_onehot_lights_up():
+    """每个存活敌人的种类段有且仅有一个 1，且词表名与遭遇匹配。"""
+    from sts.env import MONSTER_INDEX, MONSTER_VOCAB_SIZE, _E_SPECIES, _N_ENEMY_FEAT, O_ENEMY
+
+    expect = {
+        "cultist": {"Cultist"},
+        "jaw_worm": {"Jaw Worm"},
+        "louses": {"Red Louse", "Green Louse"},
+        "slimes_s": {"Acid Slime (S)", "Spike Slime (S)"},
+        "fungi_beast": {"Fungi Beast"},
+    }
+    for enc, names in expect.items():
+        env = StsBattleEnv(encounter=enc)
+        obs, _ = env.reset(seed=1)
+        seen = set()
+        for si in range(N_TARGET_SLOTS):
+            b = O_ENEMY + si * _N_ENEMY_FEAT
+            seg = obs[b + _E_SPECIES : b + _E_SPECIES + MONSTER_VOCAB_SIZE]
+            assert seg.sum() <= 1  # one-hot 或全零（空槽）
+            if seg.sum() == 1:
+                idx = int(np.flatnonzero(seg)[0])
+                seen.add(next(k for k, v in MONSTER_INDEX.items() if v == idx))
+        assert seen == names, f"{enc}: {seen} != {names}"
+
+
+def test_species_onehot_dead_slot_cleared():
+    """死亡怪整槽清零（含种类段），空槽无残留。"""
+    from sts.env import MONSTER_VOCAB_SIZE, _E_SPECIES, _N_ENEMY_FEAT, O_ENEMY
+
+    env = StsBattleEnv(encounter="louses")
+    obs, _ = env.reset(seed=2)
+    env.bc.monsters.monsters[0].hp = 0  # 红虱死亡
+    obs = env._get_obs()
+    b = O_ENEMY  # 槽 0
+    seg = obs[b + _E_SPECIES : b + _E_SPECIES + MONSTER_VOCAB_SIZE]
+    assert seg.sum() == 0  # 死亡槽种类段归零
