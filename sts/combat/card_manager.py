@@ -121,11 +121,18 @@ class CardManager:
 
     def move_innate_to_top(self) -> None:
         """战斗开始洗牌后：把固有（Innate）牌按原相对顺序放到抽牌堆顶
-        （对齐 lightspeed CardManager::init 的 innate 处理）。"""
-        innate = [c for c in self.draw_pile if c.card.innate]
+        （对齐 lightspeed CardManager::init 的 innate 处理）。
+
+        innate_when_upgraded：仅升级版固有（Brutality+）。
+        """
+
+        def _is_innate(c: CardInstance) -> bool:
+            return c.card.innate or (c.upgraded and getattr(c.card, "innate_when_upgraded", False))
+
+        innate = [c for c in self.draw_pile if _is_innate(c)]
         if not innate:
             return
-        rest = [c for c in self.draw_pile if not c.card.innate]
+        rest = [c for c in self.draw_pile if not _is_innate(c)]
         self.draw_pile[:] = rest + innate  # 堆顶 = 尾部，多张固有按原顺序被抽到
 
     def reset_attributes_at_end_of_turn(self) -> None:

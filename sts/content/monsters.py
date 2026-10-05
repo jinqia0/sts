@@ -12,8 +12,9 @@
 
 已移植：Cultist、Jaw Worm、Red/Green Louse、Acid/Spike Slime (S)、Fungi Beast、
 Acid/Spike Slime (M)、Blue/Red Slaver、Sneaky/Fat/Shield Gremlin、Gremlin Wizard、
-Sentry。A0 数值直取（`ascN ? x : y` 的 y），但伤害/状态量的进阶分支保留
-（读 bc.ascension，A0 时自动落回非进阶值）。
+Sentry（批次 1）；Mad Gremlin、Gremlin Nob、Lagavulin、The Guardian、Hexaghost、
+Taskmaster（批次 2）。A0 数值直取（`ascN ? x : y` 的 y），但伤害/状态量的
+进阶分支保留（读 bc.ascension，A0 时自动落回非进阶值）。
 
 源码与任务描述/wiki 的出入（以 C++ 为准）：
 - Red Louse 的副招是 Grow（力量+3），不是 Spit Web；Green Louse 才是
@@ -32,6 +33,19 @@ Sentry。A0 数值直取（`ascN ? x : y` 的 y），但伤害/状态量的进�
   语义在 Entangle 落地时置 1。
 - Gremlin 帮第 3 回合逃跑（Fat/Sneaky 等）：lightspeed 的
   doesEscapeNext 为死代码，本批不实现（留批次 3 决策）。
+
+批次 2 与本体/wiki 的出入（数值一律以 C++ 为准，行为差异按批次 1 的
+Red Slaver 先例择本体语义并逐处注明）：
+- Gremlin Nob A18 roll 分支逐行翻译后 Skull Bash 不可达（需同时
+  lastTwo=Skull Bash 且 lastTwo=Rush，互斥——lightspeed 疑似笔误），
+  按字面保留：A18 起恒 Rush。Rush 14/16 与 wiki 一致。
+- Lagavulin 自然醒：C++ 只 setMove 不移除 ASLEEP，残留的 ASLEEP 会让
+  唤醒后的首次漏格挡伤害误剥 8 层金属化；本体自然醒后 Asleep 消失且
+  金属化常驻（打醒才剥金属化是已知交互），故自然醒分支补移除 ASLEEP。
+- Hexaghost 的 Inferno 不塞 3 张升级灼伤、不升级已有灼伤（本体有此
+  效果，lightspeed 未实现）；Sear 伤害恒 6、无进阶加成（同 lightspeed）。
+- 回合计数映射：C++ bc.turn 0 基（首回合=0），本项目 1 基（首回合=1），
+  涉及回合计数的条件统一 +1（Lagavulin 自然醒 2→3、灼伤升级 8→9）。
 """
 
 from __future__ import annotations
@@ -43,7 +57,7 @@ from sts.combat.actions import Actions
 from sts.combat.entities import Monster
 from sts.combat.queue import Action
 from sts.combat.types import MonsterStatus, PlayerStatus
-from sts.content.cards import DAZED, SLIMED
+from sts.content.cards import BURN, DAZED, SLIMED, WOUND
 
 if TYPE_CHECKING:
     from sts.combat.battle import BattleContext
@@ -97,7 +111,7 @@ class Cultist(Monster):
     DARK_STRIKE = MoveDef("Dark Strike", "黑暗打击", "attack", base_damage=6)
 
     def __init__(self, idx: int, hp: int, max_hp: int):
-        super().__init__(idx, hp, max_hp, f"邪教徒(Cultist)")
+        super().__init__(idx, hp, max_hp, "邪教徒(Cultist)")
 
     @classmethod
     def create(cls, bc: BattleContext, idx: int) -> "Cultist":
@@ -925,4 +939,454 @@ class Sentry(Monster):
                 bc.add_to_bot(Actions.no_op_roll_move())
             case _:
                 raise AssertionError(f"未知招式 {move}")
+        self.turns_taken += 1
+
+
+# ====================================================================
+# 批次 2：中等档 Act 1 怪物（Mad Gremlin、Gremlin Nob、Lagavulin、
+# The Guardian、Hexaghost、Taskmaster）。数值/分段逐行对齐
+# MonsterSpecific.cpp，wiki 交叉校验（差异见模块头注释与各类 docstring）。
+# ====================================================================
+
+
+class MadGremlin(Monster):
+    """狂怒小鬼：固定 Scratch 4 伤（A2 起 5），开局 1 层愤怒（A17 起 2）。
+
+    wiki/C++ A0：HP 20-24（A7 起 21-25）。preBattleAction buff<ANGRY>
+    （A17 起为 2）——受击自动 +STR×ANGRY 层，钩子在
+    entities.Monster.attacked。出招恒 Scratch（getMoveForRoll 无条件
+    返回，对齐 C++ MAD_GREMLIN 分支），take_turn 尾部 NoOpRollMove
+    占位（逃跑分支死代码，同 Sneaky/Fat Gremlin）。
+    """
+
+    name = "Mad Gremlin"
+    zh = "狂怒小鬼"
+    hp_range = (20, 24)
+    hp_range_high = (21, 25)
+
+    SCRATCH = MoveDef("Scratch", "抓挠", "attack", base_damage=4)
+
+    def __init__(self, idx: int, hp: int, max_hp: int):
+        super().__init__(idx, hp, max_hp, "狂怒小鬼(Mad Gremlin)")
+
+    @classmethod
+    def create(cls, bc: BattleContext, idx: int) -> "MadGremlin":
+        hp = _roll_hp(bc, cls)
+        m = cls(idx, hp, hp)
+        # 对齐 C++ preBattleAction：buff<ANGRY>(asc17 ? 2 : 1)
+        m.statuses.add(MonsterStatus.ANGRY, 2 if bc.ascension >= 17 else 1)
+        return m
+
+    def get_move_for_roll(self, bc: BattleContext, roll: int) -> MoveDef:
+        return self.SCRATCH
+
+    def take_turn(self, bc: BattleContext) -> None:
+        dmg = bc.calculate_monster_damage(self, 5 if bc.ascension >= 2 else 4)
+        bc.log.append(f"{self.display_name} 使用 抓挠(Scratch)。")
+        bc.add_to_bot(Actions.attack_player(self.idx, dmg))
+        bc.add_to_bot(Actions.no_op_roll_move())
+        self.turns_taken += 1
+
+
+class GremlinNob(Monster):
+    """小鬼巨汉（精英）：首回合怒吼（激怒 2/3），此后 Rush / 颅骨猛击。
+
+    wiki/C++ A0：HP 82-86（A8 起 85-90）。roll 分段：
+      首回合（lastMove INVALID）固定 BELLOW（ENRAGE 2，A18 起 3，
+      无格挡——玩家每打出技能牌 +ENRAGE 层力量，钩子在
+      battle.on_use_skill_card）；
+      A18 起：!lastTwoMoves(SKULL_BASH) → RUSH；否则 lastTwoMoves(RUSH)
+      → SKULL_BASH、否则 RUSH——逐行翻译后 SKULL_BASH 不可达
+      （lastTwo 不可能同时为两招），即 A18 起恒 RUSH（lightspeed 疑似
+      笔误，按字面保留，见模块头注释）；
+      A0：roll < 33 或 Rush 已连续两回合 → SKULL_BASH，否则 RUSH。
+    数值：Rush 14 伤（A3 起 16）；Skull Bash 6 伤 + 2 层易伤
+    （A3 起 8 伤；易伤恒 2，isSourceMonster → justApplied）。
+    """
+
+    name = "Gremlin Nob"
+    zh = "小鬼巨汉"
+    hp_range = (82, 86)
+    hp_range_high = (85, 90)
+    hp_high_asc = 8
+
+    BELLOW = MoveDef("Bellow", "怒吼", "buff", intent_text="获得 2 层激怒（玩家打出技能牌时 +2 力量）")
+    RUSH = MoveDef("Rush", "冲锋", "attack", base_damage=14)
+    SKULL_BASH = MoveDef("Skull Bash", "颅骨猛击", "attack", base_damage=6)  # 另施加 2 层易伤
+
+    def __init__(self, idx: int, hp: int, max_hp: int):
+        super().__init__(idx, hp, max_hp, "小鬼巨汉(Gremlin Nob)")
+
+    @classmethod
+    def create(cls, bc: BattleContext, idx: int) -> "GremlinNob":
+        hp = _roll_hp(bc, cls)
+        return cls(idx, hp, hp)
+
+    def get_move_for_roll(self, bc: BattleContext, roll: int) -> MoveDef:
+        # 对齐 C++ lastMove(INVALID)：首回合固定 BELLOW
+        if not self.move_history:
+            return self.BELLOW
+        if bc.ascension >= 18:
+            # A18 分支逐行翻译（Skull Bash 不可达，见类注释）
+            if not _last_two(self, "Skull Bash"):
+                return self.RUSH
+            if _last_two(self, "Rush"):
+                return self.SKULL_BASH
+            return self.RUSH
+        if roll < 33 or _last_two(self, "Rush"):
+            return self.SKULL_BASH
+        return self.RUSH
+
+    def take_turn(self, bc: BattleContext) -> None:
+        move = self.move_history[0]
+        match move.name:
+            case "Bellow":
+                # buff<ENRAGE>：玩家打出技能牌时 +层 力量（引擎 on_use_skill_card）
+                self.buff(MonsterStatus.ENRAGE, 3 if bc.ascension >= 18 else 2)
+                bc.log.append(f"{self.display_name} 使用 怒吼(Bellow)，获得 {3 if bc.ascension >= 18 else 2} 层激怒！")
+            case "Rush":
+                dmg = bc.calculate_monster_damage(self, 16 if bc.ascension >= 3 else 14)
+                bc.log.append(f"{self.display_name} 使用 冲锋(Rush)。")
+                bc.add_to_bot(Actions.attack_player(self.idx, dmg))
+            case "Skull Bash":
+                dmg = bc.calculate_monster_damage(self, 8 if bc.ascension >= 3 else 6)
+                bc.log.append(f"{self.display_name} 使用 颅骨猛击(Skull Bash)。")
+                bc.add_to_bot(Actions.attack_player(self.idx, dmg))
+                bc.add_to_bot(Actions.debuff_player(PlayerStatus.VULNERABLE, 2, True))
+            case _:
+                raise AssertionError(f"未知招式 {move}")
+        bc.add_to_bot(Actions.roll_move(self.idx))
+        self.turns_taken += 1
+
+
+class Lagavulin(Monster):
+    """拉格维林（精英）：沉睡 3 回合（金属化 8 + 8 格挡），醒后攻-攻-汲取灵魂循环。
+
+    wiki/C++ A0：HP 109-111（A8 起 112-115）。开局 ASLEEP 1 + METALLICIZE 8
+    + 8 格挡（对齐 MonsterGroup LAGAVULIN 置 ASLEEP + preBattleAction）。
+    受到漏格挡伤害即醒并移除金属化——引擎 entities._apply_damage 已做
+    （对齐 Monster.cpp:412-414）；本类只管自然醒计时：
+      C++ LAGAVULIN_SLEEP 分支 `bc.turn == 2 || !hasStatus<ASLEEP>()`
+      （0 基回合计数，即第 3 回合末醒、第 4 回合攻击）。本项目回合从 1
+      起，条件映射为 bc.turn == 3。打醒的回合 SLEEP 意图照常空转一回合
+      （本体"stunned for one turn"），下一回合才攻击。
+    自然醒按本体语义补移除 ASLEEP（C++ 漏移除，残留会让唤醒后首次受击
+    误剥金属化；本体自然醒后金属化常驻——见模块头注释）。
+    醒后序列（对齐 C++ setMove 链）：攻-攻-汲取灵魂循环；攻击 18 伤
+    （A3 起 20），汲取灵魂玩家力量与敏捷 -1（A18 起 -2，立即结算）。
+    get_move_for_roll 仅首回合调用一次：睡 → SLEEP / 已醒 → SIPHON_SOUL。
+    """
+
+    name = "Lagavulin"
+    zh = "拉格维林"
+    hp_range = (109, 111)
+    hp_range_high = (112, 115)
+    hp_high_asc = 8
+
+    SLEEP = MoveDef("Sleep", "沉睡", "unknown", intent_text="沉睡中（不受击则 3 回合后自然醒来）")
+    ATTACK = MoveDef("Attack", "攻击", "attack", base_damage=18)
+    SIPHON_SOUL = MoveDef("Siphon Soul", "汲取灵魂", "debuff", intent_text="力量与敏捷 -1")
+
+    def __init__(self, idx: int, hp: int, max_hp: int):
+        super().__init__(idx, hp, max_hp, "拉格维林(Lagavulin)")
+
+    @classmethod
+    def create(cls, bc: BattleContext, idx: int) -> "Lagavulin":
+        hp = _roll_hp(bc, cls)
+        m = cls(idx, hp, hp)
+        # 对齐 C++：遭遇装配置 ASLEEP，preBattleAction 上 METALLICIZE 8 + 8 格挡
+        m.statuses.add(MonsterStatus.ASLEEP, 1)
+        m.statuses.add(MonsterStatus.METALLICIZE, 8)
+        m.block += 8
+        return m
+
+    def get_move_for_roll(self, bc: BattleContext, roll: int) -> MoveDef:
+        # C++ 仅首回合 roll 一次；此后 take_turn 全 set_move（无 roll）
+        return self.SLEEP if self.statuses.has(MonsterStatus.ASLEEP) else self.SIPHON_SOUL
+
+    def take_turn(self, bc: BattleContext) -> None:
+        move = self.move_history[0]
+        match move.name:
+            case "Attack":
+                dmg = bc.calculate_monster_damage(self, 20 if bc.ascension >= 3 else 18)
+                bc.log.append(f"{self.display_name} 使用 攻击(Attack)。")
+                bc.add_to_bot(Actions.attack_player(self.idx, dmg))
+                # lastTwoMoves(ATTACK)：本回合与上回合都是攻击 → 汲取灵魂
+                if _last_two(self, "Attack"):
+                    self.set_move(self.SIPHON_SOUL)
+                else:
+                    self.set_move(self.ATTACK)
+            case "Siphon Soul":
+                n = 2 if bc.ascension >= 18 else 1
+                bc.log.append(f"{self.display_name} 使用 汲取灵魂(Siphon Soul)，你的力量与敏捷 -{n}。")
+                # 对齐 C++ DebuffPlayer<...>(±n).actFunc：立即结算，不入队
+                Actions.debuff_player(PlayerStatus.DEXTERITY, -n, True).fn(bc)
+                Actions.debuff_player(PlayerStatus.STRENGTH, -n, True).fn(bc)
+                self.set_move(self.ATTACK)
+            case "Sleep":
+                # 自然醒计时（bc.turn 映射见类注释）；被打醒（引擎已移除
+                # ASLEEP）同样切攻击。自然醒补移除 ASLEEP（本体语义）。
+                if bc.turn == 3 or not self.statuses.has(MonsterStatus.ASLEEP):
+                    self.statuses.remove(MonsterStatus.ASLEEP)
+                    self.set_move(self.ATTACK)
+                    bc.log.append(f"{self.display_name} 醒了！")
+                else:
+                    self.set_move(self.SLEEP)
+                    bc.log.append(f"{self.display_name} 沉睡中……")
+            case _:
+                raise AssertionError(f"未知招式 {move}")
+        bc.add_to_bot(Actions.no_op_roll_move())
+        self.turns_taken += 1
+
+
+class TheGuardian(Monster):
+    """守卫者（Boss）：模式切换状态机——攻击循环 ↔ 防御模式（利爪隐蔽反伤）。
+
+    wiki/C++ A0：HP 240（A9 起 250）。开局 misc_info = 阈值 30（A9 35、
+    A19 40），MODE_SHIFT 状态同值计数（对齐 preBattleAction）。
+    漏格挡伤害累积扣减 MODE_SHIFT 计数（on_hp_lost 覆盖，attacked 与
+    非攻击 HP 损失两路径共用），归零（含恰好归零）→ 移除计数、强改
+    意图为防御模式、+20 格挡入队（对齐 Monster.cpp:520-536）。
+    攻击模式序列（对齐 C++ setMove 链，全 set_move 无 roll）：
+      蓄能（+9 格挡）→ 猛烈重击（32/36）→ 排放蒸汽（2 易伤 + 2 虚弱）
+      → 旋风（5×4）→ 蓄能 ……
+    防御模式：防御模式（利爪隐蔽 3/4，玩家打出攻击牌即反伤 层，
+    钩子在 battle.on_use_attack_card）→ 滚动攻击（9/10）→ 双重猛击
+    （8×2；移除利爪隐蔽、阈值 +10、MODE_SHIFT 重设为新阈值、回旋风）。
+    """
+
+    name = "The Guardian"
+    zh = "守卫者"
+    hp_range = (240, 240)
+    hp_range_high = (250, 250)
+    hp_high_asc = 9
+
+    CHARGING_UP = MoveDef("Charging Up", "蓄能", "defend", intent_text="获得 9 点格挡")
+    FIERCE_BASH = MoveDef("Fierce Bash", "猛烈重击", "attack", base_damage=32)
+    VENT_STEAM = MoveDef("Vent Steam", "排放蒸汽", "debuff", intent_text="施加 2 层易伤与 2 层虚弱")
+    WHIRLWIND = MoveDef("Whirlwind", "旋风", "attack", base_damage=5)  # ×4 段
+    DEFENSIVE_MODE = MoveDef("Defensive Mode", "防御模式", "buff", intent_text="获得 3 层利爪隐蔽（打出攻击牌即受反伤）")
+    ROLL_ATTACK = MoveDef("Roll Attack", "滚动攻击", "attack", base_damage=9)
+    TWIN_SLAM = MoveDef("Twin Slam", "双重猛击", "attack", base_damage=8)  # ×2 段
+
+    def __init__(self, idx: int, hp: int, max_hp: int):
+        super().__init__(idx, hp, max_hp, "守卫者(The Guardian)")
+
+    @classmethod
+    def create(cls, bc: BattleContext, idx: int) -> "TheGuardian":
+        hp = _roll_hp(bc, cls)
+        m = cls(idx, hp, hp)
+        # 对齐 C++ preBattleAction：miscInfo 与 MODE_SHIFT 同置阈值
+        d = 40 if bc.ascension >= 19 else 35 if bc.ascension >= 9 else 30
+        m.misc_info = d
+        m.statuses.add(MonsterStatus.MODE_SHIFT, d)
+        return m
+
+    def get_move_for_roll(self, bc: BattleContext, roll: int) -> MoveDef:
+        # C++ 无条件返回 CHARGING_UP（此后 take_turn 全 set_move，不再 roll）
+        return self.CHARGING_UP
+
+    def on_hp_lost(self, bc: BattleContext, amount: int) -> None:
+        # 对齐 Monster.cpp onHpLost THE_GUARDIAN 分支：漏格挡伤害扣减
+        # MODE_SHIFT 计数，归零切换防御模式（强改意图 + 20 格挡入队）。
+        # 防御模式期间（双重猛击重设前）无 MODE_SHIFT → 伤害不再累积。
+        if self.statuses.has(MonsterStatus.MODE_SHIFT):
+            new_amount = self.statuses.get(MonsterStatus.MODE_SHIFT) - amount
+            if new_amount <= 0:
+                self.statuses.remove(MonsterStatus.MODE_SHIFT)
+                self.set_move(self.DEFENSIVE_MODE)
+                bc.add_to_bot(Actions.monster_gain_block(self.idx, 20))
+            else:
+                self.statuses.set(MonsterStatus.MODE_SHIFT, new_amount)
+
+    def take_turn(self, bc: BattleContext) -> None:
+        move = self.move_history[0]
+        match move.name:
+            case "Charging Up":
+                self.block += 9  # 对齐 C++ addBlock：立即结算，不入队
+                bc.log.append(f"{self.display_name} 使用 蓄能(Charging Up)，获得 9 点格挡。")
+                self.set_move(self.FIERCE_BASH)
+            case "Fierce Bash":
+                dmg = bc.calculate_monster_damage(self, 36 if bc.ascension >= 4 else 32)
+                bc.log.append(f"{self.display_name} 使用 猛烈重击(Fierce Bash)。")
+                bc.add_to_bot(Actions.attack_player(self.idx, dmg))
+                self.set_move(self.VENT_STEAM)
+            case "Vent Steam":
+                bc.log.append(f"{self.display_name} 使用 排放蒸汽(Vent Steam)。")
+                bc.add_to_bot(Actions.debuff_player(PlayerStatus.VULNERABLE, 2, True))
+                bc.add_to_bot(Actions.debuff_player(PlayerStatus.WEAK, 2, True))
+                self.set_move(self.WHIRLWIND)
+            case "Whirlwind":
+                dmg = bc.calculate_monster_damage(self, 5)
+                bc.log.append(f"{self.display_name} 使用 旋风(Whirlwind)，5 点伤害 ×4。")
+                for _ in range(4):
+                    bc.add_to_bot(Actions.attack_player(self.idx, dmg))
+                self.set_move(self.CHARGING_UP)
+            case "Defensive Mode":
+                n = 4 if bc.ascension >= 19 else 3
+                self.buff(MonsterStatus.SHARP_HIDE, n)
+                bc.log.append(f"{self.display_name} 进入 防御模式(Defensive Mode)，获得 {n} 层利爪隐蔽。")
+                self.set_move(self.ROLL_ATTACK)
+            case "Roll Attack":
+                dmg = bc.calculate_monster_damage(self, 10 if bc.ascension >= 4 else 9)
+                bc.log.append(f"{self.display_name} 使用 滚动攻击(Roll Attack)。")
+                bc.add_to_bot(Actions.attack_player(self.idx, dmg))
+                self.set_move(self.TWIN_SLAM)
+            case "Twin Slam":
+                dmg = bc.calculate_monster_damage(self, 8)
+                bc.log.append(f"{self.display_name} 使用 双重猛击(Twin Slam)，8 点伤害 ×2！")
+                for _ in range(2):
+                    bc.add_to_bot(Actions.attack_player(self.idx, dmg))
+                self.statuses.remove(MonsterStatus.SHARP_HIDE)
+                self.misc_info += 10  # 阈值递增（对齐 C++ miscInfo += 10）
+                self.set_move(self.WHIRLWIND)
+                bc.add_to_bot(Actions.buff_enemy(self.idx, MonsterStatus.MODE_SHIFT, self.misc_info))
+            case _:
+                raise AssertionError(f"未知招式 {move}")
+        # 对齐 C++：THE_GUARDIAN 各分支均无 RollMove / NoOpRollMove 入队
+        self.turns_taken += 1
+
+
+class Hexaghost(Monster):
+    """六火幽灵（Boss）：激活锁定分割伤害，此后 灼烧-冲撞-灼烧-燃焰-冲撞-灼烧-炼狱 循环。
+
+    wiki/C++ A0：HP 250（A9 起 264）。首回合固定 ACTIVATE（C++ assert
+    firstTurn）：misc_info = 玩家当前 HP // 12 + 1，作为 DIVIDER 的
+    单段伤害（×6 段）。此后按 unique_power0（火球计数）set_move 轮转：
+      SEAR（6 伤 + 塞 1 张灼伤进弃牌堆，A19 起 2 张；C++ `bc.turn > 8`
+      起为升级版——0 基计数映射到本项目 1 基为 `bc.turn > 9`）：计数
+      0→冲撞、2→燃焰、否则→炼狱，随后计数 +1；
+      TACKLE（5×2，A4 起 6×2）→ 灼烧，随后计数 +1；
+      INFLAME（+12 格挡、力量 +2（A19 起 +3），计数 +1）→ 冲撞；
+      INFERNO（2×6，A4 起 3×6；计数清零）→ 灼烧。
+    注：lightspeed 的 INFERNO 不塞 3 张升级灼伤、不升级已有灼伤
+    （本体有，此处从 C++——见模块头注释）；SEAR 伤害恒 6 无进阶加成。
+    """
+
+    name = "Hexaghost"
+    zh = "六火幽灵"
+    hp_range = (250, 250)
+    hp_range_high = (264, 264)
+    hp_high_asc = 9
+
+    ACTIVATE = MoveDef("Activate", "激活", "unknown", intent_text="分割伤害锁定为 玩家HP÷12+1")
+    DIVIDER = MoveDef("Divider", "分割", "attack", base_damage=7)  # ×6 段（单段=激活时锁定值）
+    SEAR = MoveDef("Sear", "灼烧", "attack", base_damage=6)  # 另塞灼伤进弃牌堆
+    TACKLE = MoveDef("Tackle", "冲撞", "attack", base_damage=5)  # ×2 段
+    INFLAME = MoveDef("Inflame", "燃焰", "buff", intent_text="获得 12 点格挡，力量 +2")
+    INFERNO = MoveDef("Inferno", "炼狱", "attack", base_damage=2)  # ×6 段
+
+    def __init__(self, idx: int, hp: int, max_hp: int):
+        super().__init__(idx, hp, max_hp, "六火幽灵(Hexaghost)")
+
+    @classmethod
+    def create(cls, bc: BattleContext, idx: int) -> "Hexaghost":
+        hp = _roll_hp(bc, cls)
+        return cls(idx, hp, hp)
+
+    def get_move_for_roll(self, bc: BattleContext, roll: int) -> MoveDef:
+        # C++ 仅首回合 roll（assert firstTurn）→ ACTIVATE；此后全 set_move
+        return self.ACTIVATE
+
+    def take_turn(self, bc: BattleContext) -> None:
+        move = self.move_history[0]
+        match move.name:
+            case "Activate":
+                self.misc_info = bc.player.hp // 12 + 1  # 对齐 C++ curHp / 12 + 1
+                bc.log.append(f"{self.display_name} 使用 激活(Activate)，锁定分割伤害为 {self.misc_info}×6。")
+                self.set_move(self.DIVIDER)
+            case "Divider":
+                dmg = bc.calculate_monster_damage(self, self.misc_info)
+                bc.log.append(f"{self.display_name} 使用 分割(Divider)，{self.misc_info} 点伤害 ×6！")
+                for _ in range(6):
+                    bc.add_to_bot(Actions.attack_player(self.idx, dmg))
+                self.unique_power0 = 0
+                self.set_move(self.SEAR)
+            case "Sear":
+                dmg = bc.calculate_monster_damage(self, 6)
+                bc.log.append(f"{self.display_name} 使用 灼烧(Sear)。")
+                bc.add_to_bot(Actions.attack_player(self.idx, dmg))
+                n = 2 if bc.ascension >= 19 else 1
+                # C++ CardInstance(BURN, bc.turn > 8)：0 基回合 → 本项目 1 基 +1
+                upgraded = bc.turn > 9
+                for _ in range(n):
+                    bc.add_to_bot(Actions.make_temp_card_in_discard(BURN, upgraded))
+                if self.unique_power0 == 0:
+                    self.set_move(self.TACKLE)
+                elif self.unique_power0 == 2:
+                    self.set_move(self.INFLAME)
+                else:
+                    self.set_move(self.INFERNO)
+                self.unique_power0 += 1
+            case "Tackle":
+                dmg = bc.calculate_monster_damage(self, 6 if bc.ascension >= 4 else 5)
+                bc.log.append(f"{self.display_name} 使用 冲撞(Tackle)。")
+                for _ in range(2):
+                    bc.add_to_bot(Actions.attack_player(self.idx, dmg))
+                self.set_move(self.SEAR)
+                self.unique_power0 += 1
+            case "Inflame":
+                self.block += 12  # 对齐 C++ addBlock：立即结算
+                self.statuses.add(MonsterStatus.STRENGTH, 3 if bc.ascension >= 19 else 2)
+                bc.log.append(f"{self.display_name} 使用 燃焰(Inflame)，格挡 +12、力量 +2。")
+                self.unique_power0 += 1
+                self.set_move(self.TACKLE)
+            case "Inferno":
+                dmg = bc.calculate_monster_damage(self, 3 if bc.ascension >= 4 else 2)
+                bc.log.append(f"{self.display_name} 使用 炼狱(Inferno)，{3 if bc.ascension >= 4 else 2} 点伤害 ×6！")
+                for _ in range(6):
+                    bc.add_to_bot(Actions.attack_player(self.idx, dmg))
+                self.unique_power0 = 0
+                self.set_move(self.SEAR)
+            case _:
+                raise AssertionError(f"未知招式 {move}")
+        # 各分支尾部 NoOpRollMove / noOpRollMove（立即/入队在纯空转下等价）
+        bc.add_to_bot(Actions.no_op_roll_move())
+        self.turns_taken += 1
+
+
+class Taskmaster(Monster):
+    """监工（slavers 遭遇中间位）：固定鞭挞——7 伤 + 塞伤口进弃牌堆。
+
+    wiki/C++ A0：HP 54-60（A8 起 57-64；C++ initHp 先空耗一次
+    hpRng.random(54,60) 再 roll 区间——本项目不做轨迹对齐，仅 roll 区间）。
+    出招恒 Scouring Whip（getMoveForRoll 无条件返回）；伤害恒 7
+    （无 A2 加成，wiki 同）：
+      A18 起：自身力量 +1（入队）+ 塞 3 张伤口；
+      A3 起：塞 2 张伤口；A0：塞 1 张。
+    """
+
+    name = "Taskmaster"
+    zh = "监工"
+    hp_range = (54, 60)
+    hp_range_high = (57, 64)
+    hp_high_asc = 8
+
+    SCOURING_WHIP = MoveDef("Scouring Whip", "鞭挞", "attack", base_damage=7)  # 另塞伤口进弃牌堆
+
+    def __init__(self, idx: int, hp: int, max_hp: int):
+        super().__init__(idx, hp, max_hp, "监工(Taskmaster)")
+
+    @classmethod
+    def create(cls, bc: BattleContext, idx: int) -> "Taskmaster":
+        hp = _roll_hp(bc, cls)
+        return cls(idx, hp, hp)
+
+    def get_move_for_roll(self, bc: BattleContext, roll: int) -> MoveDef:
+        return self.SCOURING_WHIP
+
+    def take_turn(self, bc: BattleContext) -> None:
+        dmg = bc.calculate_monster_damage(self, 7)
+        bc.log.append(f"{self.display_name} 使用 鞭挞(Scouring Whip)。")
+        bc.add_to_bot(Actions.attack_player(self.idx, dmg))
+        if bc.ascension >= 18:
+            bc.add_to_bot(Actions.buff_enemy(self.idx, MonsterStatus.STRENGTH, 1))
+            n_wounds = 3
+        elif bc.ascension >= 3:
+            n_wounds = 2
+        else:
+            n_wounds = 1
+        for _ in range(n_wounds):
+            bc.add_to_bot(Actions.make_temp_card_in_discard(WOUND))
+        bc.add_to_bot(Actions.no_op_roll_move())
         self.turns_taken += 1

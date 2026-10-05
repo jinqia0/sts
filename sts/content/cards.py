@@ -10,7 +10,8 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from sts.combat.actions import Actions
-from sts.combat.queue import Action
+from sts.combat.card_manager import MAX_HAND_SIZE
+from sts.combat.queue import Action, CardQueueItem
 from sts.combat.types import MonsterStatus, Outcome, PlayerStatus
 
 if TYPE_CHECKING:
@@ -41,6 +42,9 @@ class CardDef:
     lose_energy_when_drawn: int = 0  # 被抽到时失去的能量（状态卡 Void）
     play_condition: "callable | None" = None  # 打出条件（Clash）：(bc, inst) -> bool，False 则 play_card 拒绝
     cost_delta_on_damage: int = 0  # 玩家每次失去 HP 时该实例的永久费用增减（Blood for Blood：-1）
+    # ---- 中等档迁移新增（批次 2）----
+    innate_when_upgraded: bool = False  # 仅升级版固有（Brutality+；引擎 move_innate_to_top 需接线读此位，见批次 2 报告）
+    on_exhaust_effect: "callable | None" = None  # 被消耗时触发 (bc, inst) -> None（Sentinel +能量；引擎 on_card_exhausted 已接线读取，内容层 _exhaust_from_hand 的显式调用以效果侧守卫防双重）
 
 
 def _strike_play(bc: BattleContext, item: CardQueueItem) -> None:
@@ -155,7 +159,11 @@ def _wild_strike_play(bc: BattleContext, item: CardQueueItem) -> None:
 
 
 def _unplayable_play(bc: BattleContext, item: CardQueueItem) -> None:
-    raise RuntimeError("不可打出的卡不应进入结算（play_card 应当拦截）")
+    # 状态/诅咒卡被强制入队结算时无效果——对齐 C++ useCard 的 STATUS/CURSE
+    # 分支（不进任何 useXxxCard switch；Havoc/Mayhem 打出抽牌堆顶会走到
+    # 此路径，随后按 exhaust_on_use 正常落堆）。正常出牌路径仍被 play_card
+    # 的 unplayable 位拦截，不会进入结算。
+    pass
 
 
 STRIKE = CardDef("Strike", "打击", 1, "Attack", "造成 6 点伤害。", True, False, _strike_play)
@@ -449,3 +457,417 @@ OFFERING = CardDef("Offering", "献祭", 0, "Skill", "失去 6 点 HP。获得 2
 IMPERVIOUS = CardDef("Impervious", "金刚不坏", 2, "Skill", "获得 30 点格挡。消耗。", False, True, _impervious_play)
 REAPER = CardDef("Reaper", "收割", 2, "Attack", "对所有敌人造成 4 点伤害。回复等同于未被格挡吸收的伤害的 HP。消耗。", False, True, _reaper_play)
 SWORD_BOOMERANG = CardDef("Sword Boomerang", "回旋剑", 1, "Attack", "对随机敌人造成 3 点伤害 3 次。", False, False, _sword_boomerang_play)
+
+
+# ---- 中等档迁移（批次 2，2026-10-05）：Power 状态族 / 消耗族 / 虚无族 /
+# 实例计数族 / 生成与击杀奖励族，共 30 张 ----
+# 数值以 lightspeed C++（BattleContext.cpp useAttackCard L958 起 /
+# useSkillCard L1203 起 / usePowerCard L1515 起 / Actions.cpp 复合动作）为准
+# 对译；C++ 把部分 Power 状态存为"每次触发数值"（如 COMBUST 5/7、
+# FEEL_NO_PAIN 3/4），而本引擎同批次的语义是"层数 × 固定基数"（见
+# combat/types.py 注释与 entities.py 结算），基础版两者一致、升级版有
+# 数值差异——逐卡注释记录，汇总见迁移报告。
+
+
+def _exhaust_from_hand(bc: BattleContext, inst: CardInstance) -> None:
+    """内容层统一消耗路径（True Grit/Second Wind/Sever Soul/Fiend Fire）。
+
+    对齐 C++ triggerAndMoveToExhaustPile：移出手牌（按实例身份，对齐
+    exhaustSpecificCardInHand 的 uniqueId 校验）→ 进消耗堆 → 状态/遗物
+    钩子（bc.on_card_exhausted：FEEL_NO_PAIN/DARK_EMBRACE/遗物）→
+    卡自身的 on_exhaust_effect（Sentinel）。引擎 on_card_exhausted 已
+    （工作树 2026-10-05 接线）读取 on_exhaust_effect——效果侧的
+    misc_data 守卫保证两处调用只结算一次，兼容接线前后两种引擎状态。
+    """
+    for i, c in enumerate(bc.cards.hand):
+        if c is inst:
+            del bc.cards.hand[i]
+            break
+    else:
+        return  # 已不在手牌（防御性：跳过，对齐 C++ 找不到即 return）
+    bc.cards.move_to_exhaust_pile(inst)
+    bc.on_card_exhausted(inst)
+    if inst.card.on_exhaust_effect is not None:
+        inst.card.on_exhaust_effect(bc, inst)
+
+
+def _exhaust_action(inst: CardInstance) -> Action:
+    return Action(lambda bc: _exhaust_from_hand(bc, inst))
+
+
+def _exhaust_random_from_hand(bc: BattleContext) -> None:
+    """随机消耗手中 1 张（True Grit 基础版 / Fiend Fire）。
+
+    对齐 ExhaustRandomCardInHand + getRandomCardIdxInHand（C++ 用
+    cardRandom 流，本项目按 DESIGN.md §3 统一 misc 流，分布级等价）。
+    """
+    if not bc.cards.hand:
+        return
+    idx = bc.rngs.misc.int_inclusive(0, len(bc.cards.hand) - 1)
+    _exhaust_from_hand(bc, bc.cards.hand[idx])
+
+
+# ---- Power 状态族 ----
+
+
+def _barricade_play(bc: BattleContext, item: CardQueueItem) -> None:
+    # C++ 为立即 setHasStatus；入队结算在时机上不可区分（无中途读取点）
+    bc.add_to_bot(Actions.buff_player(PlayerStatus.BARRICADE, 1))
+
+
+def _corruption_play(bc: BattleContext, item: CardQueueItem) -> None:
+    bc.add_to_bot(Actions.buff_player(PlayerStatus.CORRUPTION, 1))
+
+
+def _demon_form_play(bc: BattleContext, item: CardQueueItem) -> None:
+    # 回合开始抽牌后 +层数力量（entities.apply_start_of_turn_post_draw_powers）
+    bc.add_to_bot(Actions.buff_player(PlayerStatus.DEMON_FORM, 3 if item.card.upgraded else 2))
+
+
+def _berserk_play(bc: BattleContext, item: CardQueueItem) -> None:
+    # 对齐 C++：++energyPerTurn 立即生效；易伤 2 层（升级仅 1 层）入 bot，
+    # 玩家自施 → 当轮回合末即递减
+    bc.player.energy_per_turn_bonus += 1
+    bc.add_to_bot(Actions.debuff_player(PlayerStatus.VULNERABLE, 1 if item.card.upgraded else 2, False))
+
+
+def _brutality_play(bc: BattleContext, item: CardQueueItem) -> None:
+    # C++ 恒 1 层；升级差异 = 费用 1→0 + 固有（isCardInnate 的 upgraded 分支，
+    # 用 innate_when_upgraded 位表达，待引擎 move_innate_to_top 接线）
+    bc.add_to_bot(Actions.buff_player(PlayerStatus.BRUTALITY, 1))
+
+
+def _juggernaut_play(bc: BattleContext, item: CardQueueItem) -> None:
+    # C++ 存每次触发伤害 5/7（gainBlock 直接用值）；本引擎层数语义
+    #（gain_block 内 5×层）。基础 1 层 = 5 伤一致；升级 2 层 = 10 伤
+    #（C++ 为 7），差异记录于迁移报告。
+    bc.add_to_bot(Actions.buff_player(PlayerStatus.JUGGERNAUT, 2 if item.card.upgraded else 1))
+
+
+def _rupture_play(bc: BattleContext, item: CardQueueItem) -> None:
+    # 层数 = 每次自伤失 HP 的力量增量（C++ 1/2，直接一致）
+    bc.add_to_bot(Actions.buff_player(PlayerStatus.RUPTURE, 2 if item.card.upgraded else 1))
+
+
+def _combust_play(bc: BattleContext, item: CardQueueItem) -> None:
+    # C++ 存全体伤害值 5/7、HP 损失恒 1（combustHpLoss，C++ 自带 todo
+    # "doesn't stack hp loss correctly"）；本引擎层数语义（回合末失 层 HP
+    # + 全体 5×层）。基础 1 层 = 失 1/5 伤一致；升级 2 层 = 失 2/10 伤
+    #（C++ 失 1/7 伤），差异记录于迁移报告。
+    bc.add_to_bot(Actions.buff_player(PlayerStatus.COMBUST, 2 if item.card.upgraded else 1))
+
+
+def _evolve_play(bc: BattleContext, item: CardQueueItem) -> None:
+    # 层数 = 抽到状态牌时的补抽张数（C++ 1/2 直接用值，语义一致）
+    bc.add_to_bot(Actions.buff_player(PlayerStatus.EVOLVE, 2 if item.card.upgraded else 1))
+
+
+def _fire_breathing_play(bc: BattleContext, item: CardQueueItem) -> None:
+    # C++ 存全体伤害值 6/10（CardManager::draw 直接用值，wiki 为 4/6）；
+    # 本引擎 4×层语义 → 基础 1 层 = 4 伤（与 wiki 一致、与 C++ 6 不同），
+    # 升级 2 层 = 8 伤（C++ 为 10），差异记录于迁移报告。
+    bc.add_to_bot(Actions.buff_player(PlayerStatus.FIRE_BREATHING, 2 if item.card.upgraded else 1))
+
+
+def _feel_no_pain_play(bc: BattleContext, item: CardQueueItem) -> None:
+    # C++ 存格挡值 3/4（onCardExhausted 直接用值）；本引擎 3×层语义 →
+    # 基础 1 层 = 3 一致；升级 2 层 = 6（C++ 为 4），差异记录于迁移报告。
+    bc.add_to_bot(Actions.buff_player(PlayerStatus.FEEL_NO_PAIN, 2 if item.card.upgraded else 1))
+
+
+def _dark_embrace_play(bc: BattleContext, item: CardQueueItem) -> None:
+    # C++ 无 up 分支：恒 1 层；升级只改费 2→1（wiki 同）
+    bc.add_to_bot(Actions.buff_player(PlayerStatus.DARK_EMBRACE, 1))
+
+
+def _flame_barrier_play(bc: BattleContext, item: CardQueueItem) -> None:
+    up = item.card.upgraded
+    bc.add_to_bot(Actions.gain_block(bc.calculate_card_block(16 if up else 12)))
+    bc.add_to_bot(Actions.buff_player(PlayerStatus.FLAME_BARRIER, 6 if up else 4))
+
+
+def _double_tap_play(bc: BattleContext, item: CardQueueItem) -> None:
+    # C++ up?2:1（升级版下一张与下两张攻击牌各翻倍）。注意引擎
+    # on_use_attack_card 触发后是整状态 remove 而非 decrement——升级版
+    # 2 层实际只翻倍第一张攻击牌，需引擎改为 decrement（见迁移报告）。
+    bc.add_to_bot(Actions.buff_player(PlayerStatus.DOUBLE_TAP, 2 if item.card.upgraded else 1))
+
+
+# ---- 消耗族（技能）----
+
+
+def _second_wind_play(bc: BattleContext, item: CardQueueItem) -> None:
+    # 出牌时按管线算好每张格挡（对齐 calculateCardBlock(up?7:5)）
+    block_per_card = bc.calculate_card_block(7 if item.card.upgraded else 5)
+
+    def run(bc: BattleContext) -> None:
+        # 对齐 SecondWindAction：执行时读手牌，为每张非攻击牌 top 入队
+        # 格挡、再 top 入队对应消耗 → 净结算序 = 全部消耗（逆手牌序）→
+        # 全部格挡（自身已在手牌外，不计）
+        targets = [c for c in list(bc.cards.hand) if c.card.ctype != "Attack"]
+        for _ in targets:
+            bc.add_to_top(Actions.gain_block(block_per_card))
+        for inst in targets:
+            bc.add_to_top(_exhaust_action(inst))
+
+    bc.add_to_bot(Action(run))
+
+
+def _sever_soul_play(bc: BattleContext, item: CardQueueItem) -> None:
+    up = item.card.upgraded
+    dmg = bc.calculate_card_damage(item, item.target, 22 if up else 16)  # wiki 同：16/22
+
+    def exhaust_run(bc: BattleContext) -> None:
+        # 对齐 SeverSoulExhaustAction：逆序为每张非攻击手牌 bot 入队消耗
+        # → 落在已入队的攻击之后（净结算：先 16/22 伤，后消耗全部非攻击牌）
+        for inst in reversed(list(bc.cards.hand)):
+            if inst.card.ctype != "Attack":
+                bc.add_to_bot(_exhaust_action(inst))
+
+    bc.add_to_bot(Action(exhaust_run))
+    bc.add_to_bot(Actions.attack_enemy(item.target, dmg))
+
+
+def _fiend_fire_play(bc: BattleContext, item: CardQueueItem) -> None:
+    up = item.card.upgraded
+    dmg = bc.calculate_card_damage(item, item.target, 10 if up else 7)
+
+    def run(bc: BattleContext) -> None:
+        # 对齐 FiendFireAction：执行时锁定手牌数 n，先 top 入队 n 段攻击、
+        # 再 top 入队 n 次随机消耗 → 净结算序 = 随机消耗全部手牌 → n 段
+        # 攻击（段数在消耗前锁定，与"消耗的牌数"无关地=原手牌数）
+        n = len(bc.cards.hand)
+        for _ in range(n):
+            bc.add_to_top(Actions.attack_enemy(item.target, dmg))
+        for _ in range(n):
+            bc.add_to_top(Action(_exhaust_random_from_hand))
+
+    bc.add_to_bot(Action(run))
+
+
+def _sentinel_on_exhaust(bc: BattleContext, inst: CardInstance) -> None:
+    # 对齐 triggerAndMoveToExhaustPile 的 SENTINEL 分支：消耗时立即
+    # +2/3 能量（C++ 注释"the game adds to bot here"——lightspeed 直接结算，
+    # 等价）。misc_data 守卫：效果可能经引擎 on_card_exhausted 钩子与内容层
+    # 消耗闭包的显式调用各到达一次，守卫保证只结算一次（消耗堆不可逆出，
+    # 每实例至多消耗一次，守卫位不会与正常计数冲突）。
+    if inst.misc_data:
+        return
+    inst.misc_data = 1
+    bc.player.energy += 3 if inst.upgraded else 2
+
+
+def _sentinel_play(bc: BattleContext, item: CardQueueItem) -> None:
+    bc.add_to_bot(Actions.gain_block(bc.calculate_card_block(8 if item.card.upgraded else 5)))
+
+
+def _power_through_play(bc: BattleContext, item: CardQueueItem) -> None:
+    # 对齐 C++：2 张伤口先入手（手牌满则按上限消失），后格挡
+    bc.add_to_bot(Actions.make_temp_card_in_hand(WOUND))
+    bc.add_to_bot(Actions.make_temp_card_in_hand(WOUND))
+    bc.add_to_bot(Actions.gain_block(bc.calculate_card_block(20 if item.card.upgraded else 15)))
+
+
+def _true_grit_play(bc: BattleContext, item: CardQueueItem) -> None:
+    up = item.card.upgraded
+    bc.add_to_bot(Actions.gain_block(bc.calculate_card_block(9 if up else 7)))
+    if up:
+        # 升级版选卡消耗（对齐 ChooseExhaustOne：canPickZero=false，单候选
+        # 直执、空手跳过——open_card_select 已内置同款分支）
+        def on_choose(bc2: BattleContext, chosen: list) -> None:
+            for inst in chosen:
+                _exhaust_from_hand(bc2, inst)
+
+        bc.add_to_bot(Action(lambda bc: bc.open_card_select(
+            list(bc.cards.hand), on_choose, prompt="坚毅+：选择 1 张手牌消耗")))
+    else:
+        # 基础版随机消耗 1 张（执行时抽，misc 流）
+        bc.add_to_bot(Action(_exhaust_random_from_hand))
+
+
+def _play_top_card(exhaust: bool) -> Action:
+    """PlayTopCard 转发（引擎工厂已修复 CardQueueItem 运行时导入）。"""
+    return Actions.play_top_card(exhaust)
+
+
+def _havoc_play(bc: BattleContext, item: CardQueueItem) -> None:
+    # 对齐 useSkillCard HAVOC（BattleContext.cpp:1337）：随机目标免费打出
+    # 抽牌堆顶牌，打完那张牌消耗（PlayTopCard 第二参 true）。Havoc 自身
+    # 消耗：wiki 有"消耗。"，lightspeed doesCardExhaust 未收录 HAVOC（偏差，
+    # 以 wiki/任务口径为准置 exhausts=True）。
+    bc.add_to_bot(_play_top_card(exhaust=True))
+
+
+def _infernal_blade_pool() -> list:
+    """随机攻击牌池（对齐 getTrulyRandomCardInCombat(ATTACK)：本模块全部攻击卡）。
+
+    动态扫描模块级 CardDef：后续批次新增攻击卡自动入池。
+    """
+    return [g for g in list(globals().values()) if isinstance(g, CardDef) and g.ctype == "Attack"]
+
+
+def _infernal_blade_play(bc: BattleContext, item: CardQueueItem) -> None:
+    def run(bc: BattleContext) -> None:
+        pool = _infernal_blade_pool()
+        card = pool[bc.rngs.misc.int_inclusive(0, len(pool) - 1)]
+        inst = bc.cards.instantiate(card)
+        inst.cost_for_turn = 0  # 本回合 0 费（回合末 reset_attributes 复原；对齐 setCostForTurn(0)）
+        if len(bc.cards.hand) < MAX_HAND_SIZE:
+            bc.cards.hand.append(inst)
+        else:
+            bc.cards.move_to_discard_pile(inst)  # 手牌满：生成牌落弃牌堆（对齐 moveToHandHelper）
+
+    bc.add_to_bot(Action(run))
+
+
+# ---- 虚无族 ----
+
+
+def _carnage_play(bc: BattleContext, item: CardQueueItem) -> None:
+    dmg = bc.calculate_card_damage(item, item.target, 28 if item.card.upgraded else 20)
+    bc.add_to_bot(Actions.attack_enemy(item.target, dmg))
+
+
+def _ghostly_armor_play(bc: BattleContext, item: CardQueueItem) -> None:
+    bc.add_to_bot(Actions.gain_block(bc.calculate_card_block(13 if item.card.upgraded else 10)))
+
+
+# ---- 实例计数族（misc_data）----
+
+
+def _rampage_play(bc: BattleContext, item: CardQueueItem) -> None:
+    up = item.card.upgraded
+    # 对齐 C++：伤害按打出时的 misc_data 计（先算后加），打出后永久 +5/8。
+    # Double Tap 重放体共享本实例 → 重放伤害含第一次的增量（对齐 C++ todo
+    # "doubled card damage is changed by the first" 的实际行为）；C++ 额外的
+    # findAndUpgradeSpecialData 只为更新战斗外的牌组副本，战斗内等价。
+    dmg = bc.calculate_card_damage(item, item.target, 8 + item.card.misc_data)
+    bc.add_to_bot(Actions.attack_enemy(item.target, dmg))
+    item.card.misc_data += 8 if up else 5
+
+
+def _searing_blow_play(bc: BattleContext, item: CardQueueItem) -> None:
+    # 公式（C++ SEARING_BLOW）：base = n×(n+7)/2 + 12，n = 升级次数。
+    # 本引擎无多次升级来源（Armaments 批次 3）——升级位为 True 而
+    # misc_data=0 时按 n=1 兜底；手改 misc_data 可表达任意升级数
+    #（升级来源接线时应对 Searing Blow 递增 misc_data 而非仅置 upgraded）。
+    n = item.card.misc_data
+    if n == 0 and item.card.upgraded:
+        n = 1
+    dmg = bc.calculate_card_damage(item, item.target, n * (n + 7) // 2 + 12)
+    bc.add_to_bot(Actions.attack_enemy(item.target, dmg))
+
+
+def _blood_for_blood_play(bc: BattleContext, item: CardQueueItem) -> None:
+    # C++ up?22:18（wiki 同）。受击 -1 费由引擎 cost_delta_on_damage 三堆
+    # 遍历实现（onTookDamage→tookDamage→updateCost(-1)，下限 0，无上限
+    # 逻辑——CardInstance.cpp:148 的"cost<4"分支是升级路径，不在受击路径）。
+    dmg = bc.calculate_card_damage(item, item.target, 22 if item.card.upgraded else 18)
+    bc.add_to_bot(Actions.attack_enemy(item.target, dmg))
+
+
+# ---- 生成与击杀奖励族 ----
+
+
+def _immolate_play(bc: BattleContext, item: CardQueueItem) -> None:
+    # C++ up?28:21（wiki 同）；1 张灼伤进弃牌堆
+    bc.add_to_bot(Actions.attack_all_enemy(28 if item.card.upgraded else 21))
+    bc.add_to_bot(Actions.make_temp_card_in_discard(BURN))
+
+
+def _feed_play(bc: BattleContext, item: CardQueueItem) -> None:
+    up = item.card.upgraded
+    dmg = bc.calculate_card_damage(item, item.target, 12 if up else 10)
+
+    def run(bc: BattleContext) -> None:
+        # 对齐 FeedAction：走完整攻击管线；目标死于本次攻击（C++ 另要求
+        # 非随从/非半死/非重生——本引擎 Act 1 无此类怪，化简为死亡判定）
+        # → maxHP +3/4 并回复等量 HP（C++ increaseMaxHp 内含 heal(amount)，
+        # 即"击杀回 X 血"成立）。胜利清队不影响本动作（正在执行中）。
+        m = bc.monsters.monsters[item.target]
+        if m.is_dead_or_escaped():
+            return
+        m.attacked(bc, dmg)
+        bc.check_combat()
+        if not m.alive:
+            n = 4 if up else 3
+            bc.player.max_hp += n
+            bc.player.heal(n, bc)
+
+    bc.add_to_bot(Action(run))
+
+
+def _hand_of_greed_play(bc: BattleContext, item: CardQueueItem) -> None:
+    up = item.card.upgraded
+    dmg = bc.calculate_card_damage(item, item.target, 25 if up else 20)
+
+    def run(bc: BattleContext) -> None:
+        # 对齐 HandOfGreedAction：注意 C++ 用 m.damage（非攻击 HP 损失）
+        # 而非 attacked——不吃 CURL_UP/ANGRY/THE_BOOT 等受击触发
+        #（lightspeed 特有口径，wiki 为普通攻击；伤害数值仍按攻击管线在
+        # 出牌时算好）。击杀 → +20/25 金币。
+        m = bc.monsters.monsters[item.target]
+        if m.is_dead_or_escaped():
+            return
+        m.damage(bc, dmg)
+        bc.check_combat()
+        if not m.alive:
+            bc.player.gold += 25 if up else 20
+
+    bc.add_to_bot(Action(run))
+
+
+BARRICADE = CardDef("Barricade", "壁垒", 3, "Power", "格挡不再在回合开始时消失。", False, False,
+                    _barricade_play, upgraded_cost=2)
+CORRUPTION = CardDef("Corruption", "腐化", 3, "Power", "技能牌费用变为 0，打出即消耗。", False, False,
+                     _corruption_play, upgraded_cost=2)
+DEMON_FORM = CardDef("Demon Form", "恶魔形态", 3, "Power", "每回合开始获得 2 点力量。", False, False, _demon_form_play)
+BERSERK = CardDef("Berserk", "狂暴", 1, "Power", "获得 2 层易伤。每回合额外获得 1 点能量。", False, False,
+                  _berserk_play, upgraded_cost=0)  # lightspeed getEnergyCost 恒 0（偏差），以 wiki 1→0 为准
+BRUTALITY = CardDef("Brutality", "残暴", 1, "Power", "每回合开始失去 1 点 HP 并抽 1 张牌。", False, False,
+                    _brutality_play, upgraded_cost=0, innate_when_upgraded=True)  # 费用同上偏差口径
+JUGGERNAUT = CardDef("Juggernaut", "重装冲锋", 2, "Power", "每次获得格挡时对随机敌人造成 5 点伤害。", False, False,
+                     _juggernaut_play)
+RUPTURE = CardDef("Rupture", "破裂", 1, "Power", "自伤失去 HP 时获得 1 点力量。", False, False, _rupture_play)
+COMBUST = CardDef("Combust", "燃烧", 1, "Power", "回合末失去 1 点 HP，对所有敌人造成 5 点伤害。", False, False,
+                  _combust_play)
+EVOLVE = CardDef("Evolve", "进化", 1, "Power", "抽到状态牌时抽 1 张牌。", False, False, _evolve_play)
+FIRE_BREATHING = CardDef("Fire Breathing", "火焰吐息", 1, "Power", "抽到状态或诅咒牌时对所有敌人造成 4 点伤害。",
+                         False, False, _fire_breathing_play)
+FEEL_NO_PAIN = CardDef("Feel No Pain", "无痛", 1, "Power", "卡牌被消耗时获得 3 点格挡。", False, False,
+                       _feel_no_pain_play)
+DARK_EMBRACE = CardDef("Dark Embrace", "黑暗拥抱", 2, "Power", "卡牌被消耗时抽 1 张牌。", False, False,
+                       _dark_embrace_play, upgraded_cost=1)
+FLAME_BARRIER = CardDef("Flame Barrier", "烈焰屏障", 2, "Skill", "获得 12 点格挡。本回合受到攻击时对攻击者反弹 4 点伤害。",
+                        False, False, _flame_barrier_play)
+DOUBLE_TAP = CardDef("Double Tap", "双重打击", 1, "Skill", "本回合下一张攻击牌结算两次。", False, False, _double_tap_play)
+SECOND_WIND = CardDef("Second Wind", "喘息", 1, "Skill", "消耗手中所有非攻击牌，每张获得 5 点格挡。", False, False,
+                      _second_wind_play)
+SENTINEL = CardDef("Sentinel", "哨兵", 1, "Skill", "获得 5 点格挡。被消耗时获得 2 点能量。", False, False,
+                   _sentinel_play, on_exhaust_effect=_sentinel_on_exhaust)
+POWER_THROUGH = CardDef("Power Through", "硬撑", 1, "Skill", "将 2 张伤口加入手牌。获得 15 点格挡。", False, False,
+                        _power_through_play)
+TRUE_GRIT = CardDef("True Grit", "坚毅", 1, "Skill", "获得 7 点格挡。消耗 1 张随机手牌。", False, False, _true_grit_play)
+HAVOC = CardDef("Havoc", "浩劫", 1, "Skill", "打出抽牌堆顶的牌并消耗它。消耗。", False, True, _havoc_play,
+                upgraded_cost=0)
+INFERNAL_BLADE = CardDef("Infernal Blade", "地狱之刃", 1, "Skill", "随机攻击牌加入手牌，本回合费用为 0。消耗。",
+                         False, True, _infernal_blade_play)  # lightspeed 升级不改费（wiki 为 0 费，偏差以 C++ 为准）
+CARNAGE = CardDef("Carnage", "杀戮", 2, "Attack", "虚无。造成 20 点伤害。", True, False, _carnage_play, ethereal=True)
+GHOSTLY_ARMOR = CardDef("Ghostly Armor", "幽灵护甲", 1, "Skill", "虚无。获得 10 点格挡。", False, False,
+                        _ghostly_armor_play, ethereal=True)
+RAMPAGE = CardDef("Rampage", "狂暴冲杀", 1, "Attack", "造成 8 点伤害。本次战斗中此牌每次打出永久 +5 伤害。",
+                  True, False, _rampage_play)
+SEARING_BLOW = CardDef("Searing Blow", "灼热打击", 2, "Attack", "造成 12 点伤害。可以多次升级，每次 +2 伤害递增。",
+                       True, False, _searing_blow_play)
+BLOOD_FOR_BLOOD = CardDef("Blood for Blood", "以血还血", 4, "Attack", "造成 18 点伤害。战斗中每次失去 HP，费用 -1。",
+                          True, False, _blood_for_blood_play, upgraded_cost=3, cost_delta_on_damage=-1)
+SEVER_SOUL = CardDef("Sever Soul", "撕裂灵魂", 2, "Attack", "消耗手中所有非攻击牌。造成 16 点伤害。", True, False,
+                     _sever_soul_play)
+FIEND_FIRE = CardDef("Fiend Fire", "恶魔之火", 2, "Attack", "消耗手中所有牌，每张造成 7 点伤害。消耗。", True, True,
+                     _fiend_fire_play)
+IMMOLATE = CardDef("Immolate", "焚化", 2, "Attack", "对所有敌人造成 21 点伤害。1 张灼伤加入弃牌堆。", False, False,
+                   _immolate_play)
+FEED = CardDef("Feed", "吞噬", 1, "Attack", "造成 10 点伤害。若击杀敌人，最大 HP +3 并回复 3 点 HP。消耗。",
+               True, True, _feed_play)
+HAND_OF_GREED = CardDef("Hand of Greed", "贪婪之手", 2, "Attack", "造成 20 点伤害。若击杀敌人，获得 20 金币。",
+                        True, False, _hand_of_greed_play)

@@ -371,7 +371,7 @@ class BattleContext:
         # DOUBLE_TAP：本回合下一张攻击牌结算两次（触发后移除；重放项 purge，
         # 不会二次进弃牌堆）
         if p.statuses.has(PlayerStatus.DOUBLE_TAP) and item is not None and not item.autoplay:
-            p.statuses.remove(PlayerStatus.DOUBLE_TAP)
+            p.statuses.decrement(PlayerStatus.DOUBLE_TAP)  # 升级版 2 层连翻两张
             replay = CardQueueItem(
                 card=item.card, target=item.target, purge_on_use=True,
                 autoplay=True, energy_on_use=item.energy_on_use,
@@ -420,12 +420,19 @@ class BattleContext:
             self.relics.on_hand_empty(self)
 
     def on_card_exhausted(self, inst) -> None:
-        """消耗触发（Feel No Pain/Dark Embrace/遗物），一切消耗来源统一走此。"""
+        """消耗触发（Feel No Pain/Dark Embrace/卡牌自带效果/遗物），一切消耗来源统一走此。
+
+        对齐 triggerAndMoveToExhaustPile（BattleContext.cpp:2814-2834）：
+        FEEL_NO_PAIN → DARK_EMBRACE → 卡牌自带消耗效果（Sentinel 回能等）→ 遗物。
+        """
         s = self.player.statuses
         if s.has(PlayerStatus.FEEL_NO_PAIN):
             self.add_to_bot(Actions.gain_block(3 * s.get(PlayerStatus.FEEL_NO_PAIN)))
         if s.has(PlayerStatus.DARK_EMBRACE):
             self.add_to_bot(Actions.draw_cards(s.get(PlayerStatus.DARK_EMBRACE)))
+        eff = getattr(inst.card, "on_exhaust_effect", None)
+        if eff is not None:
+            eff(self, inst)
         self.relics.on_card_exhausted(self, inst)
 
     # ---- 回合生命周期 ----

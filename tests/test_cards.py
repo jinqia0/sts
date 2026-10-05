@@ -9,44 +9,76 @@ bc.cards.instantiate(CardDef) + bc.cards.hand.append(...) + bc.play_card(...)，
 """
 
 from sts.combat import BattleContext
-from sts.combat.types import MonsterStatus, PlayerStatus
+from sts.combat.types import InputState, MonsterStatus, PlayerStatus
 from sts.content.cards import (
     ANGER,
+    BARRICADE,
     BATTLE_TRANCE,
+    BERSERK,
     BLUDGEON,
+    BLOOD_FOR_BLOOD,
     BLOODLETTING,
     BODY_SLAM,
+    BRUTALITY,
+    CARNAGE,
     CLASH,
     CLEAVE,
     CLOTHESLINE,
+    COMBUST,
+    CORRUPTION,
+    DARK_EMBRACE,
     DEFEND,
+    DEMON_FORM,
     DISARM,
+    DOUBLE_TAP,
     DROPKICK,
     ENTRENCH,
+    EVOLVE,
+    FEED,
+    FEEL_NO_PAIN,
+    FIEND_FIRE,
+    FIRE_BREATHING,
     FLEX,
+    FLAME_BARRIER,
+    GHOSTLY_ARMOR,
+    HAND_OF_GREED,
+    HAVOC,
     HEAVY_BLADE,
     HEMOKINESIS,
+    IMMOLATE,
     IMPERVIOUS,
     INFLAME,
+    INFERNAL_BLADE,
     INTIMIDATE,
     IRON_WAVE,
+    JUGGERNAUT,
     LIMIT_BREAK,
     METALLICIZE,
     OFFERING,
     PERFECTED_STRIKE,
     POMMEL_STRIKE,
+    POWER_THROUGH,
     PUMMEL,
+    RAMPAGE,
     REAPER,
+    RUPTURE,
     SEEING_RED,
+    SECOND_WIND,
+    SEARING_BLOW,
+    SENTINEL,
+    SEVER_SOUL,
     SHOCKWAVE,
     SHRUG_IT_OFF,
+    SLIMED,
     SPOT_WEAKNESS,
     STRIKE,
     SWORD_BOOMERANG,
     THUNDERCLAP,
+    TRUE_GRIT,
     TWIN_STRIKE,
     UPPERCUT,
     WILD_STRIKE,
+    WOUND,
 )
 from sts.content.monsters import Cultist
 
@@ -709,3 +741,755 @@ def test_metallicize_end_of_turn_block():
     bc.end_turn()  # 回合 2 末 +3 格挡 → 敌回合 2 黑暗打击 6：吸收 3，掉 3 血
     assert bc.player.hp == 80 - 3
     assert bc.player.block == 0
+
+
+# ---- 中等档批次 2：Power 状态族 / 消耗族 / 虚无族 / 实例计数族 / 生成与击杀奖励族 ----
+# 数值以 lightspeed C++ 为准；升级版在"层数×固定基数"引擎语义下与 C++
+# "每次触发数值"语义有差异的卡（COMBUST/FIRE_BREATHING/FEEL_NO_PAIN/
+# JUGGERNAUT），各测试注释中均已标明。
+
+
+def run_queue(bc: BattleContext) -> None:
+    """把挂起队列跑到底（直接调用引擎方法入队动作后使用）。"""
+    if bc.input_state == InputState.PLAYER_NORMAL:
+        bc.set_state(InputState.EXECUTING_ACTIONS)
+    bc.execute_actions()
+
+
+# ---- Power 状态族 ----
+
+
+def test_barricade_card_keeps_block():
+    """壁垒：格挡跨回合保留；费用 3→2。"""
+    bc = BattleContext(seed=70)
+    bc.player.energy = 5
+    setup_hand(bc, DEFEND, BARRICADE)
+    bc.play_card(0)  # Defend：格挡 5
+    bc.play_card(0)  # Barricade：3 费
+    assert bc.player.statuses.get(PlayerStatus.BARRICADE) == 1
+    assert bc.player.energy == 1
+    bc.end_turn()  # 敌回合 1 咒语不攻击；回合 2 开始格挡不清零
+    assert bc.player.block == 5
+    bc2 = BattleContext(seed=70)
+    setup_hand_upgraded(bc2, BARRICADE)
+    bc2.play_card(0)
+    assert bc2.player.energy == 3 - 2
+    assert BARRICADE.upgraded_cost == 2
+
+
+def test_corruption_card_free_exhaust_skills():
+    """腐化：技能 0 费且打出即消耗；攻击牌不受影响；费用 3→2。"""
+    bc = BattleContext(seed=71)
+    bc.player.energy = 4
+    setup_hand(bc, CORRUPTION, DEFEND, STRIKE)
+    bc.play_card(0)  # 3 费
+    assert bc.player.statuses.get(PlayerStatus.CORRUPTION) == 1
+    assert bc.player.energy == 1
+    bc.play_card(0)  # Defend：0 费 + 消耗
+    assert bc.player.block == 5
+    assert bc.player.energy == 1
+    assert any(c.card.name == "Defend" for c in bc.cards.exhaust_pile)
+    bc.play_card(0)  # Strike：正常 1 费，不消耗
+    assert bc.player.energy == 0
+    assert not any(c.card.name == "Strike" for c in bc.cards.exhaust_pile)
+    bc2 = BattleContext(seed=71)
+    setup_hand_upgraded(bc2, CORRUPTION)
+    bc2.play_card(0)
+    assert bc2.player.energy == 3 - 2
+
+
+def test_demon_form_card_strength_per_turn():
+    """恶魔形态：回合开始（抽牌后）+2 力量；升级 +3。"""
+    bc = BattleContext(seed=72)
+    setup_hand(bc, DEMON_FORM)
+    bc.play_card(0)
+    assert bc.player.statuses.get(PlayerStatus.DEMON_FORM) == 2
+    bc.end_turn()
+    assert bc.player.statuses.get(PlayerStatus.STRENGTH) == 2
+    bc2 = BattleContext(seed=72)
+    setup_hand_upgraded(bc2, DEMON_FORM)
+    bc2.play_card(0)
+    bc2.end_turn()
+    assert bc2.player.statuses.get(PlayerStatus.STRENGTH) == 3
+
+
+def test_berserk_card_energy_and_vulnerable():
+    """狂暴：+1 每回合同能量 + 2 层易伤（自施，当轮递减）；升级 0 费仅 1 层易伤。"""
+    bc = BattleContext(seed=73)
+    setup_hand(bc, BERSERK)
+    bc.play_card(0)
+    assert bc.player.energy_per_turn_bonus == 1
+    assert bc.player.statuses.get(PlayerStatus.VULNERABLE) == 2
+    assert bc.player.energy == 2
+    bc.end_turn()
+    # 回合 2 回能 3+1（敌回合 1 为咒语；自施易伤在回合末衰减 1 层）
+    assert bc.player.energy == 4
+    bc2 = BattleContext(seed=73)
+    setup_hand_upgraded(bc2, BERSERK)
+    bc2.play_card(0)
+    assert bc2.player.energy == 3  # 0 费
+    assert bc2.player.statuses.get(PlayerStatus.VULNERABLE) == 1
+
+
+def test_brutality_card_draw_and_hp_loss():
+    """残暴：回合开始（抽牌后）失 1 HP 并抽 1；升级 0 费且 innate_when_upgraded 置位。"""
+    bc = BattleContext(seed=74)
+    bc.cards.draw_pile.append(bc.cards.instantiate(STRIKE))  # 凑 6 张，验证补抽
+    setup_hand(bc, BRUTALITY)
+    bc.play_card(0)
+    assert bc.player.statuses.get(PlayerStatus.BRUTALITY) == 1
+    bc.end_turn()  # 回合 2 开始：抽 5 后失 1 HP 并补抽 1（敌回合 1 咒语未攻击）
+    assert bc.player.hp == 80 - 1
+    assert len(bc.cards.hand) == 5 + 1
+    bc2 = BattleContext(seed=74)
+    setup_hand_upgraded(bc2, BRUTALITY)
+    bc2.play_card(0)
+    assert bc2.player.energy == 3  # 升级 0 费
+    # 升级版固有（C++ isCardInnate 的 upgraded 分支）：用 innate_when_upgraded
+    # 位表达，待引擎 move_innate_to_top 接线（见批次 2 报告）
+    assert BRUTALITY.innate_when_upgraded is True
+    assert BRUTALITY.innate is False
+
+
+def test_juggernaut_card_damage_on_block():
+    """重装冲锋：获得格挡 → 随机敌人 5 伤（单怪确定）；升级 2 层 10 伤（C++ 为 7，见注释）。"""
+    bc = BattleContext(seed=75)
+    bc.player.energy = 3
+    m = bc.monsters.monsters[0]
+    hp0 = m.hp
+    setup_hand(bc, JUGGERNAUT, DEFEND)
+    bc.play_card(0)
+    bc.play_card(0)  # Defend → 触发
+    assert bc.player.block == 5
+    assert m.hp == hp0 - 5
+    bc2 = BattleContext(seed=75)
+    bc2.player.energy = 3
+    m2 = bc2.monsters.monsters[0]
+    hp1 = m2.hp
+    setup_hand_upgraded(bc2, JUGGERNAUT, DEFEND)
+    bc2.play_card(0)
+    bc2.play_card(0)
+    # 引擎 JUGGERNAUT=层数、5×层：升级 2 层 → 10 伤（lightspeed C++ 存值 7）
+    assert m2.hp == hp1 - 10
+
+
+def test_rupture_card_strength_on_self_hp_loss():
+    """破裂：自伤失去 HP 时 +1 力量；升级 +2。"""
+    bc = BattleContext(seed=76)
+    setup_hand(bc, RUPTURE, BLOODLETTING)
+    bc.play_card(0)
+    bc.play_card(0)  # 放血：自伤失 3 HP → +1 力量
+    assert bc.player.statuses.get(PlayerStatus.STRENGTH) == 1
+    assert bc.player.hp == 80 - 3
+    # 升级：每次自伤 +2 力量
+    bc2 = BattleContext(seed=76)
+    bc2.cards.hand.clear()
+    r = bc2.cards.instantiate(RUPTURE)
+    r.upgraded = True
+    bc2.cards.hand.extend([r, bc2.cards.instantiate(BLOODLETTING)])
+    bc2.play_card(0)
+    bc2.play_card(0)
+    assert bc2.player.statuses.get(PlayerStatus.STRENGTH) == 2
+
+
+def test_combust_card_end_of_turn():
+    """燃烧：回合末失 1 HP + 全体 5 伤；升级 2 层（引擎口径：失 2/10 伤，C++ 为 1/7，见注释）。"""
+    bc = BattleContext(seed=77)
+    m = bc.monsters.monsters[0]
+    hp0 = m.hp
+    setup_hand(bc, COMBUST)
+    bc.play_card(0)
+    assert bc.player.statuses.get(PlayerStatus.COMBUST) == 1
+    bc.end_turn()  # 回合末结算：失 1 HP、全体 5 伤（敌回合 1 咒语不攻击）
+    assert bc.player.hp == 80 - 1
+    assert m.hp == hp0 - 5
+    bc2 = BattleContext(seed=77)
+    m2 = bc2.monsters.monsters[0]
+    hp1 = m2.hp
+    setup_hand_upgraded(bc2, COMBUST)
+    bc2.play_card(0)
+    assert bc2.player.statuses.get(PlayerStatus.COMBUST) == 2
+    bc2.end_turn()
+    assert bc2.player.hp == 80 - 2
+    assert m2.hp == hp1 - 10
+
+
+def test_evolve_card_draws_on_status_draw():
+    """进化：抽到状态牌时补抽 1×层。"""
+    bc = BattleContext(seed=78)
+    bc.cards.draw_pile.clear()
+    bc.cards.draw_pile.append(bc.cards.instantiate(STRIKE))
+    bc.cards.draw_pile.append(bc.cards.instantiate(WOUND))  # 尾部 = 堆顶
+    setup_hand(bc, EVOLVE)
+    bc.play_card(0)
+    bc.draw_cards(1)  # 抽到伤口 → 补抽 1
+    assert len(bc.cards.hand) == 2
+    assert [c.card.name for c in bc.cards.hand] == ["Wound", "Strike"]
+    bc2 = BattleContext(seed=78)
+    bc2.cards.draw_pile.clear()
+    bc2.cards.draw_pile.append(bc2.cards.instantiate(STRIKE))
+    bc2.cards.draw_pile.append(bc2.cards.instantiate(DEFEND))
+    bc2.cards.draw_pile.append(bc2.cards.instantiate(WOUND))
+    setup_hand_upgraded(bc2, EVOLVE)
+    bc2.play_card(0)
+    bc2.draw_cards(1)  # 抽到伤口 → 补抽 2
+    assert len(bc2.cards.hand) == 3
+
+
+def test_fire_breathing_card_damage_on_status_draw():
+    """火息：抽到状态/诅咒牌时全体 4 伤（引擎 4×层；C++ 直存 6/10，见注释）。"""
+    bc = BattleContext(seed=79)
+    add_cultist(bc)
+    hp0 = [m.hp for m in bc.monsters.monsters]
+    bc.cards.draw_pile.clear()
+    bc.cards.draw_pile.append(bc.cards.instantiate(WOUND))
+    setup_hand(bc, FIRE_BREATHING)
+    bc.play_card(0)
+    bc.draw_cards(1)  # 抽到伤口 → 全体 4 伤入队
+    run_queue(bc)
+    assert [m.hp for m in bc.monsters.monsters] == [hp0[0] - 4, hp0[1] - 4]
+    bc2 = BattleContext(seed=79)
+    add_cultist(bc2)
+    hp1 = [m.hp for m in bc2.monsters.monsters]
+    bc2.cards.draw_pile.clear()
+    bc2.cards.draw_pile.append(bc2.cards.instantiate(WOUND))
+    setup_hand_upgraded(bc2, FIRE_BREATHING)
+    bc2.play_card(0)
+    bc2.draw_cards(1)
+    run_queue(bc2)
+    # 升级 2 层 × 4 = 8（lightspeed C++ 直存 10，wiki 为 6）
+    assert [m.hp for m in bc2.monsters.monsters] == [hp1[0] - 8, hp1[1] - 8]
+
+
+def test_feel_no_pain_card_block_on_exhaust():
+    """无痛：卡被消耗时 +3 格挡；升级 2 层 +6（C++ 为 4，见注释）。"""
+    bc = BattleContext(seed=80)
+    setup_hand(bc, FEEL_NO_PAIN, SLIMED)
+    bc.play_card(0)
+    assert bc.player.statuses.get(PlayerStatus.FEEL_NO_PAIN) == 1
+    bc.play_card(0)  # Slimed：消耗 → +3 格挡
+    assert bc.player.block == 3
+    assert any(c.card.name == "Slimed" for c in bc.cards.exhaust_pile)
+    bc2 = BattleContext(seed=80)
+    setup_hand_upgraded(bc2, FEEL_NO_PAIN, SLIMED)
+    bc2.play_card(0)
+    bc2.play_card(0)
+    assert bc2.player.block == 6  # 引擎 3×2 层；lightspeed C++ 直存 4
+
+
+def test_dark_embrace_card_draw_on_exhaust():
+    """黑暗拥抱：卡被消耗时抽 1（升级仍 1，C++ 无 up 分支，仅改费 2→1）。"""
+    bc = BattleContext(seed=81)
+    draw0 = len(bc.cards.draw_pile)
+    setup_hand(bc, DARK_EMBRACE, SLIMED)
+    bc.play_card(0)
+    bc.play_card(0)  # Slimed：消耗 → 抽 1
+    assert len(bc.cards.hand) == 1
+    assert len(bc.cards.draw_pile) == draw0 - 1
+    bc2 = BattleContext(seed=81)
+    setup_hand_upgraded(bc2, DARK_EMBRACE, SLIMED)
+    bc2.play_card(0)
+    assert bc2.player.energy == 3 - 1  # 升级 1 费
+    bc2.play_card(0)  # Slimed：消耗 → 抽 1
+    assert bc2.player.energy == 3 - 1 - 1
+    assert len(bc2.cards.hand) == 1
+    assert bc2.player.statuses.get(PlayerStatus.DARK_EMBRACE) == 1
+
+
+def test_flame_barrier_card_block_and_reflect():
+    """烈焰屏障：12 格挡 + 本回合受攻击反弹 4；升级 16/6。"""
+    bc = BattleContext(seed=82)
+    m = bc.monsters.monsters[0]
+    hp0 = m.hp
+    setup_hand(bc, FLAME_BARRIER)
+    bc.play_card(0)
+    assert bc.player.block == 12
+    assert bc.player.statuses.get(PlayerStatus.FLAME_BARRIER) == 4
+    bc.player.attacked(bc, 0, 6)  # 6 伤全被格挡吸收，仍反弹
+    run_queue(bc)
+    assert bc.player.block == 6
+    assert bc.player.hp == 80
+    assert m.hp == hp0 - 4
+    bc2 = BattleContext(seed=82)
+    m2 = bc2.monsters.monsters[0]
+    hp1 = m2.hp
+    setup_hand_upgraded(bc2, FLAME_BARRIER)
+    bc2.play_card(0)
+    assert bc2.player.block == 16
+    assert bc2.player.statuses.get(PlayerStatus.FLAME_BARRIER) == 6
+    bc2.player.attacked(bc2, 0, 6)
+    run_queue(bc2)
+    assert m2.hp == hp1 - 6
+
+
+def test_double_tap_card_doubles_next_attack():
+    """双重打击：本回合下一张攻击牌结算两次；升级状态 2 层（引擎 remove 缺陷，见注释）。"""
+    bc = BattleContext(seed=83)
+    bc.player.energy = 2
+    m = bc.monsters.monsters[0]
+    hp0 = m.hp
+    setup_hand(bc, DOUBLE_TAP, STRIKE)
+    bc.play_card(0)
+    assert bc.player.statuses.get(PlayerStatus.DOUBLE_TAP) == 1
+    bc.play_card(0)  # Strike 结算两次
+    assert m.hp == hp0 - 12
+    assert not bc.player.statuses.has(PlayerStatus.DOUBLE_TAP)
+    assert any(c.card.name == "Strike" for c in bc.cards.discard_pile)  # 本体落弃牌堆
+    # 升级：C++ 应为 2 层（翻倍接下来两张攻击牌）；引擎 on_use_attack_card
+    # 触发时整状态 remove 而非递减 → 实际只翻倍第一张，待引擎修复（批次 2 报告）
+    bc2 = BattleContext(seed=83)
+    setup_hand_upgraded(bc2, DOUBLE_TAP)
+    bc2.play_card(0)
+    assert bc2.player.statuses.get(PlayerStatus.DOUBLE_TAP) == 2
+
+
+# ---- 消耗族 ----
+
+
+def test_second_wind_exhausts_and_blocks():
+    """喘息：消耗全部非攻击手牌，每张 +5 格挡（升级 +7）；攻击牌保留；无消耗对象时 0 格挡。"""
+    bc = BattleContext(seed=84)
+    setup_hand(bc, SECOND_WIND, DEFEND, INFLAME, STRIKE)
+    bc.play_card(0)
+    assert bc.player.block == 10  # Defend + Inflame 两张 × 5
+    exhausted_names = {c.card.name for c in bc.cards.exhaust_pile}
+    assert exhausted_names == {"Defend", "Inflame"}
+    assert [c.card.name for c in bc.cards.hand] == ["Strike"]
+    bc2 = BattleContext(seed=84)
+    setup_hand_upgraded(bc2, SECOND_WIND, DEFEND, INFLAME, STRIKE)
+    bc2.play_card(0)
+    assert bc2.player.block == 14  # 2 张 × 7
+    # 空条件：手牌只有攻击牌 → 无消耗对象、0 格挡
+    bc3 = BattleContext(seed=84)
+    setup_hand(bc3, SECOND_WIND, STRIKE)
+    bc3.play_card(0)
+    assert bc3.player.block == 0
+    assert [c.card.name for c in bc3.cards.hand] == ["Strike"]
+    assert bc3.cards.exhaust_pile == []
+
+
+def test_sever_soul_exhausts_then_damage():
+    """撕裂灵魂：16 伤 + 消耗全部非攻击手牌（C++ 结算序：先伤害后消耗）；升级 22。"""
+    bc = BattleContext(seed=85)
+    m = bc.monsters.monsters[0]
+    hp0 = m.hp
+    setup_hand(bc, SEVER_SOUL, DEFEND, INFLAME, STRIKE)
+    bc.play_card(0)
+    assert m.hp == hp0 - 16
+    exhausted_names = {c.card.name for c in bc.cards.exhaust_pile}
+    assert exhausted_names == {"Defend", "Inflame"}
+    assert [c.card.name for c in bc.cards.hand] == ["Strike"]
+    bc2 = BattleContext(seed=85)
+    m2 = bc2.monsters.monsters[0]
+    hp1 = m2.hp
+    setup_hand_upgraded(bc2, SEVER_SOUL, DEFEND)
+    bc2.play_card(0)
+    assert m2.hp == hp1 - 22
+    assert any(c.card.name == "Defend" for c in bc2.cards.exhaust_pile)
+
+
+def test_fiend_fire_exhausts_all_then_multi_hit():
+    """恶魔之火：消耗全部手牌（含随机序），每张 7 伤同目标；自身消耗；空手 0 伤；升级 10。"""
+    bc = BattleContext(seed=86)
+    m = bc.monsters.monsters[0]
+    hp0 = m.hp
+    setup_hand(bc, FIEND_FIRE, DEFEND, INFLAME, STRIKE)
+    bc.play_card(0)
+    assert m.hp == hp0 - 21  # 3 张手牌 × 7
+    exhausted_names = {c.card.name for c in bc.cards.exhaust_pile}
+    assert exhausted_names == {"Fiend Fire", "Defend", "Inflame", "Strike"}
+    assert bc.cards.hand == []
+    bc2 = BattleContext(seed=86)
+    m2 = bc2.monsters.monsters[0]
+    hp1 = m2.hp
+    setup_hand_upgraded(bc2, FIEND_FIRE, DEFEND, INFLAME, STRIKE)
+    bc2.play_card(0)
+    assert m2.hp == hp1 - 30  # 3 × 10
+    # 空手：无消耗对象、0 伤，仅自身消耗
+    bc3 = BattleContext(seed=86)
+    m3 = bc3.monsters.monsters[0]
+    hp2 = m3.hp
+    setup_hand(bc3, FIEND_FIRE)
+    bc3.play_card(0)
+    assert m3.hp == hp2
+    assert [c.card.name for c in bc3.cards.exhaust_pile] == ["Fiend Fire"]
+
+
+def test_sentinel_block_and_exhaust_energy():
+    """哨兵：打出仅 5 格挡（正常落弃牌堆）；被消耗时 +2 能量（升级 +3，C++ 口径）；弃置不触发。"""
+    # 打出：仅格挡，不触发能量
+    bc = BattleContext(seed=87)
+    setup_hand(bc, SENTINEL)
+    bc.play_card(0)
+    assert bc.player.block == 5
+    assert bc.player.energy == 2
+    assert any(c.card.name == "Sentinel" for c in bc.cards.discard_pile)
+    # 被消耗（Second Wind 路径，Sentinel 留在手牌未打出）→ +2 能量
+    bc2 = BattleContext(seed=87)
+    setup_hand(bc2, SECOND_WIND, SENTINEL)
+    bc2.play_card(0)
+    assert bc2.player.block == 5  # Second Wind 每张 5 格挡
+    assert bc2.player.energy == 3 - 1 + 2
+    assert any(c.card.name == "Sentinel" for c in bc2.cards.exhaust_pile)
+    # 升级：8 格挡；被消耗 +3 能量
+    bc3 = BattleContext(seed=87)
+    setup_hand(bc3, SENTINEL)
+    bc3.cards.hand[0].upgraded = True
+    bc3.play_card(0)
+    assert bc3.player.block == 8
+    bc4 = BattleContext(seed=87)
+    setup_hand_upgraded(bc4, SECOND_WIND, SENTINEL)  # SW+ 7/张 + Sentinel+ +3 能量
+    bc4.play_card(0)
+    assert bc4.player.block == 7
+    assert bc4.player.energy == 3 - 1 + 3
+    # 正常弃置（回合末）不触发能量
+    bc5 = BattleContext(seed=87)
+    setup_hand(bc5, SENTINEL)
+    bc5.end_turn()
+    assert any(c.card.name == "Sentinel" for c in bc5.cards.discard_pile)
+    assert bc5.player.energy == 3
+
+
+def test_power_through_wounds_and_block():
+    """硬撑：2 张伤口入手 + 15 格挡（顺序：先伤口后格挡）；升级 20。"""
+    bc = BattleContext(seed=88)
+    setup_hand(bc, POWER_THROUGH)
+    bc.play_card(0)
+    assert bc.player.block == 15
+    wounds = [c for c in bc.cards.hand if c.card.name == "Wound"]
+    assert len(wounds) == 2
+    assert len({c.unique_id for c in wounds}) == 2
+    bc2 = BattleContext(seed=88)
+    setup_hand_upgraded(bc2, POWER_THROUGH)
+    bc2.play_card(0)
+    assert bc2.player.block == 20
+    assert len([c for c in bc2.cards.hand if c.card.name == "Wound"]) == 2
+
+
+def test_true_grit_block_and_random_exhaust():
+    """坚毅（基础）：7 格挡 + 随机消耗 1 张手牌（misc 流）；空手不消耗。"""
+    bc = BattleContext(seed=89)
+    setup_hand(bc, TRUE_GRIT, DEFEND, STRIKE)
+    bc.play_card(0)
+    assert bc.player.block == 7
+    exhausted = [c.card.name for c in bc.cards.exhaust_pile]
+    assert len(exhausted) == 1
+    assert exhausted[0] in ("Defend", "Strike")
+    assert len(bc.cards.hand) == 1
+    assert bc.cards.hand[0].card.name != exhausted[0]
+    # 空手：仅格挡，无消耗
+    bc2 = BattleContext(seed=89)
+    setup_hand(bc2, TRUE_GRIT)
+    bc2.play_card(0)
+    assert bc2.player.block == 7
+    assert bc2.cards.exhaust_pile == []
+
+
+def test_true_grit_upgraded_opens_card_select():
+    """坚毅+：9 格挡 + 选卡消耗（can_pick_zero=False）；单候选直执；空手跳过。"""
+    bc = BattleContext(seed=89)
+    setup_hand_upgraded(bc, TRUE_GRIT, DEFEND, STRIKE)
+    bc.play_card(0)
+    assert bc.player.block == 9
+    assert bc.input_state == InputState.CARD_SELECT
+    bc.choose_card(0)  # 选 Defend
+    assert any(c.card.name == "Defend" for c in bc.cards.exhaust_pile)
+    assert [c.card.name for c in bc.cards.hand] == ["Strike"]
+    # 单候选：不挂选卡直接消耗
+    bc2 = BattleContext(seed=89)
+    setup_hand_upgraded(bc2, TRUE_GRIT, DEFEND)
+    bc2.play_card(0)
+    assert bc2.input_state == InputState.PLAYER_NORMAL
+    assert any(c.card.name == "Defend" for c in bc2.cards.exhaust_pile)
+    assert bc2.cards.hand == []
+    # 空手：仅格挡
+    bc3 = BattleContext(seed=89)
+    setup_hand_upgraded(bc3, TRUE_GRIT)
+    bc3.play_card(0)
+    assert bc3.player.block == 9
+    assert bc3.input_state == InputState.PLAYER_NORMAL
+
+
+def test_havoc_plays_top_card_and_exhausts_both():
+    """浩劫：免费随机目标打出抽牌堆顶并消耗它，自身也消耗；升级 0 费。"""
+    bc = BattleContext(seed=94)
+    m = bc.monsters.monsters[0]
+    hp0 = m.hp
+    bc.cards.draw_pile.clear()
+    bc.cards.discard_pile.clear()
+    top = bc.cards.instantiate(STRIKE)
+    bc.cards.draw_pile.append(top)  # 列表尾 = 堆顶
+    setup_hand(bc, HAVOC)
+    bc.play_card(0)
+    assert m.hp == hp0 - 6  # 免费打出的打击
+    assert any(c is top for c in bc.cards.exhaust_pile)  # 顶牌消耗
+    assert any(c.card.name == "Havoc" for c in bc.cards.exhaust_pile)  # 自身消耗
+    assert bc.player.energy == 2
+    # 两堆皆空：无牌可打，仅自身消耗，不崩
+    bc2 = BattleContext(seed=94)
+    bc2.cards.draw_pile.clear()
+    bc2.cards.discard_pile.clear()
+    setup_hand(bc2, HAVOC)
+    bc2.play_card(0)
+    assert [c.card.name for c in bc2.cards.exhaust_pile] == ["Havoc"]
+    # 抽牌堆空、弃牌堆有牌：先洗再打出
+    bc3 = BattleContext(seed=94)
+    bc3.cards.draw_pile.clear()
+    defend_inst = bc3.cards.instantiate(DEFEND)
+    bc3.cards.discard_pile.append(defend_inst)
+    setup_hand(bc3, HAVOC)
+    bc3.play_card(0)
+    assert bc3.player.block == 5
+    assert any(c is defend_inst for c in bc3.cards.exhaust_pile)
+    # 顶牌是状态卡：无效果落堆（对齐 C++ useCard 的 STATUS 分支），不崩
+    bc4 = BattleContext(seed=94)
+    m4 = bc4.monsters.monsters[0]
+    hp4 = m4.hp
+    bc4.cards.draw_pile.clear()
+    wound = bc4.cards.instantiate(WOUND)
+    bc4.cards.draw_pile.append(wound)
+    setup_hand(bc4, HAVOC)
+    bc4.play_card(0)
+    assert m4.hp == hp4
+    assert any(c is wound for c in bc4.cards.exhaust_pile)
+    # 升级 0 费
+    bc5 = BattleContext(seed=94)
+    bc5.cards.draw_pile.clear()
+    bc5.cards.draw_pile.append(bc5.cards.instantiate(STRIKE))
+    setup_hand_upgraded(bc5, HAVOC)
+    bc5.play_card(0)
+    assert bc5.player.energy == 3
+
+
+def test_infernal_blade_random_free_attack():
+    """地狱之刃：随机攻击牌 0 费入手，自身消耗；生成牌本回合免费打出。"""
+    bc = BattleContext(seed=95)
+    setup_hand(bc, INFERNAL_BLADE)
+    bc.play_card(0)
+    assert any(c.card.name == "Infernal Blade" for c in bc.cards.exhaust_pile)
+    assert len(bc.cards.hand) == 1
+    gen = bc.cards.hand[0]
+    assert gen.card.ctype == "Attack"
+    assert gen.cost == 0  # cost_for_turn=0
+    m = bc.monsters.monsters[0]
+    hp0 = m.hp
+    energy0 = bc.player.energy
+    bc.play_card(0)  # 0 费打出
+    assert bc.player.energy == energy0
+    # 攻击牌实际结算（恶魔之火空手时 0 段除外——池内唯一零伤特例）
+    if gen.card.name != "Fiend Fire":
+        assert m.hp < hp0
+    assert gen not in bc.cards.hand  # 打出后离开手牌
+
+
+# ---- 虚无族 ----
+
+
+def test_carnage_ethereal_attack():
+    """杀戮：20 伤；虚无——回合末在手则消耗；升级 28。"""
+    bc = BattleContext(seed=90)
+    m = bc.monsters.monsters[0]
+    hp0 = m.hp
+    setup_hand(bc, CARNAGE)
+    bc.play_card(0)
+    assert m.hp == hp0 - 20
+    bc2 = BattleContext(seed=90)
+    setup_hand(bc2, CARNAGE, DEFEND)
+    bc2.end_turn()  # 不打：回合末虚无消耗；Defend 正常弃置
+    assert any(c.card.name == "Carnage" for c in bc2.cards.exhaust_pile)
+    assert any(c.card.name == "Defend" for c in bc2.cards.discard_pile)
+    bc3 = BattleContext(seed=90)
+    m3 = bc3.monsters.monsters[0]
+    hp3 = m3.hp
+    setup_hand_upgraded(bc3, CARNAGE)
+    bc3.play_card(0)
+    assert m3.hp == hp3 - 28
+
+
+def test_ghostly_armor_ethereal_block():
+    """幽灵护甲：10 格挡；虚无；升级 13。"""
+    bc = BattleContext(seed=91)
+    setup_hand(bc, GHOSTLY_ARMOR)
+    bc.play_card(0)
+    assert bc.player.block == 10
+    bc2 = BattleContext(seed=91)
+    setup_hand(bc2, GHOSTLY_ARMOR, DEFEND)
+    bc2.end_turn()
+    assert any(c.card.name == "Ghostly Armor" for c in bc2.cards.exhaust_pile)
+    assert any(c.card.name == "Defend" for c in bc2.cards.discard_pile)
+    bc3 = BattleContext(seed=91)
+    setup_hand_upgraded(bc3, GHOSTLY_ARMOR)
+    bc3.play_card(0)
+    assert bc3.player.block == 13
+
+
+# ---- 实例计数族 ----
+
+
+def test_rampage_same_instance_stacks():
+    """狂暴冲杀：同一实例连打叠伤（先算后加：8 → 13 → 18）；升级 +8。"""
+    bc = BattleContext(seed=92)
+    m = bc.monsters.monsters[0]
+    hp0 = m.hp
+    setup_hand(bc, RAMPAGE)
+    inst = bc.cards.hand[0]
+    bc.play_card(0)
+    assert m.hp == hp0 - 8
+    assert inst.misc_data == 5
+    # 同一实例从弃牌堆取回再打
+    bc.cards.discard_pile.remove(inst)
+    bc.cards.hand.append(inst)
+    bc.play_card(0)
+    assert m.hp == hp0 - 8 - 13
+    assert inst.misc_data == 10
+    # 升级 +8/次
+    bc2 = BattleContext(seed=92)
+    m2 = bc2.monsters.monsters[0]
+    hp1 = m2.hp
+    setup_hand_upgraded(bc2, RAMPAGE)
+    inst2 = bc2.cards.hand[0]
+    bc2.play_card(0)
+    assert m2.hp == hp1 - 8
+    bc2.cards.discard_pile.remove(inst2)
+    bc2.cards.hand.append(inst2)
+    bc2.play_card(0)
+    assert m2.hp == hp1 - 8 - 16
+    assert inst2.misc_data == 16
+
+
+def test_searing_blow_upgrade_count_formula():
+    """灼热打击：base = 12 + n×(n+7)/2（n=misc_data 升级数）：12/16/21/27；升级位兜底 n=1。"""
+    bc = BattleContext(seed=93)
+    m = bc.monsters.monsters[0]
+    m.hp = 200
+    m.max_hp = 200
+    hp0 = m.hp
+    for n, expected in [(0, 12), (1, 16), (2, 21), (3, 27)]:
+        setup_hand(bc, SEARING_BLOW)
+        bc.cards.hand[0].misc_data = n
+        bc.player.energy = 2
+        bc.play_card(0)
+        assert m.hp == hp0 - expected
+        hp0 = m.hp
+    # 升级位为 True 而 misc_data=0 → 按 n=1 兜底（16）
+    setup_hand_upgraded(bc, SEARING_BLOW)
+    bc.player.energy = 2
+    bc.play_card(0)
+    assert m.hp == hp0 - 16
+
+
+def test_blood_for_blood_cost_reduces_on_damage():
+    """以血还血：4 费、每次失去 HP 永久 -1（下限 0）；18/22 伤；升级基费 3。"""
+    bc = BattleContext(seed=96)
+    m = bc.monsters.monsters[0]
+    m.hp = 100
+    setup_hand(bc, BLOOD_FOR_BLOOD)
+    inst = bc.cards.hand[0]
+    assert inst.cost == 4
+    bc.player.lose_hp(bc, 2)
+    assert inst.cost == 3
+    bc.player.lose_hp(bc, 2)
+    assert inst.cost == 2
+    bc.player.energy = 4
+    bc.play_card(0)
+    assert m.hp == 100 - 18
+    assert bc.player.energy == 4 - 2  # 按当前费用 2 收费
+    # 下限 0
+    for _ in range(5):
+        bc.player.lose_hp(bc, 1)
+    assert inst.cost == 0
+    bc2 = BattleContext(seed=96)
+    m2 = bc2.monsters.monsters[0]
+    m2.hp = 100
+    setup_hand_upgraded(bc2, BLOOD_FOR_BLOOD)
+    inst2 = bc2.cards.hand[0]
+    assert inst2.cost == 3
+    bc2.player.lose_hp(bc2, 2)
+    assert inst2.cost == 2
+    bc2.player.energy = 3
+    bc2.play_card(0)
+    assert m2.hp == 100 - 22
+
+
+# ---- 生成与击杀奖励族 ----
+
+
+def test_immolate_all_damage_and_burn():
+    """焚化：全体 21 伤（升级 28）+ 1 张灼伤进弃牌堆。"""
+    bc = BattleContext(seed=97)
+    add_cultist(bc)
+    hp0 = [m.hp for m in bc.monsters.monsters]
+    setup_hand(bc, IMMOLATE)
+    bc.play_card(0)
+    assert [m.hp for m in bc.monsters.monsters] == [hp0[0] - 21, hp0[1] - 21]
+    burns = [c for c in bc.cards.discard_pile if c.card.name == "Burn"]
+    assert len(burns) == 1
+    bc2 = BattleContext(seed=97)
+    add_cultist(bc2)
+    hp1 = [m.hp for m in bc2.monsters.monsters]
+    setup_hand_upgraded(bc2, IMMOLATE)
+    bc2.play_card(0)
+    assert [m.hp for m in bc2.monsters.monsters] == [hp1[0] - 28, hp1[1] - 28]
+    assert len([c for c in bc2.cards.discard_pile if c.card.name == "Burn"]) == 1
+
+
+def test_feed_kill_raises_max_hp():
+    """吞噬：击杀 → maxHP +3 并回复 3（C++ increaseMaxHp 内含 heal）；未击杀不触发；消耗；升级 12/4。"""
+    bc = BattleContext(seed=98)
+    m = bc.monsters.monsters[0]
+    m.hp = 10
+    setup_hand(bc, FEED)
+    bc.play_card(0)
+    assert bc.won
+    assert m.hp == 0
+    assert bc.player.max_hp == 80 + 3
+    assert bc.player.hp == 80 + 3
+    assert any(c.card.name == "Feed" for c in bc.cards.exhaust_pile)
+    # 未击杀：无变化
+    bc2 = BattleContext(seed=98)
+    m2 = bc2.monsters.monsters[0]
+    m2.hp = 100
+    m2.max_hp = 100
+    setup_hand(bc2, FEED)
+    bc2.play_card(0)
+    assert bc2.player.max_hp == 80
+    assert bc2.player.hp == 80
+    assert m2.hp == 90
+    # 升级：12 伤 / maxHP +4
+    bc3 = BattleContext(seed=98)
+    m3 = bc3.monsters.monsters[0]
+    m3.hp = 12
+    setup_hand_upgraded(bc3, FEED)
+    bc3.play_card(0)
+    assert bc3.player.max_hp == 80 + 4
+    assert bc3.player.hp == 80 + 4
+
+
+def test_hand_of_greed_kill_gains_gold():
+    """贪婪之手：20/25 伤；击杀 → +20/25 金币；未击杀不触发；伤害走 damage（非攻击，对齐 C++）。"""
+    bc = BattleContext(seed=99)
+    m = bc.monsters.monsters[0]
+    m.hp = 20
+    gold0 = bc.player.gold
+    setup_hand(bc, HAND_OF_GREED)
+    bc.play_card(0)
+    assert bc.won
+    assert bc.player.gold == gold0 + 20
+    # 未击杀：无金币
+    bc2 = BattleContext(seed=99)
+    m2 = bc2.monsters.monsters[0]
+    m2.hp = 100
+    m2.max_hp = 100
+    gold1 = bc2.player.gold
+    setup_hand(bc2, HAND_OF_GREED)
+    bc2.play_card(0)
+    assert bc2.player.gold == gold1
+    assert m2.hp == 80
+    # 升级：25 伤 / +25 金
+    bc3 = BattleContext(seed=99)
+    m3 = bc3.monsters.monsters[0]
+    m3.hp = 25
+    gold2 = bc3.player.gold
+    setup_hand_upgraded(bc3, HAND_OF_GREED)
+    bc3.play_card(0)
+    assert bc3.player.gold == gold2 + 25

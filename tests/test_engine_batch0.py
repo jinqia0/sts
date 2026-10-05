@@ -746,3 +746,66 @@ def test_relic_philosophers_stone_spawns_stronger():
     slime = AcidSlimeS.create(bc, idx=1)
     bc.monsters.spawn_insert(bc, 1, slime)
     assert slime.statuses.get(MonsterStatus.STRENGTH) == 1
+
+
+# ---- 批次 2 引擎接线回归（DOUBLE_TAP decrement / 升级固有 / play_top_card 工厂）----
+
+
+def test_double_tap_upgraded_replays_two_attacks():
+    """Double Tap+（2 层）：连翻两张攻击牌；状态递减而非整除移除。"""
+    from sts.content.cards import DOUBLE_TAP
+
+    bc = BattleContext(seed=160)
+    bc.player.statuses.add(PlayerStatus.DOUBLE_TAP, 2)
+    setup_hand(bc, STRIKE, STRIKE)
+    m = bc.monsters.monsters[0]
+    hp0 = m.hp
+    bc.play_card(0)
+    assert m.hp == hp0 - 12
+    assert bc.player.statuses.get(PlayerStatus.DOUBLE_TAP) == 1  # 递减非移除
+    hp1 = m.hp
+    bc.play_card(0)
+    assert m.hp == hp1 - 12
+    assert not bc.player.statuses.has(PlayerStatus.DOUBLE_TAP)
+
+
+def test_innate_when_upgraded_starts_in_hand():
+    from sts.content.cards import BRUTALITY
+
+    plain = [STRIKE] * 4 + [DEFEND] * 4 + [BRUTALITY]
+    upgraded = [STRIKE] * 4 + [DEFEND] * 4 + [BRUTALITY]
+    bc = BattleContext(seed=161, deck=plain)
+    assert not any(c.card is BRUTALITY and c.upgraded for c in bc.cards.hand), "未升级不应在手"
+    bc2 = BattleContext(seed=161, deck=upgraded)
+    inst = bc2.cards.instantiate(BRUTALITY)
+    inst.upgraded = True
+    bc2.cards.draw_pile.append(inst)  # 附加一张升级版
+    # 重新构造触发固有置顶（简化：直接构造带升级实例的战斗）
+    bc3 = BattleContext(seed=162, deck=[STRIKE] * 9)
+    bc3.cards.draw_pile.clear()
+    bc3.cards.hand.clear()
+    for c in [STRIKE] * 4 + [DEFEND] * 4:
+        bc3.cards.create_deck_card_in_draw_pile(c)
+    u = bc3.cards.instantiate(BRUTALITY)
+    u.upgraded = True
+    bc3.cards.create_deck_card_in_draw_pile(BRUTALITY)
+    bc3.cards.draw_pile[-1].upgraded = True
+    bc3.rngs.shuffle.shuffle(bc3.cards.draw_pile)
+    bc3.cards.move_innate_to_top()
+    bc3.draw_cards(5)
+    assert any(c.card is BRUTALITY and c.upgraded for c in bc3.cards.hand), "升级版 Brutality 应固有在手"
+
+
+def test_play_top_card_factory_resolves_target_and_free():
+    """引擎工厂版 PlayTopCard：随机目标 + 免费打出 + 可消耗（Havoc 语义）。"""
+    bc = BattleContext(seed=163)
+    m = bc.monsters.monsters[0]
+    hp0 = m.hp
+    energy0 = bc.player.energy
+    bc.cards.hand.clear()
+    bc.cards.draw_pile.append(bc.cards.instantiate(STRIKE))
+    bc.add_to_bot(Actions.play_top_card(exhaust=True))
+    run_queue(bc)
+    assert m.hp < hp0  # 免费打出并造成伤害
+    assert bc.player.energy == energy0
+    assert any(c.card is STRIKE for c in bc.cards.exhaust_pile), "顶牌打完消耗"

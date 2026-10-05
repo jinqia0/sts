@@ -14,16 +14,20 @@ import pytest
 
 from sts.combat import BattleContext
 from sts.combat.types import MonsterStatus, PlayerStatus
-from sts.content.cards import BASH, DEFEND
+from sts.content.cards import BASH, BLUDGEON, DEFEND, STRIKE
 from sts.content.monsters import (
     AcidSlimeM,
     AcidSlimeS,
     BlueSlaver,
     FatGremlin,
     FungiBeast,
+    GremlinNob,
     GreenLouse,
     GremlinWizard,
+    Hexaghost,
     JawWorm,
+    Lagavulin,
+    MadGremlin,
     RedLouse,
     RedSlaver,
     Sentry,
@@ -31,6 +35,8 @@ from sts.content.monsters import (
     SneakyGremlin,
     SpikeSlimeM,
     SpikeSlimeS,
+    Taskmaster,
+    TheGuardian,
 )
 
 PLAYER_MAX_HP = 80
@@ -522,7 +528,6 @@ BATCH1_ENCOUNTERS = [
     ("small_slimes", 2, 8, 32),  # S 型 8-14，M 型 28-32
     ("exordium_wildlife", 2, 10, 44),  # Fungi 22-28 / Jaw Worm 40-44 + 虱 10-17 / M 史 28-32
     ("gremlin_gang", 4, 10, 25),
-    ("slavers", 2, 46, 50),
     ("three_sentries", 3, 38, 42),
 ]
 
@@ -580,24 +585,41 @@ def test_exordium_wildlife_composition():
     assert {"SpikeSlimeM", "AcidSlimeM"} <= weaks  # 非虱弱怪出现过
 
 
-def test_gremlin_gang_batch_fixed_composition():
-    """本批只有 4 种 Gremlin：固定全上（Mad Gremlin 批次 2 补后走 misc 无放回抽样）。"""
-    for seed in range(10):
-        assert _composition("gremlin_gang", seed) == [
-            "SneakyGremlin",
-            "FatGremlin",
-            "ShieldGremlin",
-            "GremlinWizard",
-        ]
+def test_gremlin_gang_sampling_composition():
+    """批次 2 起 Mad Gremlin 入池：8 槽无放回抽 4，重数不超池内份数。"""
+    from collections import Counter
+
+    pool_cap = {
+        "MadGremlin": 2,
+        "SneakyGremlin": 2,
+        "FatGremlin": 2,
+        "ShieldGremlin": 1,
+        "GremlinWizard": 1,
+    }
+    comps = set()
+    for seed in range(60):
+        comp = _composition("gremlin_gang", seed)
+        assert len(comp) == 4
+        assert comp == _composition("gremlin_gang", seed)  # 同种子可复现
+        cnt = Counter(comp)
+        for name, n in cnt.items():
+            assert name in pool_cap
+            assert n <= pool_cap[name]
+        comps.add(tuple(comp))
+    # 抽样确实生效：组合多样，且 Mad Gremlin 有机会出现
+    assert len(comps) > 10
+    assert any("MadGremlin" in c for c in comps)
 
 
 def test_slavers_composition():
+    """对齐 C++ SLAVERS：蓝奴役者 + 监工 + 红奴役者（监工在中间位）。"""
     for seed in range(10):
         comp = _composition("slavers", seed)
-        assert comp == ["BlueSlaver", "RedSlaver"]
-        # lightspeed SLAVERS 尚有中间位监工（批次 2 补），红奴役者首招恒为刺击
+        assert comp == ["BlueSlaver", "Taskmaster", "RedSlaver"]
         bc = BattleContext(seed=seed, encounter="slavers")
-        assert bc.monsters.monsters[1].current_move.name == "Stab"
+        assert isinstance(bc.monsters.monsters[1], Taskmaster)
+        assert bc.monsters.monsters[1].current_move.name == "Scouring Whip"
+        assert bc.monsters.monsters[2].current_move.name == "Stab"  # 红奴役者首招恒为刺击
 
 
 def test_three_sentries_parity_first_moves():
@@ -831,9 +853,19 @@ def test_fat_gremlin_a17_adds_frail():
 # ---- Shield Gremlin ----
 
 
+def staged_battle(seed: int, classes, ascension: int = 0, deck=None):
+    """自定义怪物组的隔离战斗（gremlin_gang 已改抽样， Shield Gremlin 测试
+    用固定组合取代旧的无抽样路径；等价 solo_battle 的多怪版）。"""
+    bc = BattleContext(seed=seed, encounter="cultist", ascension=ascension, deck=deck)
+    bc.monsters.monsters = [cls.create(bc, i) for i, cls in enumerate(classes)]
+    bc.monsters.alive_count = len(classes)
+    for m in bc.monsters.monsters:
+        m.roll_move(bc)
+    return bc
+
+
 def test_shield_gremlin_protect_random_ally():
-    bc = BattleContext(seed=2, encounter="gremlin_gang")
-    # 本批固定顺序：[Sneaky, Fat, Shield, Wizard]，盾牌小鬼在 idx 2
+    bc = staged_battle(2, [SneakyGremlin, FatGremlin, ShieldGremlin, GremlinWizard])
     shield = bc.monsters.monsters[2]
     assert isinstance(shield, ShieldGremlin)
     others = [bc.monsters.monsters[0], bc.monsters.monsters[1], bc.monsters.monsters[3]]
@@ -845,7 +877,7 @@ def test_shield_gremlin_protect_random_ally():
 
 
 def test_shield_gremlin_alone_switches_to_shield_bash():
-    bc = BattleContext(seed=3, encounter="gremlin_gang")
+    bc = staged_battle(3, [SneakyGremlin, FatGremlin, ShieldGremlin, GremlinWizard])
     shield = bc.monsters.monsters[2]
     for i in (0, 1, 3):
         slay(bc, i)
@@ -944,3 +976,507 @@ def test_ascension_hp_and_damage_branches():
     force_intent(m, AcidSlimeM.CORROSIVE_SPIT)
     bc.end_turn()
     assert bc.player.hp == PLAYER_MAX_HP - 8
+
+
+# ====================================================================
+# 批次 2：中等档 Act 1 怪物（Mad Gremlin、Gremlin Nob、Lagavulin、
+# The Guardian、Hexaghost、Taskmaster）+ 精英/Boss 遭遇注册。
+# ====================================================================
+
+
+BATCH2_ENCOUNTERS = [
+    ("gremlin_nob", 1, 82, 86),
+    ("lagavulin", 1, 109, 111),
+    ("guardian", 1, 240, 240),
+    ("hexaghost", 1, 250, 250),
+    ("slavers", 3, 46, 60),  # 蓝/红奴役者 46-50，监工 54-60
+]
+
+
+@pytest.mark.parametrize("encounter,count,hp_lo,hp_hi", BATCH2_ENCOUNTERS)
+def test_batch2_encounter_spawn_and_hp_range(encounter, count, hp_lo, hp_hi):
+    for seed in range(10):
+        bc = BattleContext(seed=seed, encounter=encounter)
+        assert bc.monsters.monster_count == count
+        for m in bc.monsters.monsters:
+            assert hp_lo <= m.hp <= hp_hi
+            assert m.max_hp == m.hp
+            assert m.current_move is not None
+        assert len(bc.cards.draw_pile) + len(bc.cards.hand) == 10
+
+
+def test_batch2_encounter_types():
+    bc = BattleContext(seed=0, encounter="gremlin_nob")
+    assert isinstance(bc.monsters.monsters[0], GremlinNob)
+    bc = BattleContext(seed=0, encounter="lagavulin")
+    assert isinstance(bc.monsters.monsters[0], Lagavulin)
+    bc = BattleContext(seed=0, encounter="guardian")
+    assert isinstance(bc.monsters.monsters[0], TheGuardian)
+    bc = BattleContext(seed=0, encounter="hexaghost")
+    assert isinstance(bc.monsters.monsters[0], Hexaghost)
+
+
+def test_batch2_ascension_hp_ranges():
+    """精英 A8 / Boss A9 起用高位 HP 区间（对齐 C++ initHp 分桶）。"""
+    for seed in range(10):
+        bc = BattleContext(seed=seed, encounter="gremlin_nob", ascension=8)
+        assert 85 <= bc.monsters.monsters[0].hp <= 90
+        bc = BattleContext(seed=seed, encounter="lagavulin", ascension=8)
+        assert 112 <= bc.monsters.monsters[0].hp <= 115
+        bc = BattleContext(seed=seed, encounter="guardian", ascension=9)
+        assert bc.monsters.monsters[0].hp == 250
+        bc = BattleContext(seed=seed, encounter="hexaghost", ascension=9)
+        assert bc.monsters.monsters[0].hp == 264
+        # slavers A8：监工 57-64，红蓝奴役者 48-52
+        bc = BattleContext(seed=seed, encounter="slavers", ascension=8)
+        assert 57 <= bc.monsters.monsters[1].hp <= 64
+        for i in (0, 2):
+            assert 48 <= bc.monsters.monsters[i].hp <= 52
+
+
+# ---- Mad Gremlin ----
+
+
+def test_mad_gremlin_scratch_and_angry():
+    """固定抓挠 4 伤；受击 ANGRY → +1 力量，下一抓挠 5 伤。"""
+    bc, m = solo_battle(MadGremlin)
+    assert 20 <= m.hp <= 24
+    assert m.statuses.get(MonsterStatus.ANGRY) == 1
+    assert m.current_move.name == "Scratch"
+    bc.end_turn()
+    assert bc.player.hp == PLAYER_MAX_HP - 4
+    assert m.current_move.name == "Scratch"  # 无 roll：意图恒为抓挠
+    play_strike(bc, target=0)
+    assert m.statuses.get(MonsterStatus.STRENGTH) == 1  # ANGRY×1
+    bc.end_turn()
+    assert bc.player.hp == PLAYER_MAX_HP - 4 - 5
+    play_strike(bc, target=0)
+    assert m.statuses.get(MonsterStatus.STRENGTH) == 2  # 再次受击继续涨
+
+
+def test_mad_gremlin_ascension_branches():
+    for seed in range(10):
+        bc, m = solo_battle(MadGremlin, seed=seed, ascension=7)
+        assert 21 <= m.hp <= 25  # A7 起高位 HP
+    bc, m = solo_battle(MadGremlin, ascension=17)
+    assert m.statuses.get(MonsterStatus.ANGRY) == 2  # A17 起两层愤怒
+    bc.end_turn()
+    assert bc.player.hp == PLAYER_MAX_HP - 5  # A17 同时满足 A2：抓挠 5 伤
+    bc, m = solo_battle(MadGremlin, ascension=2)
+    bc.end_turn()
+    assert bc.player.hp == PLAYER_MAX_HP - 5  # A2 起抓挠 5 伤
+
+
+# ---- Gremlin Nob ----
+
+
+def test_gremlin_nob_bellow_enrage():
+    """首回合固定怒吼（激怒 2，无格挡）；玩家打技能牌 +2 力量/张，攻击牌不触发。"""
+    bc, m = solo_battle(GremlinNob, deck=[DEFEND, DEFEND, STRIKE])
+    assert 82 <= m.hp <= 86
+    assert m.current_move.name == "Bellow"
+    bc.end_turn()
+    assert m.statuses.get(MonsterStatus.ENRAGE) == 2
+    assert m.block == 0  # Bellow 无格挡（对齐 C++）
+    assert bc.player.hp == PLAYER_MAX_HP
+    # 打出技能牌 → Nob +2 力量/张（引擎 on_use_skill_card 的 ENRAGE 钩子）
+    for expected_str in (2, 4):
+        defend = next(i for i, c in enumerate(bc.cards.hand) if c.card.name == "Defend")
+        bc.play_card(defend)
+        assert m.statuses.get(MonsterStatus.STRENGTH) == expected_str
+    # 打出攻击牌不触发 ENRAGE
+    play_strike(bc, target=0)
+    assert m.statuses.get(MonsterStatus.STRENGTH) == 4
+
+
+def test_gremlin_nob_rush_and_skull_bash():
+    """Rush 14 伤；Skull Bash 6 伤 + 2 层易伤（A3 起 16/8）。"""
+    bc, m = solo_battle(GremlinNob)
+    force_intent(m, GremlinNob.RUSH)
+    bc.end_turn()
+    assert bc.player.hp == PLAYER_MAX_HP - 14
+    force_intent(m, GremlinNob.SKULL_BASH)
+    bc.end_turn()
+    assert bc.player.hp == PLAYER_MAX_HP - 14 - 6
+    assert bc.player.statuses.get(PlayerStatus.VULNERABLE) == 2
+    # 怪物施加→justApplied：施加轮回合末跳过衰减（仍为 2），此后每轮 -1
+    force_intent(m, GremlinNob.RUSH)
+    bc.end_turn()  # 本轮起正常衰减（Rush 被易伤放大，不在断言范围）
+    assert bc.player.statuses.get(PlayerStatus.VULNERABLE) == 1
+    force_intent(m, GremlinNob.RUSH)
+    bc.end_turn()
+    assert not bc.player.statuses.has(PlayerStatus.VULNERABLE)
+    # A3：Rush 16 / Skull Bash 8（易伤仍为 2）
+    bc, m = solo_battle(GremlinNob, ascension=3)
+    force_intent(m, GremlinNob.RUSH)
+    bc.end_turn()
+    assert bc.player.hp == PLAYER_MAX_HP - 16
+    force_intent(m, GremlinNob.SKULL_BASH)
+    bc.end_turn()
+    assert bc.player.hp == PLAYER_MAX_HP - 16 - 8
+    assert bc.player.statuses.get(PlayerStatus.VULNERABLE) == 2
+
+
+def test_gremlin_nob_roll_segments():
+    """首回合固定 Bellow；A0 分段 33/67 + Rush 连续两回合强制 Skull Bash。"""
+    bc, m = solo_battle(GremlinNob)
+    set_history(m)  # 无历史 → 首回合 Bellow（与 roll 无关）
+    for roll in (0, 50, 99):
+        assert m.get_move_for_roll(bc, roll).name == "Bellow"
+    set_history(m, GremlinNob.RUSH)
+    assert m.get_move_for_roll(bc, 0).name == "Skull Bash"
+    assert m.get_move_for_roll(bc, 32).name == "Skull Bash"
+    assert m.get_move_for_roll(bc, 33).name == "Rush"
+    assert m.get_move_for_roll(bc, 99).name == "Rush"
+    # Rush 连续两回合：任意 roll 强制 Skull Bash
+    set_history(m, GremlinNob.RUSH, GremlinNob.RUSH)
+    assert m.get_move_for_roll(bc, 0).name == "Skull Bash"
+    assert m.get_move_for_roll(bc, 99).name == "Skull Bash"
+    # 上回合 Skull Bash：不影响 33/67 分段
+    set_history(m, GremlinNob.SKULL_BASH)
+    assert m.get_move_for_roll(bc, 32).name == "Skull Bash"
+    assert m.get_move_for_roll(bc, 33).name == "Rush"
+
+
+def test_gremlin_nob_a18_rush_only():
+    """A18 分支逐行翻译：Skull Bash 不可达（lightspeed 疑似笔误，按字面保留）。"""
+    bc, m = solo_battle(GremlinNob, ascension=18)
+    assert m.current_move.name == "Bellow"
+    for history in (
+        (GremlinNob.RUSH,),
+        (GremlinNob.SKULL_BASH,),
+        (GremlinNob.RUSH, GremlinNob.RUSH),
+        (GremlinNob.SKULL_BASH, GremlinNob.SKULL_BASH),
+        (GremlinNob.RUSH, GremlinNob.SKULL_BASH),
+    ):
+        set_history(m, *history)
+        for roll in (0, 33, 50, 99):
+            assert m.get_move_for_roll(bc, roll).name == "Rush"
+    # A18 的 Bellow 激怒为 3 层（重开一局走执行路径）
+    bc, m = solo_battle(GremlinNob, ascension=18)
+    bc.end_turn()
+    assert m.statuses.get(MonsterStatus.ENRAGE) == 3
+
+
+# ---- Lagavulin ----
+
+
+def test_lagavulin_initial_state_and_natural_wake():
+    """开局沉睡（金属化 8 + 8 格挡）；3 回合自然醒，保留金属化。"""
+    bc, m = solo_battle(Lagavulin)
+    assert 109 <= m.hp <= 111
+    assert m.statuses.get(MonsterStatus.ASLEEP) == 1
+    assert m.statuses.get(MonsterStatus.METALLICIZE) == 8
+    assert m.block == 8
+    assert m.current_move.name == "Sleep"
+    for round_ in (1, 2):
+        bc.end_turn()
+        assert m.current_move.name == "Sleep"
+        assert m.block == 8  # 回合开始清零后金属化补回 8
+        assert bc.player.hp == PLAYER_MAX_HP
+    bc.end_turn()  # 第 3 回合：自然醒 → 下一回合攻击
+    assert m.current_move.name == "Attack"
+    # 本体语义：自然醒移除 Asleep 且金属化常驻（C++ 漏移除，见类注释）
+    assert not m.statuses.has(MonsterStatus.ASLEEP)
+    assert m.statuses.get(MonsterStatus.METALLICIZE) == 8
+    bc.end_turn()  # 第 4 回合：攻击 18
+    assert bc.player.hp == PLAYER_MAX_HP - 18
+    # 醒后受击：金属化 8 仍在（格挡吸收），不再被剥除
+    hp0 = m.hp
+    play_strike(bc, target=0)
+    assert m.hp == hp0  # 6 伤全被金属化格挡吸收
+    assert m.statuses.get(MonsterStatus.METALLICIZE) == 8
+
+
+def test_lagavulin_sequence_and_siphon_soul():
+    """醒后循环：攻-攻-汲取灵魂；汲取 -1 力量 -1 敏捷（A18 起 -2）。"""
+    bc, m = solo_battle(Lagavulin)
+    for _ in range(3):
+        bc.end_turn()  # r1-r3 沉睡，r3 末自然醒
+    assert m.current_move.name == "Attack"
+    bc.end_turn()  # r4 攻击
+    assert bc.player.hp == PLAYER_MAX_HP - 18
+    assert m.current_move.name == "Attack"  # 上回合是沉睡 → 继续攻击
+    bc.end_turn()  # r5 攻击（攻-攻连续）
+    assert bc.player.hp == PLAYER_MAX_HP - 36
+    assert m.current_move.name == "Siphon Soul"
+    bc.end_turn()  # r6 汲取灵魂
+    assert bc.player.hp == PLAYER_MAX_HP - 36  # 汲取无伤害
+    assert bc.player.statuses.get(PlayerStatus.STRENGTH) == -1
+    assert bc.player.statuses.get(PlayerStatus.DEXTERITY) == -1
+    assert m.current_move.name == "Attack"  # 汲取后回攻击（循环重启）
+    bc.end_turn()  # r7 攻击（玩家 -1 力量不影响怪物出伤）
+    assert bc.player.hp == PLAYER_MAX_HP - 54
+    # A18：攻击 20（A18 ⊇ A3），汲取 -2/-2
+    bc, m = solo_battle(Lagavulin, ascension=18)
+    for _ in range(6):
+        bc.end_turn()  # r1-r3 睡、r4-r5 攻、r6 汲取
+    assert bc.player.hp == PLAYER_MAX_HP - 40
+    assert bc.player.statuses.get(PlayerStatus.STRENGTH) == -2
+    assert bc.player.statuses.get(PlayerStatus.DEXTERITY) == -2
+
+
+def test_lagavulin_damage_wake_strips_metallicize():
+    """打醒：漏格挡伤害即醒并移除金属化；当回合仍空转（stunned），下回合才攻击。"""
+    bc, m = solo_battle(Lagavulin, deck=[BLUDGEON])
+    hp0 = m.hp
+    bludgeon = next(i for i, c in enumerate(bc.cards.hand) if c.card.name == "Bludgeon")
+    bc.play_card(bludgeon, target=0)
+    # 32 伤：8 格挡吸收 → 24 漏过 → 醒 + 剥金属化
+    assert m.hp == hp0 - 24
+    assert not m.statuses.has(MonsterStatus.ASLEEP)
+    assert not m.statuses.has(MonsterStatus.METALLICIZE)
+    assert m.current_move.name == "Sleep"  # 意图仍是沉睡（当回合行动时切换）
+    assert bc.player.hp == PLAYER_MAX_HP
+    bc.end_turn()  # Sleep 分支：已醒 → 切攻击，本回合不攻击
+    assert m.current_move.name == "Attack"
+    assert bc.player.hp == PLAYER_MAX_HP
+    bc.end_turn()  # 攻击 18；金属化已剥 → 无格挡
+    assert bc.player.hp == PLAYER_MAX_HP - 18
+    assert m.block == 0
+
+
+def test_lagavulin_small_hit_fully_absorbed_does_not_wake():
+    """开局 8 格挡完全吸收的伤害不唤醒（漏格挡才醒）。"""
+    bc, m = solo_battle(Lagavulin)
+    hp0 = m.hp
+    play_strike(bc, target=0)  # 6 伤 < 8 格挡
+    assert m.hp == hp0
+    assert m.block == 2
+    assert m.statuses.has(MonsterStatus.ASLEEP)
+    assert m.statuses.get(MonsterStatus.METALLICIZE) == 8
+
+
+# ---- The Guardian ----
+
+
+def test_guardian_initial_and_attack_mode_cycle():
+    """开局阈值 30 / 意图蓄能；攻击模式循环：蓄能→猛烈重击→排放蒸汽→旋风。"""
+    bc, m = solo_battle(TheGuardian)
+    assert m.hp == 240
+    assert m.misc_info == 30
+    assert m.statuses.get(MonsterStatus.MODE_SHIFT) == 30
+    assert m.current_move.name == "Charging Up"
+    bc.end_turn()  # r1 蓄能：+9 格挡
+    assert m.block == 9
+    assert m.current_move.name == "Fierce Bash"
+    bc.end_turn()  # r2 猛烈重击 32
+    assert bc.player.hp == PLAYER_MAX_HP - 32
+    assert m.current_move.name == "Vent Steam"
+    bc.end_turn()  # r3 排放蒸汽：2 易伤 + 2 虚弱
+    assert bc.player.statuses.get(PlayerStatus.VULNERABLE) == 2
+    assert bc.player.statuses.get(PlayerStatus.WEAK) == 2
+    assert m.current_move.name == "Whirlwind"
+    bc.end_turn()  # r4 旋风：玩家带 2 层易伤 → floor(5×1.5)=7/段 ×4 = 28
+    assert bc.player.hp == PLAYER_MAX_HP - 32 - 28
+    assert m.current_move.name == "Charging Up"  # 回到循环起点
+
+
+def test_guardian_mode_shift_full_chain():
+    """全链路：打够阈值→防御模式（+20 格挡、强改意图）→利爪隐蔽反伤→
+    滚动攻击→双重猛击（阈值 +10、重设 MODE_SHIFT）→回攻击模式。"""
+    bc, m = solo_battle(TheGuardian, deck=[BLUDGEON, STRIKE, DEFEND])
+    # 玩家回合 1：重击 32 > 阈值 30 → 立即切防御模式
+    bludgeon = next(i for i, c in enumerate(bc.cards.hand) if c.card.name == "Bludgeon")
+    bc.play_card(bludgeon, target=0)
+    assert m.hp == 240 - 32
+    assert m.block == 20  # 切模式 +20 格挡入队落地
+    assert m.current_move.name == "Defensive Mode"  # 意图被强改
+    assert not m.statuses.has(MonsterStatus.MODE_SHIFT)
+    bc.end_turn()  # 防御模式回合：利爪隐蔽 3（20 格挡在其回合开始时清零）
+    assert m.statuses.get(MonsterStatus.SHARP_HIDE) == 3
+    assert m.current_move.name == "Roll Attack"
+    # 玩家回合 2：打攻击牌吃 3 点反伤；打技能牌不触发
+    play_strike(bc, target=0)
+    assert m.hp == 240 - 32 - 6
+    assert bc.player.hp == PLAYER_MAX_HP - 3
+    defend = next(i for i, c in enumerate(bc.cards.hand) if c.card.name == "Defend")
+    bc.play_card(defend)
+    assert bc.player.hp == PLAYER_MAX_HP - 3  # 技能牌无反伤
+    bc.end_turn()  # 滚动攻击 9（玩家 5 格挡吸收 5）
+    assert bc.player.hp == PLAYER_MAX_HP - 3 - (9 - 5)
+    assert m.current_move.name == "Twin Slam"
+    bc.end_turn()  # 双重猛击 8×2 = 16
+    assert bc.player.hp == PLAYER_MAX_HP - 3 - 4 - 16
+    assert not m.statuses.has(MonsterStatus.SHARP_HIDE)  # 利爪隐蔽移除
+    assert m.misc_info == 40  # 阈值 +10
+    assert m.statuses.get(MonsterStatus.MODE_SHIFT) == 40  # 重设
+    assert m.current_move.name == "Whirlwind"  # 回攻击模式（跳过蓄能）
+    bc.end_turn()  # 旋风 5×4 = 20
+    assert bc.player.hp == PLAYER_MAX_HP - 43
+    assert m.current_move.name == "Charging Up"
+    bc.end_turn()  # 蓄能 +9
+    assert m.block == 9
+    assert m.current_move.name == "Fierce Bash"
+
+
+def test_guardian_mode_shift_accumulation_and_defensive_damage():
+    """阈值按漏格挡伤害累积扣减；恰好归零也切换；防御模式期间伤害不再累积。"""
+    bc, m = solo_battle(TheGuardian)
+    m.damage(bc, 29)
+    assert m.statuses.get(MonsterStatus.MODE_SHIFT) == 1
+    assert m.current_move.name == "Charging Up"  # 未到阈值：意图不变
+    m.damage(bc, 1)  # 恰好归零（对齐 C++ <= 0）
+    assert m.current_move.name == "Defensive Mode"
+    # +20 格挡为入队动作（对齐 C++ addToBot），直接调用时手动出队结算
+    while not bc.action_queue.is_empty():
+        bc.action_queue.pop_front().fn(bc)
+    assert m.block == 20
+    assert not m.statuses.has(MonsterStatus.MODE_SHIFT)
+    # 防御模式期间（双重猛击重设前）伤害不再累积：意图不再强改
+    m.damage(bc, 25)  # 20 格挡吸收 → 5 漏过
+    assert m.current_move.name == "Defensive Mode"
+    assert m.block == 0
+    assert m.hp == 240 - 29 - 1 - 5
+    # 超额一击直接切换（余额不结转）
+    bc, m = solo_battle(TheGuardian)
+    m.damage(bc, 40)
+    assert m.current_move.name == "Defensive Mode"
+
+
+def test_guardian_ascension_branches():
+    """A9 阈值 35 / HP 250；A19 阈值 40、利爪隐蔽 4。"""
+    bc, m = solo_battle(TheGuardian, ascension=9)
+    assert m.hp == 250
+    assert m.misc_info == 35
+    assert m.statuses.get(MonsterStatus.MODE_SHIFT) == 35
+    bc, m = solo_battle(TheGuardian, ascension=19)
+    assert m.hp == 250
+    assert m.misc_info == 40
+    m.damage(bc, 40)
+    assert m.current_move.name == "Defensive Mode"
+    bc.end_turn()
+    assert m.statuses.get(MonsterStatus.SHARP_HIDE) == 4
+    # A4 起：猛烈重击 36 / 滚动攻击 10
+    bc, m = solo_battle(TheGuardian, ascension=4)
+    force_intent(m, TheGuardian.FIERCE_BASH)
+    bc.end_turn()
+    assert bc.player.hp == PLAYER_MAX_HP - 36
+    force_intent(m, TheGuardian.ROLL_ATTACK)
+    bc.end_turn()
+    assert bc.player.hp == PLAYER_MAX_HP - 36 - 10
+
+
+# ---- Hexaghost ----
+
+
+def test_hexaghost_activate_and_divider():
+    """激活锁定分割伤害 = 玩家HP//12+1；分割 ×6 段。"""
+    bc, m = solo_battle(Hexaghost)
+    assert m.hp == 250
+    assert m.current_move.name == "Activate"
+    assert m.misc_info == 0
+    bc.end_turn()  # r1 激活：80 // 12 + 1 = 7
+    assert m.misc_info == 7
+    assert m.current_move.name == "Divider"
+    bc.end_turn()  # r2 分割 7×6 = 42
+    assert bc.player.hp == PLAYER_MAX_HP - 42
+    assert m.current_move.name == "Sear"
+    # 分割伤害随玩家当前 HP 变化
+    bc, m = solo_battle(Hexaghost, seed=1)
+    bc.player.hp = 13
+    bc.end_turn()
+    assert m.misc_info == 2  # 13 // 12 + 1
+
+
+def test_hexaghost_cycle_and_burn_upgrade():
+    """火球轮转：灼烧-冲撞-灼烧-燃焰-冲撞-灼烧-炼狱；灼伤第 10 回合起升级。
+
+    用 50 张防御的大牌组避免洗牌（防止灼伤被抽进手触发回合末自伤，
+    保持逐回合伤害断言确定）。
+    """
+    bc, m = solo_battle(Hexaghost, deck=[DEFEND] * 50)
+    bc.end_turn()  # r1 激活（misc 7）
+    assert bc.player.hp == PLAYER_MAX_HP
+    bc.end_turn()  # r2 分割 42
+    assert bc.player.hp == PLAYER_MAX_HP - 42
+    bc.player.hp = PLAYER_MAX_HP  # 测试续命，后续按 80 重算
+    bc.end_turn()  # r3 灼烧 6 + 1 张灼伤
+    assert bc.player.hp == PLAYER_MAX_HP - 6
+    assert _card_total(bc, "Burn") == 1
+    assert not any(c.upgraded for c in bc.cards.discard_pile if c.card.name == "Burn")
+    assert m.current_move.name == "Tackle"
+    bc.end_turn()  # r4 冲撞 5×2
+    assert bc.player.hp == PLAYER_MAX_HP - 16
+    assert m.current_move.name == "Sear"
+    bc.end_turn()  # r5 灼烧 6 + 灼伤
+    assert bc.player.hp == PLAYER_MAX_HP - 22
+    assert _card_total(bc, "Burn") == 2
+    assert m.current_move.name == "Inflame"
+    bc.end_turn()  # r6 燃焰：+12 格挡、力量 +2
+    assert bc.player.hp == PLAYER_MAX_HP - 22
+    assert m.block == 12
+    assert m.statuses.get(MonsterStatus.STRENGTH) == 2
+    assert m.current_move.name == "Tackle"
+    bc.end_turn()  # r7 冲撞 (5+2)×2 = 14
+    assert bc.player.hp == PLAYER_MAX_HP - 36
+    assert m.current_move.name == "Sear"
+    bc.end_turn()  # r8 灼烧 6+2 = 8 + 灼伤（第 8 回合未到升级线）
+    assert bc.player.hp == PLAYER_MAX_HP - 44
+    assert _card_total(bc, "Burn") == 3
+    assert not any(
+        c.upgraded
+        for z in (bc.cards.hand, bc.cards.draw_pile, bc.cards.discard_pile, bc.cards.exhaust_pile)
+        for c in z
+        if c.card.name == "Burn"
+    )
+    assert m.current_move.name == "Inferno"
+    bc.end_turn()  # r9 炼狱 (2+2)×6 = 24
+    assert bc.player.hp == PLAYER_MAX_HP - 68
+    assert m.unique_power0 == 0  # 火球计数清零，循环重启
+    assert m.current_move.name == "Sear"
+    bc.end_turn()  # r10 灼烧 8 + 升级灼伤（bc.turn > 9，对齐 C++ turn > 8）
+    assert bc.player.hp == PLAYER_MAX_HP - 76
+    assert _card_total(bc, "Burn") == 4
+    assert sum(
+        c.upgraded
+        for z in (bc.cards.hand, bc.cards.draw_pile, bc.cards.discard_pile, bc.cards.exhaust_pile)
+        for c in z
+        if c.card.name == "Burn"
+    ) == 1
+    assert m.current_move.name == "Tackle"
+
+
+def test_hexaghost_ascension_branches():
+    """A4 起冲撞 6×2、炼狱 3×6；A19 起灼烧塞 2 张灼伤（分割/灼烧伤害不变）。"""
+    bc, m = solo_battle(Hexaghost, ascension=4)
+    force_intent(m, Hexaghost.TACKLE)
+    bc.end_turn()
+    assert bc.player.hp == PLAYER_MAX_HP - 12
+    force_intent(m, Hexaghost.INFERNO)
+    bc.end_turn()
+    assert bc.player.hp == PLAYER_MAX_HP - 12 - 18
+    bc, m = solo_battle(Hexaghost, ascension=19)
+    force_intent(m, Hexaghost.SEAR)
+    bc.end_turn()
+    assert bc.player.hp == PLAYER_MAX_HP - 6  # 灼烧伤害恒 6（无进阶加成）
+    assert _card_total(bc, "Burn") == 2
+
+
+# ---- Taskmaster ----
+
+
+def test_taskmaster_scouring_whip():
+    """固定鞭挞 7 伤 + 塞 1 张伤口；A3 起 2 张；A18 起 3 张且自身力量 +1。"""
+    bc, m = solo_battle(Taskmaster)
+    assert 54 <= m.hp <= 60
+    assert m.current_move.name == "Scouring Whip"
+    bc.end_turn()
+    assert bc.player.hp == PLAYER_MAX_HP - 7  # 伤害恒 7（无 A2 加成，wiki 同）
+    assert _card_total(bc, "Wound") == 1
+    bc.end_turn()
+    assert bc.player.hp == PLAYER_MAX_HP - 14
+    assert _card_total(bc, "Wound") == 2
+    # A3：每次塞 2 张
+    bc, m = solo_battle(Taskmaster, ascension=3)
+    bc.end_turn()
+    assert _card_total(bc, "Wound") == 2
+    # A18：每次塞 3 张 + 自身力量 +1 → 下一鞭 8 伤
+    bc, m = solo_battle(Taskmaster, ascension=18)
+    bc.end_turn()
+    assert bc.player.hp == PLAYER_MAX_HP - 7
+    assert _card_total(bc, "Wound") == 3
+    assert m.statuses.get(MonsterStatus.STRENGTH) == 1
+    bc.end_turn()
+    assert bc.player.hp == PLAYER_MAX_HP - 7 - 8
+    assert _card_total(bc, "Wound") == 6

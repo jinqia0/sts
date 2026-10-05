@@ -14,9 +14,13 @@
     three_louse        虱子 ×3（红绿按 misc 流逐只抽样）
     small_slimes       小史莱姆：1×S + 1×M（尖 S+酸 M / 酸 S+尖 M 二选一）
     exordium_wildlife  荒野生物：Fungi/Jaw Worm + 虱/M 史莱姆（misc 流组合）
-    gremlin_gang       小鬼帮：从 Gremlin 池无放回抽 4（本批固定 4 种全上）
-    slavers            蓝奴役者 + 红奴役者（lightspeed 尚有监工，批次 2 补）
+    gremlin_gang       小鬼帮：从 8 槽 Gremlin 池无放回抽 4（批次 2 起）
+    slavers            蓝奴役者 + 监工 + 红奴役者（批次 2 补中间位监工）
     three_sentries     哨卫 ×3（首招按 idx 奇偶分 Bolt/Beam）
+    gremlin_nob        小鬼巨汉 ×1（精英）
+    lagavulin          拉格维林 ×1（精英）
+    guardian           守卫者 ×1（Boss）
+    hexaghost          六火幽灵 ×1（Boss）
 
 组合抽样统一走 misc 流（对齐 lightspeed 的 miscRng 用途划分；
 DESIGN.md §3 不做轨迹对齐，分布级等价即可）。
@@ -34,9 +38,13 @@ from sts.content.monsters import (
     Cultist,
     FatGremlin,
     FungiBeast,
+    GremlinNob,
     GreenLouse,
     GremlinWizard,
+    Hexaghost,
     JawWorm,
+    Lagavulin,
+    MadGremlin,
     RedLouse,
     RedSlaver,
     Sentry,
@@ -44,6 +52,8 @@ from sts.content.monsters import (
     SneakyGremlin,
     SpikeSlimeM,
     SpikeSlimeS,
+    Taskmaster,
+    TheGuardian,
 )
 
 if TYPE_CHECKING:
@@ -95,7 +105,7 @@ def _sample_without_replacement(bc: BattleContext, pool: list, n: int) -> list:
     """无放回抽 n 个（对齐 lightspeed 的 lastIdx 前移删法，misc 流）。
 
     C++ 逐个抽 pool[miscRng.random(lastIdx)] 后把尾部前移压缩；等价于
-    抽中即删。批次 2 加 Mad Gremlin 后 gremlin_gang 自然走此路径。
+    抽中即删。gremlin_gang 自批次 2（Mad Gremlin 入池）起走此路径。
     """
     pool = list(pool)
     picked = []
@@ -138,12 +148,10 @@ def _setup_exordium_wildlife(bc: BattleContext) -> None:
 
 
 # Gremlin 池（对齐 C++ 8 槽：Mad×2、Sneaky×2、Fat×2、Shield、Wizard）。
-# None = Mad Gremlin 未迁移；全池可用时走 misc 无放回抽样，
-# 本批固定 4 种全上（批次 2 补 Mad 后自然切到抽样路径）。
-MAD_GREMLIN: type[Monster] | None = None
+# 批次 2 起 Mad Gremlin 入池，走 misc 无放回抽样。
 _GREMLIN_POOL: list = [
-    MAD_GREMLIN,
-    MAD_GREMLIN,
+    MadGremlin,
+    MadGremlin,
     SneakyGremlin,
     SneakyGremlin,
     FatGremlin,
@@ -154,18 +162,32 @@ _GREMLIN_POOL: list = [
 
 
 def _setup_gremlin_gang(bc: BattleContext) -> None:
-    if all(c is not None for c in _GREMLIN_POOL):
-        classes = _sample_without_replacement(bc, _GREMLIN_POOL, 4)
-    else:
-        # 本批只有 4 种 Gremlin：固定全上（顺序即行动顺序）
-        classes = [SneakyGremlin, FatGremlin, ShieldGremlin, GremlinWizard]
+    classes = _sample_without_replacement(bc, _GREMLIN_POOL, 4)
     _spawn(bc, *classes)
 
 
 def _setup_slavers(bc: BattleContext) -> None:
-    # lightspeed SLAVERS = Blue Slaver + Taskmaster + Red Slaver；
-    # Taskmaster（监工）未迁移，本批先红蓝两只，批次 2 补中间位。
-    _spawn(bc, BlueSlaver, RedSlaver)
+    # 对齐 C++ SLAVERS 槽位顺序：Blue Slaver + Taskmaster + Red Slaver
+    _spawn(bc, BlueSlaver, Taskmaster, RedSlaver)
+
+
+# ---- 批次 2：精英 / Boss 遭遇（单怪）----
+
+
+def _setup_gremlin_nob(bc: BattleContext) -> None:
+    _spawn(bc, GremlinNob)
+
+
+def _setup_lagavulin(bc: BattleContext) -> None:
+    _spawn(bc, Lagavulin)
+
+
+def _setup_guardian(bc: BattleContext) -> None:
+    _spawn(bc, TheGuardian)
+
+
+def _setup_hexaghost(bc: BattleContext) -> None:
+    _spawn(bc, Hexaghost)
 
 
 def _setup_three_sentries(bc: BattleContext) -> None:
@@ -185,6 +207,10 @@ ENCOUNTERS = {
     "gremlin_gang": _setup_gremlin_gang,
     "slavers": _setup_slavers,
     "three_sentries": _setup_three_sentries,
+    "gremlin_nob": _setup_gremlin_nob,
+    "lagavulin": _setup_lagavulin,
+    "guardian": _setup_guardian,
+    "hexaghost": _setup_hexaghost,
 }
 
 

@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from sts.combat.queue import Action
+from sts.combat.queue import Action, CardQueueItem
 from sts.combat.types import InputState, MonsterStatus
 
 if TYPE_CHECKING:
