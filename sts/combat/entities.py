@@ -54,6 +54,9 @@ class Player(Combatant):
         self.orb_slots = 3  # 槽位上限（Capacitor ±/Runic Capacitor +2）
         self.dark_stacks = 0  # 暗球存层（passive 每回合 +6）
         self.special: dict[str, int] = {}  # 特殊计数槽（对齐 lightspeed bomb/combust 等）
+        # 上回合失去过 HP（Emotion Chip 遗物：回合开始查询；任意 HP 损失置位，
+        # 回合开始结算后清零——含敌方阶段承伤，对齐原版 lostHPLastTurn 语义）
+        self.hp_lost_last_turn = False
 
     # ---- Defect 充能球（按 Java 原版自建；lightspeed 空壳）----
     def _orb_damage_mult(self, m: "Monster") -> float:
@@ -98,28 +101,56 @@ class Player(Combatant):
         elif orb == Orb.PLASMA:
             bc.add_to_bot(Actions.gain_energy(2))
 
-    def trigger_orb_passives(self, bc: BattleContext, start: bool) -> None:
-        """充能球被动：回合开始（FROST 得格挡）与回合结束（LIGHTNING 伤/
-        DARK +6 存层）。LOOP：回合开始时 orbs[0] 的被动额外触发 ×层。"""
+    def trigger_orb_passive_once(self, bc: BattleContext, orb: Orb) -> None:
+        """单球被动触发一次（回合批量被动 / EMOTION_CHIP 全球触发 /
+        GOLD_PLATED_CABLES 最右球复触发共用；效果对齐 wiki Orb 页）。
+
+        PLASMA 被动：+1 能量（wiki：Plasma Orbs activate theirs at the
+        beginning of your turn——与 FROST 同在回合开始侧结算）。
+        """
         focus = self.statuses.get(PlayerStatus.FOCUS)
+        if orb == Orb.FROST:
+            bc.add_to_bot(Actions.gain_block(max(0, 2 + focus)))
+        elif orb == Orb.LIGHTNING:
+            dmg = max(0, 3 + focus)
+            if self.statuses.has(PlayerStatus.ELECTRO):
+                bc.add_to_bot(Actions.damage_all_enemy(dmg))
+            else:
+                bc.add_to_bot(Actions.damage_random_enemy(dmg))
+        elif orb == Orb.DARK:
+            self.dark_stacks += 6
+        elif orb == Orb.PLASMA:
+            # PLASMA 不吃 FOCUS（wiki）；能量直加对齐 gainEnergy 动作
+            bc.add_to_bot(Actions.gain_energy(1))
+
+    def trigger_orb_passives(self, bc: BattleContext, start: bool) -> None:
+        """充能球被动：回合开始（FROST 得格挡/PLASMA 得能量）与回合结束
+        （LIGHTNING 伤/DARK +6 存层）。LOOP：回合开始时 orbs[0] 的被动
+        额外触发 ×层。GOLD_PLATED_CABLES：回合结束全部槽位结算后，最右球
+        被动额外触发一次（wiki Gold-Plated Cables）。"""
         if start:
             for orb in self.orbs:
                 if orb == Orb.FROST:
-                    bc.add_to_bot(Actions.gain_block(max(0, 2 + focus)))
+                    self.trigger_orb_passive_once(bc, orb)
+                elif orb == Orb.PLASMA:
+                    self.trigger_orb_passive_once(bc, orb)
             if self.orbs and self.statuses.has(PlayerStatus.LOOP):
                 for _ in range(self.statuses.get(PlayerStatus.LOOP)):
                     if self.orbs[0] == Orb.FROST:
-                        bc.add_to_bot(Actions.gain_block(max(0, 2 + focus)))
+                        bc.add_to_bot(Actions.gain_block(max(0, 2 + self.statuses.get(PlayerStatus.FOCUS))))
         else:
+            # 引擎既有约定（批次 F，已定测试口径）：FROST 被动在回合开始侧
+            # 结算，回合结束仅 LIGHTNING/DARK——wiki Orb 页为 FROST 回合末，
+            # 系已知时序偏差（审计报告记录，不在此处改约定）
             for orb in self.orbs:
-                if orb == Orb.LIGHTNING:
-                    dmg = max(0, 3 + focus)
-                    if self.statuses.has(PlayerStatus.ELECTRO):
-                        bc.add_to_bot(Actions.damage_all_enemy(dmg))
-                    else:
-                        bc.add_to_bot(Actions.damage_random_enemy(dmg))
-                elif orb == Orb.DARK:
-                    self.dark_stacks += 6
+                if orb in (Orb.LIGHTNING, Orb.DARK):
+                    self.trigger_orb_passive_once(bc, orb)
+            # GOLD_PLATED_CABLES（wiki：Your rightmost Orb triggers its
+            # passive an additional time；the extra trigger occurs after all
+            # other Orb slots have resolved their passives——批次 F 未迁移，
+            # 遗物审计批次按 wiki 补）。orbs[-1] = 最新入槽 = 最右。
+            if self.orbs and bc.relics.has_gold_plated_cables(bc):
+                self.trigger_orb_passive_once(bc, self.orbs[-1])
 
     # ---- 观者姿态（对齐 Stance 枚举 + ChangeStance；C++ 该动作为空壳，
     # 进入钩子链按 wiki 自建）----
@@ -130,9 +161,10 @@ class Player(Combatant):
             return
         s = self.statuses
         # 退出 Calm +2 能量 / 进入 Divinity +3 能量（wiki Keywords#Stance；
-        # 进入钩子前结算离开效果）
+        # 进入钩子前结算离开效果）。VIOLET_LOTUS（wiki：Whenever you exit
+        # Calm, gain an additional Energy → 2 变 3）经遗物容器查询。
         if self.stance == Stance.CALM and new != Stance.CALM:
-            bc.add_to_bot(Actions.gain_energy(2))
+            bc.add_to_bot(Actions.gain_energy(bc.relics.calm_exit_energy(bc)))
         if new == Stance.WRATH and s.has(PlayerStatus.RUSHDOWN):
             bc.add_to_bot(Actions.draw_cards(2 * s.get(PlayerStatus.RUSHDOWN)))
         if s.has(PlayerStatus.MENTAL_FORTRESS):
@@ -245,13 +277,21 @@ class Player(Combatant):
             self.statuses.decrement(PlayerStatus.BUFFER)
             return
         was_bloodied = self.hp * 2 <= self.max_hp  # 扣血前快照
+        self.hp_lost_last_turn = True  # Emotion Chip 查询位（任意 HP 损失）
         self.hp = max(0, self.hp - amount)
         if self_inflicted and self.statuses.has(PlayerStatus.RUPTURE):
             bc.add_to_bot(Actions.buff_player(PlayerStatus.STRENGTH, self.statuses.get(PlayerStatus.RUPTURE)))
         bc.relics.on_player_hp_was_lost(bc, amount, was_bloodied)
         bc.cards.on_player_damaged()  # Blood for Blood 类受击改费（Player.cpp:317 onTookDamage）
         if self.hp <= 0 and bc.outcome == Outcome.UNDECIDED:
-            bc.outcome = Outcome.PLAYER_LOSS
+            # LIZARD_TAIL（wiki：When you would die, heal to 50% of your Max HP
+            # instead. Works once.）——原版每局一次，单场模拟映射为每场一次；
+            # 查询落在 RelicContainer.on_would_die（计数器消费）
+            saved = bc.relics.on_would_die(bc)
+            if saved is not None:
+                self.hp = saved
+            else:
+                bc.outcome = Outcome.PLAYER_LOSS
         bc.check_combat()
 
     # ---- 玩家回合钩子（对齐 Player.cpp 对应方法）----
@@ -279,6 +319,12 @@ class Player(Combatant):
             n = s.get(PlayerStatus.LOSE_STRENGTH)
             bc.add_to_bot(Actions.debuff_player(PlayerStatus.STRENGTH, -n, False))
             bc.add_to_bot(Actions.remove_player_status(PlayerStatus.LOSE_STRENGTH))
+        if s.has(PlayerStatus.LOSE_DEXTERITY):
+            # 临时敏捷（Duality 遗物）：回合末 -1×层 敏捷并移除（LOSE_STRENGTH
+            # 的敏捷版，wiki Duality：1 Dexterity Down removes it at end of turn）
+            n = s.get(PlayerStatus.LOSE_DEXTERITY)
+            bc.add_to_bot(Actions.debuff_player(PlayerStatus.DEXTERITY, -n, False))
+            bc.add_to_bot(Actions.remove_player_status(PlayerStatus.LOSE_DEXTERITY))
         if s.has(PlayerStatus.NO_DRAW):
             bc.add_to_bot(Actions.remove_player_status(PlayerStatus.NO_DRAW))
         # Wraith Form（wiki 现行文本：每回合末失去 1×层 敏捷；对齐 C++

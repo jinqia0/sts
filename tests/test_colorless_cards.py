@@ -538,6 +538,7 @@ def test_trip_single_target_vulnerable():
     bc.play_card(0, target=1)
     assert c2.statuses.get(MonsterStatus.VULNERABLE) == 2
     assert not bc.monsters.monsters[0].statuses.has(MonsterStatus.VULNERABLE)
+    assert bc.player.energy == 3  # 0 费（wiki 口径，此前误记 1）
 
 
 def test_trip_upgraded_all_enemies_vulnerable():

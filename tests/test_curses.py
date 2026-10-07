@@ -207,19 +207,19 @@ def test_ascenders_bane_ethereal_exhausts_at_end_of_turn():
     assert bane in bc.cards.exhaust_pile
 
 
-# ---- Curse of the Bell / Necronomicurse：被消耗时复制入手 ----
+# ---- Curse of the Bell / Necronomicurse ----
 
 
-def test_curse_of_the_bell_copies_on_exhaust():
-    # 经 Burning Pact 的选卡消耗路径（引擎 on_card_exhausted + 内容层
-    # _exhaust_from_hand 双触达，misc_data 守卫保证只复制一张）
+def test_curse_of_the_bell_no_copy_on_exhaust():
+    # wiki 口径（2026-10-06 复核）："Unplayable. Cannot be removed from your
+    # deck."——被消耗时**无**复制效果；lightspeed 的 triggerOnExhaust 复制
+    # 系其笔误，此前被误继承，已移除。
     bc = BattleContext(seed=219)
     setup_hand(bc, BURNING_PACT, CURSE_OF_THE_BELL)
     bell = bc.cards.hand[1]
     bc.play_card(0)  # 唯一手牌候选 → 选卡直执消耗
     assert bell in bc.cards.exhaust_pile
-    copies = [c for c in bc.cards.hand if c.card is CURSE_OF_THE_BELL]
-    assert len(copies) == 1
+    assert not any(c.card is CURSE_OF_THE_BELL for c in bc.cards.hand)
 
 
 def test_necronomicurse_copies_on_exhaust():

@@ -66,6 +66,7 @@ from sts.content.cards import (
     PUMMEL,
     RAMPAGE,
     REAPER,
+    RECKLESS_CHARGE,
     RUPTURE,
     SEEING_RED,
     SECOND_WIND,
@@ -179,7 +180,7 @@ def test_perfected_strike_counts_strikes():
 
 
 def test_uppercut_damage_and_debuffs():
-    """上勾拳：13 伤 + 1 虚弱 + 1 易伤；升级版伤害仍 13（对齐 C++），层数 2。"""
+    """上勾拳：13 伤 + 1 虚弱 + 1 易伤；升级不加伤（wiki 与 lightspeed 均为 13/13），层数 2。"""
     bc = BattleContext(seed=49)
     m = bc.monsters.monsters[0]
     bc.player.energy = 4
@@ -191,7 +192,8 @@ def test_uppercut_damage_and_debuffs():
     assert m.statuses.get(MonsterStatus.VULNERABLE) == 1
     setup_hand_upgraded(bc, UPPERCUT)
     bc.play_card(0)
-    # 升级不加伤（wiki 为 17，以 C++ 为准）；第一张施加的易伤使第二张 13×1.5=19
+    # 升级不加伤（wiki 复核 13/13，批次 1 记录的"wiki 为 17"系误读）；
+    # 第一张施加的易伤使第二张 13×1.5=19
     assert m.hp == hp0 - 13 - 19
     assert m.statuses.get(MonsterStatus.WEAK) == 3
     assert m.statuses.get(MonsterStatus.VULNERABLE) == 3
@@ -295,7 +297,7 @@ def test_shockwave_all_weak_vulnerable():
 
 
 def test_disarm_reduces_strength_and_exhausts():
-    """缴械：敌 -2 力量（升级仍 -2，对齐 C++）；吃 ARTIFACT 抵消；消耗。"""
+    """缴械：敌 -2 力量（升级 -3，wiki 口径）；吃 ARTIFACT 抵消；消耗。"""
     bc = BattleContext(seed=56)
     m = bc.monsters.monsters[0]
     m.statuses.add(MonsterStatus.STRENGTH, 4)
@@ -305,7 +307,7 @@ def test_disarm_reduces_strength_and_exhausts():
     assert any(c.card.name == "Disarm" for c in bc.cards.exhaust_pile)
     setup_hand_upgraded(bc, DISARM)
     bc.play_card(0)
-    assert m.statuses.get(MonsterStatus.STRENGTH) == 0  # wiki 为 -3，C++ 恒 -2
+    assert m.statuses.get(MonsterStatus.STRENGTH) == -1  # 4-2-3，wiki 口径（lightspeed 原恒 -2，系其笔误）
 
 
 def test_disarm_blocked_by_artifact():
@@ -320,21 +322,22 @@ def test_disarm_blocked_by_artifact():
     assert not m.statuses.has(MonsterStatus.ARTIFACT)
 
 
-def test_seeing_red_gains_energy_no_exhaust():
-    """怒目而视：+2 能量；升级 0 费；不消耗（对齐 C++，wiki 为消耗）。"""
+def test_seeing_red_gains_energy_and_exhausts():
+    """怒目而视：+2 能量；升级 0 费；消耗（wiki 口径，lightspeed 原不消耗系其笔误）。"""
     bc = BattleContext(seed=58)
     setup_hand(bc, SEEING_RED)
     bc.play_card(0)
     assert bc.player.energy == 4  # 3 - 1 费 + 2
-    assert any(c.card.name == "Seeing Red" for c in bc.cards.discard_pile)
-    assert not any(c.card.name == "Seeing Red" for c in bc.cards.exhaust_pile)
+    assert any(c.card.name == "Seeing Red" for c in bc.cards.exhaust_pile)
+    assert not any(c.card.name == "Seeing Red" for c in bc.cards.discard_pile)
     setup_hand_upgraded(bc, SEEING_RED)
     bc.play_card(0)
     assert bc.player.energy == 4 + 2  # 0 费
+    assert sum(1 for c in bc.cards.exhaust_pile if c.card.name == "Seeing Red") == 2
 
 
 def test_bloodletting_hp_for_energy():
-    """放血：失去 3 HP（对齐 C++，wiki 为 1），+2 能量；升级 +3。"""
+    """放血：失去 3 HP（wiki 与 lightspeed 一致），+2 能量；升级 +3。"""
     bc = BattleContext(seed=59)
     setup_hand(bc, BLOODLETTING)
     bc.play_card(0)
@@ -821,13 +824,13 @@ def test_demon_form_card_strength_per_turn():
 
 
 def test_berserk_card_energy_and_vulnerable():
-    """狂暴：+1 每回合同能量 + 2 层易伤（自施，当轮递减）；升级 0 费仅 1 层易伤。"""
+    """狂暴：0 费（wiki 口径）；+1 每回合同能量 + 2 层易伤（自施，当轮递减）；升级仅 1 层易伤。"""
     bc = BattleContext(seed=73)
     setup_hand(bc, BERSERK)
     bc.play_card(0)
     assert bc.player.energy_per_turn_bonus == 1
     assert bc.player.statuses.get(PlayerStatus.VULNERABLE) == 2
-    assert bc.player.energy == 2
+    assert bc.player.energy == 3  # 0 费（wiki：费用恒 0，此前误记 1→0）
     bc.end_turn()
     # 回合 2 回能 3+1（敌回合 1 为咒语；自施易伤在回合末衰减 1 层）
     assert bc.player.energy == 4
@@ -1217,8 +1220,8 @@ def test_true_grit_upgraded_opens_card_select():
     assert bc3.input_state == InputState.PLAYER_NORMAL
 
 
-def test_havoc_plays_top_card_and_exhausts_both():
-    """浩劫：免费随机目标打出抽牌堆顶并消耗它，自身也消耗；升级 0 费。"""
+def test_havoc_plays_top_card_and_exhausts_top():
+    """浩劫：免费随机目标打出抽牌堆顶并消耗它，自身不消耗（wiki 口径：Exhaust 仅指顶牌）；升级 0 费。"""
     bc = BattleContext(seed=94)
     m = bc.monsters.monsters[0]
     hp0 = m.hp
@@ -1230,15 +1233,17 @@ def test_havoc_plays_top_card_and_exhausts_both():
     bc.play_card(0)
     assert m.hp == hp0 - 6  # 免费打出的打击
     assert any(c is top for c in bc.cards.exhaust_pile)  # 顶牌消耗
-    assert any(c.card.name == "Havoc" for c in bc.cards.exhaust_pile)  # 自身消耗
+    assert not any(c.card.name == "Havoc" for c in bc.cards.exhaust_pile)  # 自身不消耗
+    assert any(c.card.name == "Havoc" for c in bc.cards.discard_pile)  # 落弃牌堆
     assert bc.player.energy == 2
-    # 两堆皆空：无牌可打，仅自身消耗，不崩
+    # 两堆皆空：无牌可打，自身落弃牌堆，不崩
     bc2 = BattleContext(seed=94)
     bc2.cards.draw_pile.clear()
     bc2.cards.discard_pile.clear()
     setup_hand(bc2, HAVOC)
     bc2.play_card(0)
-    assert [c.card.name for c in bc2.cards.exhaust_pile] == ["Havoc"]
+    assert [c.card.name for c in bc2.cards.exhaust_pile] == []
+    assert [c.card.name for c in bc2.cards.discard_pile] == ["Havoc"]
     # 抽牌堆空、弃牌堆有牌：先洗再打出
     bc3 = BattleContext(seed=94)
     bc3.cards.draw_pile.clear()
@@ -1281,12 +1286,46 @@ def test_infernal_blade_random_free_attack():
     m = bc.monsters.monsters[0]
     hp0 = m.hp
     energy0 = bc.player.energy
-    bc.play_card(0)  # 0 费打出
-    assert bc.player.energy == energy0
+    bc.play_card(0)  # 本回合 0 费打出（X 费牌打出消耗全部能量，单独口径）
+    if gen.card.x_cost:
+        assert bc.player.energy == 0  # X = 剩余能量
+    else:
+        assert bc.player.energy == energy0
     # 攻击牌实际结算（恶魔之火空手时 0 段除外——池内唯一零伤特例）
     if gen.card.name != "Fiend Fire":
         assert m.hp < hp0
     assert gen not in bc.cards.hand  # 打出后离开手牌
+    # 升级改费 1→0（wiki 口径；lightspeed 原不改费，系其笔误）
+    assert INFERNAL_BLADE.upgraded_cost == 0
+    bc2 = BattleContext(seed=95)
+    setup_hand_upgraded(bc2, INFERNAL_BLADE)
+    energy0 = bc2.player.energy
+    bc2.play_card(0)
+    assert bc2.player.energy == energy0  # 0 费打出
+    assert any(c.upgraded and c.card.name == "Infernal Blade" for c in bc2.cards.exhaust_pile)
+
+
+def test_reckless_charge_damage_and_dazed_shuffle():
+    """鲁莽冲锋（批次 G 补遗）：7/10 伤 + 1 张眩晕洗入抽牌堆。"""
+    bc = BattleContext(seed=136)
+    m = bc.monsters.monsters[0]
+    hp0 = m.hp
+    draw0 = len(bc.cards.draw_pile)
+    setup_hand(bc, RECKLESS_CHARGE)
+    bc.play_card(0)
+    assert m.hp == hp0 - 7
+    assert len(bc.cards.draw_pile) == draw0 + 1  # 眩晕洗入
+    assert sum(1 for c in bc.cards.draw_pile if c.card.name == "Dazed") == 1
+    assert bc.player.energy == 3  # 0 费
+    assert any(c.card.name == "Reckless Charge" for c in bc.cards.discard_pile)
+    bc2 = BattleContext(seed=136)
+    m2 = bc2.monsters.monsters[0]
+    hp2 = m2.hp
+    setup_hand_upgraded(bc2, RECKLESS_CHARGE)
+    bc2.play_card(0)
+    assert m2.hp == hp2 - 10
+    assert sum(1 for c in bc2.cards.draw_pile if c.card.name == "Dazed") == 1
+    # 眩晕为虚无：在手时回合末才消耗；在抽牌堆中不受影响（无断言，仅确认不崩）
 
 
 # ---- 虚无族 ----
@@ -1778,7 +1817,7 @@ def test_headbutt_kill_clears_pending_select():
 
 
 def test_dual_wield_single_candidate_copies_one():
-    """双持：单候选自动复制 1 份（C++ up?2:1——基础 1 份），保留升级态；自身消耗。"""
+    """双持：单候选自动复制 1 份（C++ up?2:1——基础 1 份），保留升级态；自身不消耗（wiki 口径）。"""
     bc = BattleContext(seed=132)
     setup_hand(bc, DUAL_WIELD)
     strike = bc.cards.instantiate(STRIKE)
@@ -1791,7 +1830,8 @@ def test_dual_wield_single_candidate_copies_one():
     assert copy.card.name == "Strike"
     assert copy.upgraded  # 副本保留升级态
     assert copy.unique_id != strike.unique_id
-    assert any(c.card.name == "Dual Wield" for c in bc.cards.exhaust_pile)
+    assert not any(c.card.name == "Dual Wield" for c in bc.cards.exhaust_pile)
+    assert any(c.card.name == "Dual Wield" for c in bc.cards.discard_pile)
 
 
 def test_dual_wield_copy_preserves_misc_data():
@@ -1829,7 +1869,8 @@ def test_dual_wield_multi_select_and_upgraded_count():
     bc3.play_card(0)
     assert bc3.input_state == InputState.PLAYER_NORMAL
     assert [c.card.name for c in bc3.cards.hand] == ["Defend"]
-    assert any(c.card.name == "Dual Wield" for c in bc3.cards.exhaust_pile)
+    assert not any(c.card.name == "Dual Wield" for c in bc3.cards.exhaust_pile)
+    assert any(c.card.name == "Dual Wield" for c in bc3.cards.discard_pile)
 
 
 def test_dual_wield_hand_full_overflow_to_discard():
@@ -1840,8 +1881,8 @@ def test_dual_wield_hand_full_overflow_to_discard():
     assert bc.input_state == InputState.CARD_SELECT  # 9 张打击多候选
     bc.choose_card(0)
     assert len(bc.cards.hand) == 10  # 第 1 份副本入手（满）
-    assert len(bc.cards.discard_pile) == 1  # 第 2 份落弃牌堆
-    assert bc.cards.discard_pile[0].card.name == "Strike"
+    # 第 2 份落弃牌堆；双持自身不消耗（wiki 口径），也落弃牌堆
+    assert sorted(c.card.name for c in bc.cards.discard_pile) == ["Dual Wield", "Strike"]
 
 
 def test_exhume_select_from_exhaust_pile_excludes_self():

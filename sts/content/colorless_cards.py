@@ -564,8 +564,8 @@ PURITY = CardDef("Purity", "纯净", 0, "Skill", "消耗至多 3 张手牌。消
                  False, True, _purity_play, colorless=True)
 SWIFT_STRIKE = CardDef("Swift Strike", "迅捷打击", 0, "Attack", "造成 7 点伤害。（升级 10 点）",
                        True, False, _swift_strike_play, colorless=True)
-TRIP = CardDef("Trip", "绊倒", 1, "Skill", "施加 2 层易伤。（升级：所有敌人）",
-               True, False, _trip_play, colorless=True)
+TRIP = CardDef("Trip", "绊倒", 0, "Skill", "施加 2 层易伤。（升级：所有敌人）",
+               True, False, _trip_play, colorless=True)  # wiki 口径：0 费（此前误记 1）
 APOTHEOSIS = CardDef("Apotheosis", "神化", 2, "Skill", "升级本场战斗的所有牌（四堆）。消耗。（升级费用 1）",
                      False, True, _apotheosis_play, upgraded_cost=1, colorless=True)
 CHRYSALIS = CardDef("Chrysalis", "结茧", 2, "Skill", "3 张随机技能 0 费洗入抽牌堆。消耗。（升级 5 张）",

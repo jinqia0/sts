@@ -6,8 +6,9 @@
   regretCardCount = 入队时的完整手牌数）+ useNoTriggerCard（L933-961：
   Burn/Decay 走 DamagePlayer **吃格挡**、Regret 走 PlayerLoseHp **不吃
   格挡**、Doubt/Shame 直接 debuff 且置 justApplied）+ CardPools.h L63
-  curseCardPool + CardInstance::triggerOnExhaust（L208-212：Curse of the
-  Bell 消耗时复制入手）+ BattleContext.cpp L2836-2837（Necronomicurse 同款）。
+  curseCardPool + BattleContext.cpp L2836-2837（Necronomicurse 的
+  triggerOnExhaust 复制入手）。Curse of the Bell 在 C++ 里的同款复制
+  系 lightspeed 笔误，wiki 无此效果，2026-10-06 审计已移除（见下方注释）。
 - 数值/文本与本体反编译交叉校验：Regret.java（magicNumber=hand.size()
   **含自身**，LoseHPAction 不吃格挡）、Pride.java（cost 1 **可打出**、
   exhaust、isInnate、回合末 MakeTempCardInDrawPile **置顶复制**、原牌随
@@ -132,13 +133,16 @@ SHAME = CardDef("Shame", "羞愧", 0, "Curse",
 PARASITE = CardDef("Parasite", "寄生", 0, "Curse",
                    "不可打出。", False, False, _unplayable_noop, unplayable=True)
 NORMALITY = CardDef("Normality", "平庸", 0, "Curse",
-                    "不可打出。（若本回合尚未打出卡牌，本回合最多只能打出 1 张——"
+                    "不可打出。（在手牌中时，本回合最多只能打出 3 张牌——"
                     "打出限制未实现）",
                     False, False, _unplayable_noop, unplayable=True)
-# Normality 的打出限制按计划跳过：本体规则是"回合开始时手中有 Normality
-# → 该回合只能打出 1 张牌"；lightspeed 完全未实现等价校验（isCardPlayAllowed
-# 里 handNormalityCount && cardsPlayedThisTurn >= 3 的闸门与本体规则也对不上，
-# BattleContext.cpp L713-716），故仅落地 unplayable 位。
+# Normality 的打出限制未实现（2026-10-07 wiki 复核修正文本）：wiki 规则是
+# "While in hand, you cannot play more than 3 cards this turn."（该诅咒
+# 不可打出，整回合滞留手中 → 本回合第 4 张起不可出）。lightspeed 的闸门
+# （isCardPlayAllowed：handNormalityCount && cardsPlayedThisTurn >= 3，
+# BattleContext.cpp L713-716）语义其实与 wiki 一致——此前记录"与本体规则
+# 对不上"系误读。真正的阻塞在引擎层：出牌校验需在 battle.py play_card
+# 前置（内容层无对应钩子），故本文件仅落地 unplayable 位 + 文本。
 DOUBT = CardDef("Doubt", "疑虑", 0, "Curse",
                 "不可打出。回合结束时获得 1 层虚弱。",
                 False, False, _unplayable_noop,
@@ -193,22 +197,16 @@ ASCENDERS_BANE = CardDef("Ascender's Bane", "登塔者之灾", 0, "Curse",
 # 本项目无移除/变形机制，战斗内仅落地 unplayable + ethereal。
 
 
-def _curse_of_the_bell_on_exhaust(bc: "BattleContext", inst: "CardInstance") -> None:
-    # 对齐 C++ CardInstance::triggerOnExhaust（L210-211）：被消耗时复制
-    # 一张入手。本体 CurseOfTheBell.java 并无 triggerOnExhaust（wiki 亦
-    # 无此交互）——这是 lightspeed 的偏差，按"结算路径以 C++ 为准"保留，
-    # 见迁移报告。misc_data 守卫防双结算（同 Sentinel 模式：引擎
-    # on_card_exhausted 钩子与内容层 _exhaust_from_hand 显式调用各达一次）。
-    if inst.misc_data:
-        return
-    inst.misc_data = 1
-    bc.add_to_bot(Actions.make_temp_card_in_hand(CURSE_OF_THE_BELL))
+# Curse of the Bell（2026-10-06 wiki 审计修正）：wiki 页为"Unplayable.
+# Cannot be removed from your deck."——**无**"被消耗时复制入手"效果；
+# 该行为系 lightspeed CardInstance::triggerOnExhaust（L210-211）的笔误，
+# 此前按"结算路径以 C++ 为准"误继承，已删除。
 
 
 CURSE_OF_THE_BELL = CardDef("Curse of the Bell", "丧钟之咒", 0, "Curse",
-                            "不可打出。无法从牌组中移除。（被消耗时复制一张入手）",
+                            "不可打出。无法从牌组中移除。",
                             False, False, _unplayable_noop,
-                            unplayable=True, on_exhaust_effect=_curse_of_the_bell_on_exhaust)
+                            unplayable=True)
 
 
 def _necronomicurse_on_exhaust(bc: "BattleContext", inst: "CardInstance") -> None:

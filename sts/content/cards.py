@@ -298,7 +298,8 @@ def _perfected_strike_play(bc: BattleContext, item: CardQueueItem) -> None:
 
 def _uppercut_play(bc: BattleContext, item: CardQueueItem) -> None:
     up = item.card.upgraded
-    # C++ 升级版伤害仍为 13（wiki 为 17，以 C++ 为准），升级仅提升虚弱/易伤
+    # wiki 口径（Uppercut 13/13：升级不加伤，仅虚弱/易伤 1→2；批次 1 曾记录
+    # "wiki 为 17" 系当时误读——2026-10-06 复核 wiki 页与 lightspeed 均为 13）
     dmg = bc.calculate_card_damage(item, item.target, 13)
     bc.add_to_bot(Actions.attack_enemy(item.target, dmg))
     n = 2 if up else 1
@@ -356,14 +357,15 @@ def _shockwave_play(bc: BattleContext, item: CardQueueItem) -> None:
 
 
 def _disarm_play(bc: BattleContext, item: CardQueueItem) -> None:
-    # 对齐 C++ DISARM：恒 -2 力量（wiki 升级版 -3，以 C++ 为准）；
-    # DebuffEnemy 语义：吃 ARTIFACT 抵消，负数直达力量（可为负）
-    bc.add_to_bot(Actions.debuff_enemy(item.target, MonsterStatus.STRENGTH, -2, False))
+    # wiki 口径（Disarm -2/-3 力量；lightspeed 原恒 -2，系其笔误——升级分支
+    # 漏写）。DebuffEnemy 语义：吃 ARTIFACT 抵消，负数直达力量（可为负）
+    n = -3 if item.card.upgraded else -2
+    bc.add_to_bot(Actions.debuff_enemy(item.target, MonsterStatus.STRENGTH, n, False))
 
 
 def _seeing_red_play(bc: BattleContext, item: CardQueueItem) -> None:
-    # 对齐 C++：+2 能量、升级改费 1→0；lightspeed 的 doesCardExhaust 未收录
-    # SEEING_RED → 不消耗（wiki 为消耗，以 C++ 为准）
+    # wiki 口径（"Gain 2 Energy. Exhaust."）：消耗；lightspeed 的 doesCardExhaust
+    # 未收录 SEEING_RED → 不消耗，系其笔误。+2 能量、升级改费 1→0。
     bc.add_to_bot(Actions.gain_energy(2))
 
 
@@ -466,8 +468,8 @@ PUMMEL = CardDef("Pummel", "连续痛击", 1, "Attack", "造成 2 点伤害 4 �
 INTIMIDATE = CardDef("Intimidate", "威吓", 0, "Skill", "所有敌人获得 1 层虚弱。消耗。", False, True, _intimidate_play)
 SHOCKWAVE = CardDef("Shockwave", "震波", 2, "Skill", "所有敌人获得 3 层虚弱和 3 层易伤。消耗。", False, True, _shockwave_play)
 DISARM = CardDef("Disarm", "缴械", 1, "Skill", "敌人失去 2 点力量。消耗。", True, True, _disarm_play)
-SEEING_RED = CardDef("Seeing Red", "怒目而视", 1, "Skill", "获得 2 点能量。", False, False, _seeing_red_play,
-                     upgraded_cost=0)
+SEEING_RED = CardDef("Seeing Red", "怒目而视", 1, "Skill", "获得 2 点能量。消耗。", False, True, _seeing_red_play,
+                     upgraded_cost=0)  # wiki 口径置消耗（lightspeed 原不消耗，系其 doesCardExhaust 笔误）
 BLOODLETTING = CardDef("Bloodletting", "放血", 0, "Skill", "失去 3 点 HP。获得 2 点能量。", False, False, _bloodletting_play)
 SPOT_WEAKNESS = CardDef("Spot Weakness", "洞察弱点", 1, "Skill", "若敌人意图为攻击，获得 3 点力量。", True, False, _spot_weakness_play)
 ENTRENCH = CardDef("Entrench", "堑壕", 2, "Skill", "将当前格挡翻倍。", False, False, _entrench_play,
@@ -553,15 +555,16 @@ def _berserk_play(bc: BattleContext, item: CardQueueItem) -> None:
 
 
 def _brutality_play(bc: BattleContext, item: CardQueueItem) -> None:
-    # C++ 恒 1 层；升级差异 = 费用 1→0 + 固有（isCardInnate 的 upgraded 分支，
-    # 用 innate_when_upgraded 位表达，待引擎 move_innate_to_top 接线）
+    # C++ 恒 1 层；升级差异 = 固有（isCardInnate 的 upgraded 分支，用
+    # innate_when_upgraded 位表达，待引擎 move_innate_to_top 接线）；
+    # 费用 wiki 口径恒 0（2026-10-06 复核，此前误记 1→0）
     bc.add_to_bot(Actions.buff_player(PlayerStatus.BRUTALITY, 1))
 
 
 def _juggernaut_play(bc: BattleContext, item: CardQueueItem) -> None:
-    # C++ 存每次触发伤害 5/7（gainBlock 直接用值）；本引擎层数语义
-    #（gain_block 内 5×层）。基础 1 层 = 5 伤一致；升级 2 层 = 10 伤
-    #（C++ 为 7），差异记录于迁移报告。
+    # wiki 口径（2026-10-06 复核）：每次获得格挡对随机敌 5/7 伤（lightspeed
+    # 亦为 5/7）。本引擎 gain_block 内为 5×层语义 → 基础 1 层 = 5 伤一致；
+    # 升级 2 层 = 10 伤（wiki 为 7）——倍率在引擎层（禁改范围），见审计报告。
     bc.add_to_bot(Actions.buff_player(PlayerStatus.JUGGERNAUT, 2 if item.card.upgraded else 1))
 
 
@@ -571,10 +574,11 @@ def _rupture_play(bc: BattleContext, item: CardQueueItem) -> None:
 
 
 def _combust_play(bc: BattleContext, item: CardQueueItem) -> None:
-    # C++ 存全体伤害值 5/7、HP 损失恒 1（combustHpLoss，C++ 自带 todo
-    # "doesn't stack hp loss correctly"）；本引擎层数语义（回合末失 层 HP
-    # + 全体 5×层）。基础 1 层 = 失 1/5 伤一致；升级 2 层 = 失 2/10 伤
-    #（C++ 失 1/7 伤），差异记录于迁移报告。
+    # wiki 口径（2026-10-06 复核）：回合末失 1 HP、全体 5/7 伤（多张叠加时
+    # 伤害累加、HP 损失 = 打出张数；lightspeed 为 5/7 伤 + 恒 1 HP 且自带
+    # "doesn't stack hp loss correctly" todo）。本引擎 entities 层为 5×层伤
+    # + 失层 HP 语义 → 基础 1 层 = 5 伤/1 HP 一致；升级 2 层 = 10 伤/2 HP
+    #（wiki 为 7 伤/1 HP）——结算在引擎层（禁改范围），见审计报告。
     bc.add_to_bot(Actions.buff_player(PlayerStatus.COMBUST, 2 if item.card.upgraded else 1))
 
 
@@ -584,15 +588,17 @@ def _evolve_play(bc: BattleContext, item: CardQueueItem) -> None:
 
 
 def _fire_breathing_play(bc: BattleContext, item: CardQueueItem) -> None:
-    # C++ 存全体伤害值 6/10（CardManager::draw 直接用值，wiki 为 4/6）；
-    # 本引擎 4×层语义 → 基础 1 层 = 4 伤（与 wiki 一致、与 C++ 6 不同），
-    # 升级 2 层 = 8 伤（C++ 为 10），差异记录于迁移报告。
+    # wiki 口径（2026-10-06 复核）：抽到状态/诅咒时全体 6/10 伤（lightspeed
+    # 亦为 6/10）。本引擎 battle.py 抽牌钩子为 4×层语义 → 基础 1 层 = 4 伤、
+    # 升级 2 层 = 8 伤，均低于 wiki——倍率在引擎层（禁改范围），需把
+    # battle.py L798/L801 的 4×改为可变基数后才能对齐，见审计报告。
     bc.add_to_bot(Actions.buff_player(PlayerStatus.FIRE_BREATHING, 2 if item.card.upgraded else 1))
 
 
 def _feel_no_pain_play(bc: BattleContext, item: CardQueueItem) -> None:
-    # C++ 存格挡值 3/4（onCardExhausted 直接用值）；本引擎 3×层语义 →
-    # 基础 1 层 = 3 一致；升级 2 层 = 6（C++ 为 4），差异记录于迁移报告。
+    # wiki 口径（2026-10-06 复核）：卡被消耗时 3/4 格挡（lightspeed 亦为
+    # 3/4）。本引擎 battle.py on_card_exhausted 为 3×层语义 → 基础 1 层 = 3
+    # 一致；升级 2 层 = 6（wiki 为 4）——倍率在引擎层（禁改范围），见审计报告。
     bc.add_to_bot(Actions.buff_player(PlayerStatus.FEEL_NO_PAIN, 2 if item.card.upgraded else 1))
 
 
@@ -608,9 +614,9 @@ def _flame_barrier_play(bc: BattleContext, item: CardQueueItem) -> None:
 
 
 def _double_tap_play(bc: BattleContext, item: CardQueueItem) -> None:
-    # C++ up?2:1（升级版下一张与下两张攻击牌各翻倍）。注意引擎
-    # on_use_attack_card 触发后是整状态 remove 而非 decrement——升级版
-    # 2 层实际只翻倍第一张攻击牌，需引擎改为 decrement（见迁移报告）。
+    # C++ up?2:1（升级版下一张与下两张攻击牌各翻倍）。引擎 on_use_attack_card
+    # 已按 decrement 结算（battle.py L476 附近），与 wiki "your next (Attack is;
+    # 2 Attacks are) played twice" 一致。
     bc.add_to_bot(Actions.buff_player(PlayerStatus.DOUBLE_TAP, 2 if item.card.upgraded else 1))
 
 
@@ -713,10 +719,40 @@ def _play_top_card(exhaust: bool) -> Action:
 
 def _havoc_play(bc: BattleContext, item: CardQueueItem) -> None:
     # 对齐 useSkillCard HAVOC（BattleContext.cpp:1337）：随机目标免费打出
-    # 抽牌堆顶牌，打完那张牌消耗（PlayTopCard 第二参 true）。Havoc 自身
-    # 消耗：wiki 有"消耗。"，lightspeed doesCardExhaust 未收录 HAVOC（偏差，
-    # 以 wiki/任务口径为准置 exhausts=True）。
-    bc.add_to_bot(_play_top_card(exhaust=True))
+    # 抽牌堆顶牌，打完那张牌消耗（PlayTopCard 第二参 true）。wiki 口径：
+    # "Play the top card of your draw pile and Exhaust it."——"Exhaust it"
+    # 指被 打出的顶牌，Havoc 自身**不**消耗（此前误读 wiki 置了 exhausts=True，
+    # 与 lightspeed 不消耗一致，已改回）。
+    def run(bc2: BattleContext) -> None:
+        if bc2.cards.draw_pile:
+            bc2.add_to_top(_play_top_card(exhaust=True))
+            return
+        # 抽牌堆空：洗弃牌堆再打顶。真实游戏此刻刚打出的 Havoc 尚未落
+        # 弃牌堆（OnAfterCardUsed 为入队动作、晚于本效果），而本引擎
+        # on_after_use_card 同步先行已把它放进去——临时移出再洗、洗完放回，
+        # 对齐真实净口径（Havoc 不参与本次洗回，也不会"打出自己"）；
+        # 弃牌堆也空 → 无牌可打，Havoc 正常落弃牌堆。
+        me = item.card
+        held_idx = None
+        for i, c in enumerate(bc2.cards.discard_pile):
+            if c is me:
+                held_idx = i
+                break
+        if held_idx is not None:
+            bc2.cards.discard_pile.pop(held_idx)
+        if not bc2.cards.discard_pile:
+            if held_idx is not None:
+                bc2.cards.discard_pile.append(me)
+            return
+        bc2.on_shuffle()
+        if held_idx is not None:
+            bc2.cards.discard_pile.append(me)
+        inst = bc2.cards.pop_from_draw_pile()
+        bc2.add_to_top_card(CardQueueItem(
+            card=inst, random_target=True, exhaust_on_use=True, autoplay=True,
+        ))
+
+    bc.add_to_bot(Action(run))
 
 
 def _infernal_blade_pool() -> list:
@@ -843,10 +879,10 @@ BARRICADE = CardDef("Barricade", "壁垒", 3, "Power", "格挡不再在回合开
 CORRUPTION = CardDef("Corruption", "腐化", 3, "Power", "技能牌费用变为 0，打出即消耗。", False, False,
                      _corruption_play, upgraded_cost=2)
 DEMON_FORM = CardDef("Demon Form", "恶魔形态", 3, "Power", "每回合开始获得 2 点力量。", False, False, _demon_form_play)
-BERSERK = CardDef("Berserk", "狂暴", 1, "Power", "获得 2 层易伤。每回合额外获得 1 点能量。", False, False,
-                  _berserk_play, upgraded_cost=0)  # lightspeed getEnergyCost 恒 0（偏差），以 wiki 1→0 为准
-BRUTALITY = CardDef("Brutality", "残暴", 1, "Power", "每回合开始失去 1 点 HP 并抽 1 张牌。", False, False,
-                    _brutality_play, upgraded_cost=0, innate_when_upgraded=True)  # 费用同上偏差口径
+BERSERK = CardDef("Berserk", "狂暴", 0, "Power", "获得 2 层易伤。每回合额外获得 1 点能量。", False, False,
+                  _berserk_play)  # wiki 口径（2026-10-06 复核）：费用恒 0，升级仅易伤 2→1（此前误记为 1→0）
+BRUTALITY = CardDef("Brutality", "残暴", 0, "Power", "每回合开始失去 1 点 HP 并抽 1 张牌。", False, False,
+                    _brutality_play, innate_when_upgraded=True)  # wiki 口径：费用恒 0，升级仅加"固有"
 JUGGERNAUT = CardDef("Juggernaut", "重装冲锋", 2, "Power", "每次获得格挡时对随机敌人造成 5 点伤害。", False, False,
                      _juggernaut_play)
 RUPTURE = CardDef("Rupture", "破裂", 1, "Power", "自伤失去 HP 时获得 1 点力量。", False, False, _rupture_play)
@@ -869,10 +905,10 @@ SENTINEL = CardDef("Sentinel", "哨兵", 1, "Skill", "获得 5 点格挡。被�
 POWER_THROUGH = CardDef("Power Through", "硬撑", 1, "Skill", "将 2 张伤口加入手牌。获得 15 点格挡。", False, False,
                         _power_through_play)
 TRUE_GRIT = CardDef("True Grit", "坚毅", 1, "Skill", "获得 7 点格挡。消耗 1 张随机手牌。", False, False, _true_grit_play)
-HAVOC = CardDef("Havoc", "浩劫", 1, "Skill", "打出抽牌堆顶的牌并消耗它。消耗。", False, True, _havoc_play,
-                upgraded_cost=0)
+HAVOC = CardDef("Havoc", "浩劫", 1, "Skill", "打出抽牌堆顶的牌并消耗它。", False, False, _havoc_play,
+                upgraded_cost=0)  # wiki 口径（2026-10-06 复核）：Exhaust 仅指被打出的顶牌，自身不消耗
 INFERNAL_BLADE = CardDef("Infernal Blade", "地狱之刃", 1, "Skill", "随机攻击牌加入手牌，本回合费用为 0。消耗。",
-                         False, True, _infernal_blade_play)  # lightspeed 升级不改费（wiki 为 0 费，偏差以 C++ 为准）
+                         False, True, _infernal_blade_play, upgraded_cost=0)  # wiki 口径：升级改费 1→0（lightspeed 原不改费，系其笔误）
 CARNAGE = CardDef("Carnage", "杀戮", 2, "Attack", "虚无。造成 20 点伤害。", True, False, _carnage_play, ethereal=True)
 GHOSTLY_ARMOR = CardDef("Ghostly Armor", "幽灵护甲", 1, "Skill", "虚无。获得 10 点格挡。", False, False,
                         _ghostly_armor_play, ethereal=True)
@@ -1119,14 +1155,40 @@ HEADBUTT = CardDef("Headbutt", "头槌", 1, "Attack",
                    "造成 9 点伤害。将 1 张弃牌堆的牌置于抽牌堆顶。（升级 12 点）",
                    True, False, _headbutt_play)
 DUAL_WIELD = CardDef("Dual Wield", "双持", 1, "Skill",
-                     "复制 1 张手中的攻击或能力牌加入手牌。（升级后 2 份）消耗。",
-                     False, True, _dual_wield_play)  # wiki 口径置消耗；lightspeed doesCardExhaust 未收录 DUAL_WIELD（偏差，同 Havoc 处理）
+                     "复制 1 张手中的攻击或能力牌加入手牌。（升级后 2 份）",
+                     False, False, _dual_wield_play)  # wiki 口径（2026-10-06 复核）：无"消耗"词条，自身不消耗（此前误读）
 EXHUME = CardDef("Exhume", "发掘", 1, "Skill",
                  "从消耗堆选 1 张牌回到手牌。消耗。", False, True, _exhume_play,
                  upgraded_cost=0)  # Cards.h getUpgradedCost：EXHUME 升级 1→0（同 Havoc/Seeing Red）
 BURNING_PACT = CardDef("Burning Pact", "燃烧契约", 1, "Skill",
                        "消耗 1 张手牌。抽 2 张牌。（升级抽 3 张）",
                        False, False, _burning_pact_play)
+
+
+# ---- 批次 G 补遗（2026-10-06 wiki 审计）：迁移期整体遗漏的铁甲卡 ----
+# 全量比对 wiki.gg 卡表发现两张卡从未迁移：Reckless Charge（本批次补齐）与
+# Rage（引擎阻塞，见文件尾注）。两张卡均为 lightspeed 已实现但迁移清单
+# 漏收的 Uncommon——继承自任务稿的"铁甲 75 张"实际只迁了 73 张。
+
+
+def _reckless_charge_play(bc: BattleContext, item: CardQueueItem) -> None:
+    # wiki 口径："Deal (7;10) damage. Shuffle a Dazed into your draw pile."
+    # 伤害 + 1 张眩晕洗入抽牌堆随机位置（同 Wild Strike 的 WOUND 路径）
+    up = item.card.upgraded
+    dmg = bc.calculate_card_damage(item, item.target, 10 if up else 7)
+    bc.add_to_bot(Actions.attack_enemy(item.target, dmg))
+    bc.add_to_bot(Actions.make_temp_card_in_draw_pile(DAZED, False, shuffle_into=True))
+
+
+RECKLESS_CHARGE = CardDef("Reckless Charge", "鲁莽冲锋", 0, "Attack",
+                           "造成 7 点伤害。1 张眩晕洗入抽牌堆。（升级 10 点）",
+                           True, False, _reckless_charge_play)
+
+# Rage（0 费技能："本回合每打出一张攻击牌获得 3/5 点格挡"）——引擎阻塞未实现：
+# battle.py on_use_attack_card 已按 PlayerStatus.RAGE 层数给格挡（L469-470），
+# 但 entities.apply_end_of_turn_powers 缺 RAGE 的回合末移除（真实游戏 Rage 仅
+# "this turn" 有效），内容层无回合末钩子可补——需引擎加一行
+# remove_player_status(RAGE)（紧邻 DOUBLE_TAP 的移除分支），再加卡即可。
 
 
 # ---- 诅咒卡 / 无色卡 / 静默卡 / 观者卡 / 故障卡 re-export（正式定义在

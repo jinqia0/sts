@@ -159,6 +159,8 @@ class PlayerStatus(IntEnum):
     STATIC_DISCHARGE = 61  # 受到攻击时引导闪电球 ×层（Defect Static Discharge）
     BIAS = 62  # 偏见：每回合开始 FOCUS -层（Biased Cognition；永续不清除）
     BUFFER = 63  # 缓冲：下次 HP 损失被完全抵挡并消耗一层（Defect Buffer）
+    # ---- 遗物审计批次（2026-10-06，wiki 核对补）----
+    LOSE_DEXTERITY = 64  # 临时敏捷（Duality 遗物：打出攻击 +1 敏捷；回合末 -1×层并移除，LOSE_STRENGTH 的敏捷版）
 
 
 class MonsterStatus(IntEnum):
