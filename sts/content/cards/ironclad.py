@@ -112,10 +112,10 @@ def starting_deck() -> list[CardDef]:
 # ============================================================
 
 
-STRIKE = CardDef("Strike", "打击", 1, "Attack", "造成 6 点伤害。（升级 9 伤）", True, False, _strike_play)
+STRIKE = CardDef("Strike", "打击", 1, "Attack", "造成 6 点伤害。", True, False, _strike_play)
 
 
-DEFEND = CardDef("Defend", "防御", 1, "Skill", "获得 5 点格挡。（升级 8 格挡）", False, False, _defend_play)
+DEFEND = CardDef("Defend", "防御", 1, "Skill", "获得 5 点格挡。", False, False, _defend_play)
 
 
 def _bash_play(bc: BattleContext, item: CardQueueItem) -> None:
@@ -126,7 +126,7 @@ def _bash_play(bc: BattleContext, item: CardQueueItem) -> None:
     bc.add_to_bot(Actions.debuff_enemy(item.target, MonsterStatus.VULNERABLE, 3 if up else 2, False))
 
 
-BASH = CardDef("Bash", "痛击", 2, "Attack", "造成 8 点伤害。施加 2 层易伤。（升级 10 伤 3 层）", True, False, _bash_play)
+BASH = CardDef("Bash", "痛击", 2, "Attack", "造成 8 点伤害。\n给予 2 层易伤。", True, False, _bash_play)
 
 
 # ============================================================
@@ -142,7 +142,7 @@ def _anger_play(bc: BattleContext, item: CardQueueItem) -> None:
     bc.add_to_bot(Actions.make_temp_card_in_discard(ANGER, up))
 
 
-ANGER = CardDef("Anger", "怒火", 0, "Attack", "造成 6 点伤害。一张副本进入弃牌堆。（升级 8 伤）", True, False, _anger_play)
+ANGER = CardDef("Anger", "愤怒", 0, "Attack", "造成 6 点伤害。\n在弃牌堆放入一张此牌的复制品。", True, False, _anger_play)
 
 
 def _armaments_play(bc: BattleContext, item: CardQueueItem) -> None:
@@ -176,7 +176,7 @@ def _armaments_play(bc: BattleContext, item: CardQueueItem) -> None:
 
 
 ARMAMENTS = CardDef("Armaments", "武装", 1, "Skill",
-                    "获得 5 点格挡。升级 1 张手牌。（升级后：升级所有手牌）",
+                    "获得 5 点格挡。\n在本场战斗中升级手牌中的一张牌。",
                     False, False, _armaments_play)
 
 
@@ -187,7 +187,7 @@ def _body_slam_play(bc: BattleContext, item: CardQueueItem) -> None:
 
 
 BODY_SLAM = CardDef(
-    "Body Slam", "猛击", 1, "Attack", "造成等同于当前格挡的伤害。（升级费用 0）", True, False, _body_slam_play,
+    "Body Slam", "全身撞击", 1, "Attack", "造成你当前格挡值的伤害。", True, False, _body_slam_play,
     upgraded_cost=0,  # 升级版仅改费 1→0（伤害不变）
 )
 
@@ -202,7 +202,7 @@ def _clash_play(bc: BattleContext, item: CardQueueItem) -> None:
     bc.add_to_bot(Actions.attack_enemy(item.target, dmg))
 
 
-CLASH = CardDef("Clash", "冲突", 0, "Attack", "只有在手牌全是攻击牌时才能打出。造成 14 点伤害。（升级 18 伤）",
+CLASH = CardDef("Clash", "交锋", 0, "Attack", "只有在手牌每一张牌都是攻击牌时才能被打出。\n造成 14 点伤害。",
                 True, False, _clash_play, play_condition=_clash_condition)
 
 
@@ -212,7 +212,7 @@ def _cleave_play(bc: BattleContext, item: CardQueueItem) -> None:
     bc.add_to_bot(Actions.attack_all_enemy(11 if up else 8))
 
 
-CLEAVE = CardDef("Cleave", "顺劈斩", 1, "Attack", "对所有敌人造成 8 点伤害。（升级 11 伤）", False, False, _cleave_play)
+CLEAVE = CardDef("Cleave", "顺劈斩", 1, "Attack", "对所有敌人造成 8 点伤害。", False, False, _cleave_play)
 
 
 def _clothesline_play(bc: BattleContext, item: CardQueueItem) -> None:
@@ -222,7 +222,7 @@ def _clothesline_play(bc: BattleContext, item: CardQueueItem) -> None:
     bc.add_to_bot(Actions.debuff_enemy(item.target, MonsterStatus.WEAK, 3 if up else 2, False))
 
 
-CLOTHESLINE = CardDef("Clothesline", "锁喉", 2, "Attack", "造成 12 点伤害。施加 2 层虚弱。（升级 14 伤 3 层）", True, False, _clothesline_play)
+CLOTHESLINE = CardDef("Clothesline", "金刚臂", 2, "Attack", "造成 12 点伤害。\n给予 2 层虚弱。", True, False, _clothesline_play)
 
 
 def _flex_play(bc: BattleContext, item: CardQueueItem) -> None:
@@ -234,12 +234,7 @@ def _flex_play(bc: BattleContext, item: CardQueueItem) -> None:
     bc.add_to_bot(Actions.debuff_player(PlayerStatus.LOSE_STRENGTH, n, False))
 
 
-FLEX = CardDef("Flex", "展示肌肉", 0, "Skill", "获得 2 点力量。回合末失去。（升级 4 点力量）", False, False, _flex_play)
-
-
-def _play_top_card(exhaust: bool) -> Action:
-    """PlayTopCard 转发（引擎工厂已修复 CardQueueItem 运行时导入）。"""
-    return Actions.play_top_card(exhaust)
+FLEX = CardDef("Flex", "活动肌肉", 0, "Skill", "获得 2 点力量。\n你的回合结束时，失去 2 点力量。", False, False, _flex_play)
 
 
 def _havoc_play(bc: BattleContext, item: CardQueueItem) -> None:
@@ -248,55 +243,28 @@ def _havoc_play(bc: BattleContext, item: CardQueueItem) -> None:
     # "Play the top card of your draw pile and Exhaust it."——"Exhaust it"
     # 指被 打出的顶牌，Havoc 自身**不**消耗（此前误读 wiki 置了 exhausts=True，
     # 与 lightspeed 不消耗一致，已改回）。
-    def run(bc2: BattleContext) -> None:
-        if bc2.cards.draw_pile:
-            bc2.add_to_top(_play_top_card(exhaust=True))
-            return
-        # 抽牌堆空：洗弃牌堆再打顶。真实游戏此刻刚打出的 Havoc 尚未落
-        # 弃牌堆（OnAfterCardUsed 为入队动作、晚于本效果），而本引擎
-        # on_after_use_card 同步先行已把它放进去——临时移出再洗、洗完放回，
-        # 对齐真实净口径（Havoc 不参与本次洗回，也不会"打出自己"）；
-        # 弃牌堆也空 → 无牌可打，Havoc 正常落弃牌堆。
-        me = item.card
-        held_idx = None
-        for i, c in enumerate(bc2.cards.discard_pile):
-            if c is me:
-                held_idx = i
-                break
-        if held_idx is not None:
-            bc2.cards.discard_pile.pop(held_idx)
-        if not bc2.cards.discard_pile:
-            if held_idx is not None:
-                bc2.cards.discard_pile.append(me)
-            return
-        bc2.on_shuffle()
-        if held_idx is not None:
-            bc2.cards.discard_pile.append(me)
-        inst = bc2.cards.pop_from_draw_pile()
-        bc2.add_to_top_card(CardQueueItem(
-            card=inst, random_target=True, exhaust_on_use=True, autoplay=True,
-        ))
-
-    bc.add_to_bot(Action(run))
+    # 抽牌堆空时 PlayTopCard 自带"洗弃牌堆再重试"（playTopCardInDrawPile，
+    # BattleContext.cpp:2515-2522）；此刻刚打出的 Havoc 尚在 limbo（出牌
+    # 收尾 on_after_card_used 为入队动作、晚于本效果），不参与洗回，也
+    # 不会"打出自己"；两堆皆空则 no-op。
+    bc.add_to_bot(Actions.play_top_card(exhaust=True))
 
 
-HAVOC = CardDef("Havoc", "浩劫", 1, "Skill", "打出抽牌堆顶的牌并消耗它。（升级费用 0）", False, False, _havoc_play,
+HAVOC = CardDef("Havoc", "破灭", 1, "Skill", "打出抽牌堆顶部的牌，将其消耗。", False, False, _havoc_play,
                 upgraded_cost=0)  # wiki 口径（2026-10-06 复核）：Exhaust 仅指被打出的顶牌，自身不消耗
 
 
 def _headbutt_play(bc: BattleContext, item: CardQueueItem) -> None:
     # 对齐 C++ HEADBUTT：先攻击（9/12，出牌时算伤）后 HeadbuttAction 选卡
     # （候选=弃牌堆全部，空堆仅攻击无选卡）；选中 → 置抽牌堆顶 + 移出弃牌堆。
-    # C++ 的 OnAfterCardUsed（打出的牌落堆）是入队动作，晚于本卡自身效果
-    # （Actions.cpp OnAfterCardUsed）——即 C++ HeadbuttAction 看到的弃牌堆
-    # 不含刚打出的 Headbutt；本引擎 on_after_use_card 同步先行，刚打出的
-    # Headbutt 已落弃牌堆，故按实例身份排除以对齐 C++ 净候选集（"空堆仅
-    # 攻击"的口径也由此成立；堆中先前的 Headbutt 仍可选，与 C++ 一致）。
+    # 出牌收尾 on_after_card_used 为入队动作、晚于本效果（对齐 C++
+    # OnAfterCardUsed）——选卡时刚打出的 Headbutt 尚在 limbo、不在弃牌堆，
+    # 候选集天然不含它；堆中先前的 Headbutt 仍可选，与 C++ 一致。
     dmg = bc.calculate_card_damage(item, item.target, 12 if item.card.upgraded else 9)
     bc.add_to_bot(Actions.attack_enemy(item.target, dmg))
 
     def run(bc: BattleContext) -> None:
-        candidates = [c for c in bc.cards.discard_pile if c is not item.card]
+        candidates = list(bc.cards.discard_pile)
 
         def on_choose(bc2: BattleContext, chosen: list) -> None:
             for inst in chosen:
@@ -311,7 +279,7 @@ def _headbutt_play(bc: BattleContext, item: CardQueueItem) -> None:
 
 
 HEADBUTT = CardDef("Headbutt", "头槌", 1, "Attack",
-                   "造成 9 点伤害。将 1 张弃牌堆的牌置于抽牌堆顶。（升级 12 点）",
+                   "造成 9 点伤害。\n将弃牌堆中的一张牌放到抽牌堆的顶部。",
                    True, False, _headbutt_play)
 
 
@@ -325,7 +293,7 @@ def _heavy_blade_play(bc: BattleContext, item: CardQueueItem) -> None:
     bc.add_to_bot(Actions.attack_enemy(item.target, dmg))
 
 
-HEAVY_BLADE = CardDef("Heavy Blade", "重刃", 2, "Attack", "造成 14 点伤害。力量额外计入 2 次。（升级 3 次）", True, False, _heavy_blade_play)
+HEAVY_BLADE = CardDef("Heavy Blade", "重刃", 2, "Attack", "造成 14 点伤害。\n力量在重刃上发挥 3 倍效果。", True, False, _heavy_blade_play)
 
 
 def _iron_wave_play(bc: BattleContext, item: CardQueueItem) -> None:
@@ -336,7 +304,7 @@ def _iron_wave_play(bc: BattleContext, item: CardQueueItem) -> None:
     bc.add_to_bot(Actions.attack_enemy(item.target, dmg))
 
 
-IRON_WAVE = CardDef("Iron Wave", "铁波", 1, "Attack", "获得 5 点格挡。造成 5 点伤害。（升级 7 伤 7 格挡）", True, False, _iron_wave_play)
+IRON_WAVE = CardDef("Iron Wave", "铁斩波", 1, "Attack", "获得 5 点格挡。\n造成 5 点伤害。", True, False, _iron_wave_play)
 
 
 def _perfected_strike_play(bc: BattleContext, item: CardQueueItem) -> None:
@@ -350,7 +318,7 @@ def _perfected_strike_play(bc: BattleContext, item: CardQueueItem) -> None:
     bc.add_to_bot(Actions.attack_enemy(item.target, dmg))
 
 
-PERFECTED_STRIKE = CardDef("Perfected Strike", "完美打击", 2, "Attack", "造成 6 点伤害，每有一张“打击”牌额外 +2。（升级 +3）", True, False, _perfected_strike_play)
+PERFECTED_STRIKE = CardDef("Perfected Strike", "完美打击", 2, "Attack", "造成 6 点伤害。\n你每有一张名字中有打击的牌，伤害+2。", True, False, _perfected_strike_play)
 
 
 def _pommel_strike_play(bc: BattleContext, item: CardQueueItem) -> None:
@@ -360,7 +328,7 @@ def _pommel_strike_play(bc: BattleContext, item: CardQueueItem) -> None:
     bc.add_to_bot(Actions.draw_cards(2 if up else 1))
 
 
-POMMEL_STRIKE = CardDef("Pommel Strike", "剑柄打击", 1, "Attack", "造成 9 点伤害。抽 1 张牌。（升级 10 伤抽 2 张）", True, False, _pommel_strike_play)
+POMMEL_STRIKE = CardDef("Pommel Strike", "剑柄打击", 1, "Attack", "造成 9 点伤害。\n抽 1 张牌。", True, False, _pommel_strike_play)
 
 
 def _shrug_it_off_play(bc: BattleContext, item: CardQueueItem) -> None:
@@ -369,7 +337,7 @@ def _shrug_it_off_play(bc: BattleContext, item: CardQueueItem) -> None:
     bc.add_to_bot(Actions.draw_cards(1))
 
 
-SHRUG_IT_OFF = CardDef("Shrug It Off", "耸肩", 1, "Skill", "获得 8 点格挡。抽 1 张牌。（升级 11 格挡）", False, False, _shrug_it_off_play)
+SHRUG_IT_OFF = CardDef("Shrug It Off", "耸肩无视", 1, "Skill", "获得 8 点格挡。\n抽 1 张牌。", False, False, _shrug_it_off_play)
 
 
 def _sword_boomerang_play(bc: BattleContext, item: CardQueueItem) -> None:
@@ -377,7 +345,7 @@ def _sword_boomerang_play(bc: BattleContext, item: CardQueueItem) -> None:
     bc.add_to_bot(Actions.attack_random_enemy(3, 4 if item.card.upgraded else 3))
 
 
-SWORD_BOOMERANG = CardDef("Sword Boomerang", "回旋剑", 1, "Attack", "对随机敌人造成 3 点伤害 3 次。（升级 4 次）", False, False, _sword_boomerang_play)
+SWORD_BOOMERANG = CardDef("Sword Boomerang", "飞剑回旋镖", 1, "Attack", "随机对敌人造成 3 点伤害 3 次。", False, False, _sword_boomerang_play)
 
 
 def _thunderclap_play(bc: BattleContext, item: CardQueueItem) -> None:
@@ -387,7 +355,7 @@ def _thunderclap_play(bc: BattleContext, item: CardQueueItem) -> None:
     bc.add_to_bot(Actions.debuff_all_enemy(MonsterStatus.VULNERABLE, 1, False))
 
 
-THUNDERCLAP = CardDef("Thunderclap", "雷霆骤雨", 1, "Attack", "对所有敌人造成 4 点伤害。施加 1 层易伤。（升级 7 伤）", False, False, _thunderclap_play)
+THUNDERCLAP = CardDef("Thunderclap", "闪电霹雳", 1, "Attack", "对所有敌人造成 4 点伤害，给予 1 层易伤。", False, False, _thunderclap_play)
 
 
 def _true_grit_play(bc: BattleContext, item: CardQueueItem) -> None:
@@ -407,7 +375,7 @@ def _true_grit_play(bc: BattleContext, item: CardQueueItem) -> None:
         bc.add_to_bot(Action(_exhaust_random_from_hand))
 
 
-TRUE_GRIT = CardDef("True Grit", "坚毅", 1, "Skill", "获得 7 点格挡。消耗 1 张随机手牌。（升级 9 格挡）", False, False, _true_grit_play)
+TRUE_GRIT = CardDef("True Grit", "坚毅", 1, "Skill", "获得 7 点格挡。\n消耗一张随机手牌。", False, False, _true_grit_play)
 
 
 def _twin_strike_play(bc: BattleContext, item: CardQueueItem) -> None:
@@ -418,7 +386,7 @@ def _twin_strike_play(bc: BattleContext, item: CardQueueItem) -> None:
     bc.add_to_bot(Actions.attack_enemy(item.target, dmg))
 
 
-TWIN_STRIKE = CardDef("Twin Strike", "双斩", 1, "Attack", "造成 2 次 5 点伤害。（升级 7 伤）", True, False, _twin_strike_play)
+TWIN_STRIKE = CardDef("Twin Strike", "双重打击", 1, "Attack", "造成 5 点伤害两次。", True, False, _twin_strike_play)
 
 
 def _warcry_play(bc: BattleContext, item: CardQueueItem) -> None:
@@ -441,7 +409,7 @@ def _warcry_play(bc: BattleContext, item: CardQueueItem) -> None:
 
 
 WARCRY = CardDef("Warcry", "战吼", 0, "Skill",
-                 "抽 1 张牌。将 1 张手牌置于抽牌堆顶。消耗。（升级抽 2 张）",
+                 "抽 1 张牌。\n将手牌中的一张牌放到你的抽牌堆顶部。\n消耗。",
                  False, True, _warcry_play)
 
 
@@ -453,7 +421,7 @@ def _wild_strike_play(bc: BattleContext, item: CardQueueItem) -> None:
     bc.add_to_bot(Actions.make_temp_card_in_draw_pile(WOUND, False, shuffle_into=True))
 
 
-WILD_STRIKE = CardDef("Wild Strike", "狂野打击", 1, "Attack", "造成 12 点伤害。1 张伤口洗入抽牌堆。（升级 17 伤）", True, False, _wild_strike_play)
+WILD_STRIKE = CardDef("Wild Strike", "狂野打击", 1, "Attack", "造成 12 点伤害。\n将一张伤口放入你的抽牌堆中。", True, False, _wild_strike_play)
 
 
 # ============================================================
@@ -467,7 +435,7 @@ def _battle_trance_play(bc: BattleContext, item: CardQueueItem) -> None:
     bc.add_to_bot(Actions.debuff_player(PlayerStatus.NO_DRAW, 1, False))
 
 
-BATTLE_TRANCE = CardDef("Battle Trance", "战斗恍惚", 0, "Skill", "抽 3 张牌。本回合不能再抽牌。（升级抽 4 张）", False, False, _battle_trance_play)
+BATTLE_TRANCE = CardDef("Battle Trance", "战斗专注", 0, "Skill", "抽 3 张牌。\n你在这个回合内不能再抽任何牌。", False, False, _battle_trance_play)
 
 
 def _blood_for_blood_play(bc: BattleContext, item: CardQueueItem) -> None:
@@ -478,7 +446,7 @@ def _blood_for_blood_play(bc: BattleContext, item: CardQueueItem) -> None:
     bc.add_to_bot(Actions.attack_enemy(item.target, dmg))
 
 
-BLOOD_FOR_BLOOD = CardDef("Blood for Blood", "以血还血", 4, "Attack", "造成 18 点伤害。战斗中每次失去 HP，费用 -1。（升级费用 3、22 伤）",
+BLOOD_FOR_BLOOD = CardDef("Blood for Blood", "以血还血", 4, "Attack", "你每在战斗中失去生命一次，这张牌的耗能就减少 1 点能量。\n造成 18 点伤害。",
                           True, False, _blood_for_blood_play, upgraded_cost=3, cost_delta_on_damage=-1)
 
 
@@ -489,7 +457,7 @@ def _bloodletting_play(bc: BattleContext, item: CardQueueItem) -> None:
     bc.add_to_bot(Actions.gain_energy(3 if item.card.upgraded else 2))
 
 
-BLOODLETTING = CardDef("Bloodletting", "放血", 0, "Skill", "失去 3 点 HP。获得 2 点能量。（升级 3 点能量）", False, False, _bloodletting_play)
+BLOODLETTING = CardDef("Bloodletting", "放血", 0, "Skill", "获得 2 点能量。\n失去 3 点生命。", False, False, _bloodletting_play)
 
 
 def _burning_pact_play(bc: BattleContext, item: CardQueueItem) -> None:
@@ -510,7 +478,7 @@ def _burning_pact_play(bc: BattleContext, item: CardQueueItem) -> None:
 
 
 BURNING_PACT = CardDef("Burning Pact", "燃烧契约", 1, "Skill",
-                       "消耗 1 张手牌。抽 2 张牌。（升级抽 3 张）",
+                       "消耗 1 张牌。\n抽 2 张牌。",
                        False, False, _burning_pact_play)
 
 
@@ -519,7 +487,7 @@ def _carnage_play(bc: BattleContext, item: CardQueueItem) -> None:
     bc.add_to_bot(Actions.attack_enemy(item.target, dmg))
 
 
-CARNAGE = CardDef("Carnage", "杀戮", 2, "Attack", "虚无。造成 20 点伤害。（升级 28 伤）", True, False, _carnage_play, ethereal=True)
+CARNAGE = CardDef("Carnage", "残杀", 2, "Attack", "虚无。\n造成 20 点伤害。", True, False, _carnage_play, ethereal=True)
 
 
 def _combust_play(bc: BattleContext, item: CardQueueItem) -> None:
@@ -530,7 +498,7 @@ def _combust_play(bc: BattleContext, item: CardQueueItem) -> None:
         combust_base=(bc2.player.special.get("combust_base", 0) + (7 if item.card.upgraded else 5)))))
 
 
-COMBUST = CardDef("Combust", "燃烧", 1, "Power", "回合末失去 1 点 HP，对所有敌人造成 5 点伤害。（升级 7 伤）", False, False,
+COMBUST = CardDef("Combust", "自燃", 1, "Power", "在你的回合结束时，你失去 1 点生命，对所有敌人造成 5 点伤害。", False, False,
                   _combust_play)
 
 
@@ -539,7 +507,7 @@ def _dark_embrace_play(bc: BattleContext, item: CardQueueItem) -> None:
     bc.add_to_bot(Actions.buff_player(PlayerStatus.DARK_EMBRACE, 1))
 
 
-DARK_EMBRACE = CardDef("Dark Embrace", "黑暗拥抱", 2, "Power", "卡牌被消耗时抽 1 张牌。（升级费用 1）", False, False,
+DARK_EMBRACE = CardDef("Dark Embrace", "黑暗之拥", 2, "Power", "每当有一张牌被消耗时，抽 1 张牌。", False, False,
                        _dark_embrace_play, upgraded_cost=1)
 
 
@@ -550,7 +518,7 @@ def _disarm_play(bc: BattleContext, item: CardQueueItem) -> None:
     bc.add_to_bot(Actions.debuff_enemy(item.target, MonsterStatus.STRENGTH, n, False))
 
 
-DISARM = CardDef("Disarm", "缴械", 1, "Skill", "敌人失去 2 点力量。消耗。（升级 3 点力量）", True, True, _disarm_play)
+DISARM = CardDef("Disarm", "缴械", 1, "Skill", "使敌人失去 2 点力量。\n消耗。", True, True, _disarm_play)
 
 
 def _dropkick_play(bc: BattleContext, item: CardQueueItem) -> None:
@@ -574,7 +542,7 @@ def _dropkick_play(bc: BattleContext, item: CardQueueItem) -> None:
     bc.add_to_bot(Action(run))
 
 
-DROPKICK = CardDef("Dropkick", "飞踢", 1, "Attack", "造成 5 点伤害。若目标有易伤，获得 1 点能量并抽 1 张牌。（升级 8 伤）", True, False, _dropkick_play)
+DROPKICK = CardDef("Dropkick", "飞身踢", 1, "Attack", "造成 5 点伤害。\n如果敌人有易伤状态，\n获得 1 点能量并且\n抽 1 张牌。", True, False, _dropkick_play)
 
 
 def _copy_instance_to_hand(bc: BattleContext, inst: CardInstance, count: int) -> None:
@@ -613,7 +581,7 @@ def _dual_wield_play(bc: BattleContext, item: CardQueueItem) -> None:
 
 
 DUAL_WIELD = CardDef("Dual Wield", "双持", 1, "Skill",
-                     "复制 1 张手中的攻击或能力牌加入手牌。（升级后 2 份）",
+                     "将你手牌中的一张攻击或能力牌复制一张。",
                      False, False, _dual_wield_play)  # wiki 口径（2026-10-06 复核）：无"消耗"词条，自身不消耗（此前误读）
 
 
@@ -626,7 +594,7 @@ def _entrench_play(bc: BattleContext, item: CardQueueItem) -> None:
     bc.add_to_bot(Action(run))
 
 
-ENTRENCH = CardDef("Entrench", "堑壕", 2, "Skill", "将当前格挡翻倍。（升级费用 1）", False, False, _entrench_play,
+ENTRENCH = CardDef("Entrench", "巩固", 2, "Skill", "将你当前的格挡翻倍。", False, False, _entrench_play,
                    upgraded_cost=1)
 
 
@@ -635,7 +603,7 @@ def _evolve_play(bc: BattleContext, item: CardQueueItem) -> None:
     bc.add_to_bot(Actions.buff_player(PlayerStatus.EVOLVE, 2 if item.card.upgraded else 1))
 
 
-EVOLVE = CardDef("Evolve", "进化", 1, "Power", "抽到状态牌时抽 1 张牌。（升级 2 张）", False, False, _evolve_play)
+EVOLVE = CardDef("Evolve", "进化", 1, "Power", "每当你抽到一张状态牌时，抽 1 张牌。", False, False, _evolve_play)
 
 
 def _feel_no_pain_play(bc: BattleContext, item: CardQueueItem) -> None:
@@ -646,7 +614,7 @@ def _feel_no_pain_play(bc: BattleContext, item: CardQueueItem) -> None:
         fnp_base=4 if item.card.upgraded else 3)))
 
 
-FEEL_NO_PAIN = CardDef("Feel No Pain", "无痛", 1, "Power", "卡牌被消耗时获得 3 点格挡。（升级 4 格挡）", False, False,
+FEEL_NO_PAIN = CardDef("Feel No Pain", "无惧疼痛", 1, "Power", "每当有一张牌被消耗时，获得 3 点格挡。", False, False,
                        _feel_no_pain_play)
 
 
@@ -658,7 +626,7 @@ def _fire_breathing_play(bc: BattleContext, item: CardQueueItem) -> None:
         fire_breathing_base=10 if item.card.upgraded else 6)))
 
 
-FIRE_BREATHING = CardDef("Fire Breathing", "火焰吐息", 1, "Power", "抽到状态或诅咒牌时对所有敌人造成 4 点伤害。（升级 10 伤）",
+FIRE_BREATHING = CardDef("Fire Breathing", "火焰吐息", 1, "Power", "每当你抽到一张状态牌或诅咒牌时，对所有敌人造成 6 点伤害。",
                          False, False, _fire_breathing_play)
 
 
@@ -668,7 +636,7 @@ def _flame_barrier_play(bc: BattleContext, item: CardQueueItem) -> None:
     bc.add_to_bot(Actions.buff_player(PlayerStatus.FLAME_BARRIER, 6 if up else 4))
 
 
-FLAME_BARRIER = CardDef("Flame Barrier", "烈焰屏障", 2, "Skill", "获得 12 点格挡。本回合受到攻击时对攻击者反弹 4 点伤害。（升级 6 伤 16 格挡）",
+FLAME_BARRIER = CardDef("Flame Barrier", "火焰屏障", 2, "Skill", "获得 12 点格挡。\n你在这个回合每受到一次攻击，都对攻击者造成 4 点伤害。",
                         False, False, _flame_barrier_play)
 
 
@@ -676,7 +644,7 @@ def _ghostly_armor_play(bc: BattleContext, item: CardQueueItem) -> None:
     bc.add_to_bot(Actions.gain_block(bc.calculate_card_block(13 if item.card.upgraded else 10)))
 
 
-GHOSTLY_ARMOR = CardDef("Ghostly Armor", "幽灵护甲", 1, "Skill", "虚无。获得 10 点格挡。（升级 13 格挡）", False, False,
+GHOSTLY_ARMOR = CardDef("Ghostly Armor", "幽灵铠甲", 1, "Skill", "虚无。\n获得 10 点格挡。", False, False,
                         _ghostly_armor_play, ethereal=True)
 
 
@@ -689,7 +657,7 @@ def _hemokinesis_play(bc: BattleContext, item: CardQueueItem) -> None:
     bc.add_to_bot(Actions.attack_enemy(item.target, dmg))
 
 
-HEMOKINESIS = CardDef("Hemokinesis", "血液激发", 1, "Attack", "失去 2 点 HP。造成 15 点伤害。（升级 20 伤）", True, False, _hemokinesis_play)
+HEMOKINESIS = CardDef("Hemokinesis", "御血术", 1, "Attack", "失去 2 点生命。\n造成 15 点伤害。", True, False, _hemokinesis_play)
 
 
 def _infernal_blade_pool() -> list:
@@ -714,7 +682,7 @@ def _infernal_blade_play(bc: BattleContext, item: CardQueueItem) -> None:
     bc.add_to_bot(Action(run))
 
 
-INFERNAL_BLADE = CardDef("Infernal Blade", "地狱之刃", 1, "Skill", "随机攻击牌加入手牌，本回合费用为 0。消耗。（升级费用 0）",
+INFERNAL_BLADE = CardDef("Infernal Blade", "地狱之刃", 1, "Skill", "增加一张随机攻击牌到你的手牌。\n这张牌在本回合耗能变为 0。\n消耗。",
                          False, True, _infernal_blade_play, upgraded_cost=0)  # wiki 口径：升级改费 1→0（lightspeed 原不改费，系其笔误）
 
 
@@ -722,21 +690,21 @@ def _inflame_play(bc: BattleContext, item: CardQueueItem) -> None:
     bc.add_to_bot(Actions.buff_player(PlayerStatus.STRENGTH, 3 if item.card.upgraded else 2))
 
 
-INFLAME = CardDef("Inflame", "燃烧", 1, "Power", "获得 2 点力量。（升级 3 点力量）", False, False, _inflame_play)
+INFLAME = CardDef("Inflame", "燃烧", 1, "Power", "获得 2 点力量。", False, False, _inflame_play)
 
 
 def _intimidate_play(bc: BattleContext, item: CardQueueItem) -> None:
     bc.add_to_bot(Actions.debuff_all_enemy(MonsterStatus.WEAK, 2 if item.card.upgraded else 1, False))
 
 
-INTIMIDATE = CardDef("Intimidate", "威吓", 0, "Skill", "所有敌人获得 1 层虚弱。消耗。（升级 2 层）", False, True, _intimidate_play)
+INTIMIDATE = CardDef("Intimidate", "威吓", 0, "Skill", "给予所有敌人 1 层虚弱。\n消耗。", False, True, _intimidate_play)
 
 
 def _metallicize_play(bc: BattleContext, item: CardQueueItem) -> None:
     bc.add_to_bot(Actions.buff_player(PlayerStatus.METALLICIZE, 4 if item.card.upgraded else 3))
 
 
-METALLICIZE = CardDef("Metallicize", "金属化", 1, "Power", "每回合末获得 3 点格挡。（升级 4 格挡）", False, False, _metallicize_play)
+METALLICIZE = CardDef("Metallicize", "金属化", 1, "Power", "在你的回合结束时，获得 3 点格挡。", False, False, _metallicize_play)
 
 
 def _power_through_play(bc: BattleContext, item: CardQueueItem) -> None:
@@ -746,7 +714,7 @@ def _power_through_play(bc: BattleContext, item: CardQueueItem) -> None:
     bc.add_to_bot(Actions.gain_block(bc.calculate_card_block(20 if item.card.upgraded else 15)))
 
 
-POWER_THROUGH = CardDef("Power Through", "硬撑", 1, "Skill", "将 2 张伤口加入手牌。获得 15 点格挡。（升级 20 格挡）", False, False,
+POWER_THROUGH = CardDef("Power Through", "硬撑", 1, "Skill", "增加 2 张伤口到你的手牌。\n获得 15 点格挡。", False, False,
                         _power_through_play)
 
 
@@ -759,7 +727,7 @@ def _pummel_play(bc: BattleContext, item: CardQueueItem) -> None:
         bc.add_to_bot(Actions.attack_enemy(item.target, dmg))
 
 
-PUMMEL = CardDef("Pummel", "连续痛击", 1, "Attack", "造成 2 点伤害 4 次。消耗。（升级 5 次）", True, True, _pummel_play)
+PUMMEL = CardDef("Pummel", "连续拳", 1, "Attack", "造成 2 点伤害 4 次。\n消耗。", True, True, _pummel_play)
 
 
 def _rampage_play(bc: BattleContext, item: CardQueueItem) -> None:
@@ -773,7 +741,7 @@ def _rampage_play(bc: BattleContext, item: CardQueueItem) -> None:
     item.card.misc_data += 8 if up else 5
 
 
-RAMPAGE = CardDef("Rampage", "狂暴冲杀", 1, "Attack", "造成 8 点伤害。本次战斗中此牌每次打出永久 +5 伤害。（升级 +8）",
+RAMPAGE = CardDef("Rampage", "暴走", 1, "Attack", "造成 8 点伤害。\n这张牌每被打出一次，在本场战斗中其伤害增加 5。",
                   True, False, _rampage_play)
 
 
@@ -786,8 +754,8 @@ def _reckless_charge_play(bc: BattleContext, item: CardQueueItem) -> None:
     bc.add_to_bot(Actions.make_temp_card_in_draw_pile(DAZED, False, shuffle_into=True))
 
 
-RECKLESS_CHARGE = CardDef("Reckless Charge", "鲁莽冲锋", 0, "Attack",
-                           "造成 7 点伤害。1 张眩晕洗入抽牌堆。（升级 10 点）",
+RECKLESS_CHARGE = CardDef("Reckless Charge", "无谋冲锋", 0, "Attack",
+                           "造成 7 点伤害。\n将一张晕眩放入你的抽牌堆中。",
                            True, False, _reckless_charge_play)
 
 
@@ -796,7 +764,7 @@ def _rupture_play(bc: BattleContext, item: CardQueueItem) -> None:
     bc.add_to_bot(Actions.buff_player(PlayerStatus.RUPTURE, 2 if item.card.upgraded else 1))
 
 
-RUPTURE = CardDef("Rupture", "破裂", 1, "Power", "自伤失去 HP 时获得 1 点力量。（升级 2 点力量）", False, False, _rupture_play)
+RUPTURE = CardDef("Rupture", "撕裂", 1, "Power", "每当你从一张牌中失去生命时，获得 1 点力量。", False, False, _rupture_play)
 
 
 def _searing_blow_play(bc: BattleContext, item: CardQueueItem) -> None:
@@ -811,7 +779,7 @@ def _searing_blow_play(bc: BattleContext, item: CardQueueItem) -> None:
     bc.add_to_bot(Actions.attack_enemy(item.target, dmg))
 
 
-SEARING_BLOW = CardDef("Searing Blow", "灼热打击", 2, "Attack", "造成 12 点伤害。可以多次升级，每次 +2 伤害递增。（升级基础 16 伤）",
+SEARING_BLOW = CardDef("Searing Blow", "灼热攻击", 2, "Attack", "造成 12 点伤害。\n能被多次升级。",
                        True, False, _searing_blow_play,
                        multiple_upgrades=True)  # 批次 3 接线：Armaments 升级路径经 upgrade() 推进 misc_data（原批次 2 遗留 TODO）
 
@@ -833,7 +801,7 @@ def _second_wind_play(bc: BattleContext, item: CardQueueItem) -> None:
     bc.add_to_bot(Action(run))
 
 
-SECOND_WIND = CardDef("Second Wind", "喘息", 1, "Skill", "消耗手中所有非攻击牌，每张获得 5 点格挡。（升级 7 格挡）", False, False,
+SECOND_WIND = CardDef("Second Wind", "重振精神", 1, "Skill", "消耗手牌中所有非攻击牌，每张获得 5 点格挡。", False, False,
                       _second_wind_play)
 
 
@@ -843,7 +811,7 @@ def _seeing_red_play(bc: BattleContext, item: CardQueueItem) -> None:
     bc.add_to_bot(Actions.gain_energy(2))
 
 
-SEEING_RED = CardDef("Seeing Red", "怒目而视", 1, "Skill", "获得 2 点能量。消耗。（升级费用 0）", False, True, _seeing_red_play,
+SEEING_RED = CardDef("Seeing Red", "盛怒", 1, "Skill", "获得 2 点能量。\n消耗。", False, True, _seeing_red_play,
                      upgraded_cost=0)  # wiki 口径置消耗（lightspeed 原不消耗，系其 doesCardExhaust 笔误）
 
 
@@ -863,7 +831,7 @@ def _sentinel_play(bc: BattleContext, item: CardQueueItem) -> None:
     bc.add_to_bot(Actions.gain_block(bc.calculate_card_block(8 if item.card.upgraded else 5)))
 
 
-SENTINEL = CardDef("Sentinel", "哨兵", 1, "Skill", "获得 5 点格挡。被消耗时获得 2 点能量。（升级 8 格挡）", False, False,
+SENTINEL = CardDef("Sentinel", "哨卫", 1, "Skill", "获得 5 点格挡。\n如果这张牌被消耗，\n获得 2 点能量。", False, False,
                    _sentinel_play, on_exhaust_effect=_sentinel_on_exhaust)
 
 
@@ -882,7 +850,7 @@ def _sever_soul_play(bc: BattleContext, item: CardQueueItem) -> None:
     bc.add_to_bot(Actions.attack_enemy(item.target, dmg))
 
 
-SEVER_SOUL = CardDef("Sever Soul", "撕裂灵魂", 2, "Attack", "消耗手中所有非攻击牌。造成 16 点伤害。（升级 22 伤）", True, False,
+SEVER_SOUL = CardDef("Sever Soul", "断魂斩", 2, "Attack", "消耗手牌中所有非攻击牌。\n造成 16 点伤害。", True, False,
                      _sever_soul_play)
 
 
@@ -892,7 +860,7 @@ def _shockwave_play(bc: BattleContext, item: CardQueueItem) -> None:
     bc.add_to_bot(Actions.debuff_all_enemy(MonsterStatus.VULNERABLE, n, False))
 
 
-SHOCKWAVE = CardDef("Shockwave", "震波", 2, "Skill", "所有敌人获得 3 层虚弱和 3 层易伤。消耗。（升级 5 层）", False, True, _shockwave_play)
+SHOCKWAVE = CardDef("Shockwave", "震荡波", 2, "Skill", "给予所有敌人 3 层虚弱和易伤。\n消耗。", False, True, _shockwave_play)
 
 
 def _spot_weakness_play(bc: BattleContext, item: CardQueueItem) -> None:
@@ -908,7 +876,7 @@ def _spot_weakness_play(bc: BattleContext, item: CardQueueItem) -> None:
     bc.add_to_bot(Action(run))
 
 
-SPOT_WEAKNESS = CardDef("Spot Weakness", "洞察弱点", 1, "Skill", "若敌人意图为攻击，获得 3 点力量。（升级 4 点力量）", True, False, _spot_weakness_play)
+SPOT_WEAKNESS = CardDef("Spot Weakness", "观察弱点", 1, "Skill", "如果一名敌人的意图是攻击，你获得 3 点力量。", True, False, _spot_weakness_play)
 
 
 def _uppercut_play(bc: BattleContext, item: CardQueueItem) -> None:
@@ -922,7 +890,7 @@ def _uppercut_play(bc: BattleContext, item: CardQueueItem) -> None:
     bc.add_to_bot(Actions.debuff_enemy(item.target, MonsterStatus.VULNERABLE, n, False))
 
 
-UPPERCUT = CardDef("Uppercut", "上勾拳", 2, "Attack", "造成 13 点伤害。施加 1 层虚弱和 1 层易伤。（升级 2 层）", True, False, _uppercut_play)
+UPPERCUT = CardDef("Uppercut", "上勾拳", 2, "Attack", "造成 13 点伤害。\n给予 1 层虚弱。\n给予 1 层易伤。", True, False, _uppercut_play)
 
 
 def _whirlwind_play(bc: BattleContext, item: CardQueueItem) -> None:
@@ -964,7 +932,7 @@ def _whirlwind_play(bc: BattleContext, item: CardQueueItem) -> None:
 
 
 WHIRLWIND = CardDef("Whirlwind", "旋风斩", -1, "Attack",
-                    "消耗所有能量，对所有敌人造成 5 点伤害，次数等同于能量数。（升级 8 点）",
+                    "对所有敌人造成 5 点伤害X次。",
                     False, False, _whirlwind_play, x_cost=True)
 
 
@@ -978,7 +946,7 @@ def _barricade_play(bc: BattleContext, item: CardQueueItem) -> None:
     bc.add_to_bot(Actions.buff_player(PlayerStatus.BARRICADE, 1))
 
 
-BARRICADE = CardDef("Barricade", "壁垒", 3, "Power", "格挡不再在回合开始时消失。（升级费用 2）", False, False,
+BARRICADE = CardDef("Barricade", "壁垒", 3, "Power", "格挡不再在你的回合开始时消失。", False, False,
                     _barricade_play, upgraded_cost=2)
 
 
@@ -989,7 +957,7 @@ def _berserk_play(bc: BattleContext, item: CardQueueItem) -> None:
     bc.add_to_bot(Actions.debuff_player(PlayerStatus.VULNERABLE, 1 if item.card.upgraded else 2, False))
 
 
-BERSERK = CardDef("Berserk", "狂暴", 0, "Power", "获得 2 层易伤。每回合额外获得 1 点能量。（升级易伤 1 层）", False, False,
+BERSERK = CardDef("Berserk", "狂暴", 0, "Power", "获得 2 层易伤。\n在每回合开始时获得 1 点能量。", False, False,
                   _berserk_play)  # wiki 口径（2026-10-06 复核）：费用恒 0，升级仅易伤 2→1（此前误记为 1→0）
 
 
@@ -998,7 +966,7 @@ def _bludgeon_play(bc: BattleContext, item: CardQueueItem) -> None:
     bc.add_to_bot(Actions.attack_enemy(item.target, dmg))
 
 
-BLUDGEON = CardDef("Bludgeon", "重击", 3, "Attack", "造成 32 点伤害。（升级 42 伤）", True, False, _bludgeon_play)
+BLUDGEON = CardDef("Bludgeon", "重锤", 3, "Attack", "造成 32 点伤害。", True, False, _bludgeon_play)
 
 
 def _brutality_play(bc: BattleContext, item: CardQueueItem) -> None:
@@ -1008,7 +976,7 @@ def _brutality_play(bc: BattleContext, item: CardQueueItem) -> None:
     bc.add_to_bot(Actions.buff_player(PlayerStatus.BRUTALITY, 1))
 
 
-BRUTALITY = CardDef("Brutality", "残暴", 0, "Power", "每回合开始失去 1 点 HP 并抽 1 张牌。（升级后固有）", False, False,
+BRUTALITY = CardDef("Brutality", "残暴", 0, "Power", "在你的回合开始时，你失去 1 点生命，抽 1 张牌。", False, False,
                     _brutality_play, innate_when_upgraded=True)  # wiki 口径：费用恒 0，升级仅加"固有"
 
 
@@ -1016,7 +984,7 @@ def _corruption_play(bc: BattleContext, item: CardQueueItem) -> None:
     bc.add_to_bot(Actions.buff_player(PlayerStatus.CORRUPTION, 1))
 
 
-CORRUPTION = CardDef("Corruption", "腐化", 3, "Power", "技能牌费用变为 0，打出即消耗。（升级费用 2）", False, False,
+CORRUPTION = CardDef("Corruption", "腐化", 3, "Power", "所有技能牌耗能变为 0。\n所有技能牌在被打出时被消耗。", False, False,
                      _corruption_play, upgraded_cost=2)
 
 
@@ -1025,7 +993,7 @@ def _demon_form_play(bc: BattleContext, item: CardQueueItem) -> None:
     bc.add_to_bot(Actions.buff_player(PlayerStatus.DEMON_FORM, 3 if item.card.upgraded else 2))
 
 
-DEMON_FORM = CardDef("Demon Form", "恶魔形态", 3, "Power", "每回合开始获得 2 点力量。（升级 3 点力量）", False, False, _demon_form_play)
+DEMON_FORM = CardDef("Demon Form", "恶魔形态", 3, "Power", "在每回合开始时获得\n2 点力量。", False, False, _demon_form_play)
 
 
 def _double_tap_play(bc: BattleContext, item: CardQueueItem) -> None:
@@ -1035,7 +1003,7 @@ def _double_tap_play(bc: BattleContext, item: CardQueueItem) -> None:
     bc.add_to_bot(Actions.buff_player(PlayerStatus.DOUBLE_TAP, 2 if item.card.upgraded else 1))
 
 
-DOUBLE_TAP = CardDef("Double Tap", "双重打击", 1, "Skill", "本回合下一张攻击牌结算两次。（升级 2 张）", False, False, _double_tap_play)
+DOUBLE_TAP = CardDef("Double Tap", "双发", 1, "Skill", "在这个回合，你打出的下一张攻击牌会打出两次。", False, False, _double_tap_play)
 
 
 def _exhume_play(bc: BattleContext, item: CardQueueItem) -> None:
@@ -1045,9 +1013,8 @@ def _exhume_play(bc: BattleContext, item: CardQueueItem) -> None:
             return
         # 候选 = 消耗堆中非 Exhume 的牌（对齐 C++ 排除分支——lightspeed 自带
         # todo 标注此为 bug：本体允许选回 Exhume 自身；按"以 C++ 为准"口径
-        # 实现排除）。时序差异说明：C++ 打出的牌落堆晚于自身效果（OnAfterCardUsed
-        # 入队），本引擎同步先行——但排除按卡牌身份过滤，两边的净候选集一致
-        #（本引擎额外排除的"刚打出的自身"在 C++ 中尚未落堆，同样不可选）。
+        # 实现排除）。刚打出的 Exhume 尚在 limbo（出牌收尾晚于效果），不在
+        # 消耗堆中；排除分支只滤掉堆中先前的 Exhume，两边净候选集一致。
         candidates = [c for c in bc.cards.exhaust_pile if c.card is not EXHUME]
 
         def on_choose(bc2: BattleContext, chosen: list) -> None:
@@ -1063,7 +1030,7 @@ def _exhume_play(bc: BattleContext, item: CardQueueItem) -> None:
 
 
 EXHUME = CardDef("Exhume", "发掘", 1, "Skill",
-                 "从消耗堆选 1 张牌回到手牌。消耗。（升级费用 0）", False, True, _exhume_play,
+                 "选择一张已消耗的牌，将其放入你的手牌。\n消耗。", False, True, _exhume_play,
                  upgraded_cost=0)  # Cards.h getUpgradedCost：EXHUME 升级 1→0（同 Havoc/Seeing Red）
 
 
@@ -1089,7 +1056,7 @@ def _feed_play(bc: BattleContext, item: CardQueueItem) -> None:
     bc.add_to_bot(Action(run))
 
 
-FEED = CardDef("Feed", "吞噬", 1, "Attack", "造成 10 点伤害。若击杀敌人，最大 HP +3 并回复 3 点 HP。消耗。（升级 12 伤 4 HP）",
+FEED = CardDef("Feed", "狂宴", 1, "Attack", "造成 10 点伤害。\n斩杀时，永久获得 3 点最大生命。消耗。",
                True, True, _feed_play)
 
 
@@ -1110,7 +1077,7 @@ def _fiend_fire_play(bc: BattleContext, item: CardQueueItem) -> None:
     bc.add_to_bot(Action(run))
 
 
-FIEND_FIRE = CardDef("Fiend Fire", "恶魔之火", 2, "Attack", "消耗手中所有牌，每张造成 7 点伤害。消耗。（升级 10 伤）", True, True,
+FIEND_FIRE = CardDef("Fiend Fire", "恶魔之焰", 2, "Attack", "消耗所有手牌。\n每张被消耗的牌造成 7 点伤害。\n消耗。", True, True,
                      _fiend_fire_play)
 
 
@@ -1120,7 +1087,7 @@ def _immolate_play(bc: BattleContext, item: CardQueueItem) -> None:
     bc.add_to_bot(Actions.make_temp_card_in_discard(BURN))
 
 
-IMMOLATE = CardDef("Immolate", "焚化", 2, "Attack", "对所有敌人造成 21 点伤害。1 张灼伤加入弃牌堆。（升级 28 伤）", False, False,
+IMMOLATE = CardDef("Immolate", "燔祭", 2, "Attack", "对所有敌人造成 21 点伤害。\n将一张灼伤放入你的弃牌堆中。", False, False,
                    _immolate_play)
 
 
@@ -1128,7 +1095,7 @@ def _impervious_play(bc: BattleContext, item: CardQueueItem) -> None:
     bc.add_to_bot(Actions.gain_block(bc.calculate_card_block(40 if item.card.upgraded else 30)))
 
 
-IMPERVIOUS = CardDef("Impervious", "金刚不坏", 2, "Skill", "获得 30 点格挡。消耗。（升级 40 格挡）", False, True, _impervious_play)
+IMPERVIOUS = CardDef("Impervious", "岿然不动", 2, "Skill", "获得 30 点格挡。\n消耗。", False, True, _impervious_play)
 
 
 def _juggernaut_play(bc: BattleContext, item: CardQueueItem) -> None:
@@ -1140,7 +1107,7 @@ def _juggernaut_play(bc: BattleContext, item: CardQueueItem) -> None:
         juggernaut_base=7 if item.card.upgraded else 5)))
 
 
-JUGGERNAUT = CardDef("Juggernaut", "重装冲锋", 2, "Power", "每次获得格挡时对随机敌人造成 5 点伤害。（升级 7 伤）", False, False,
+JUGGERNAUT = CardDef("Juggernaut", "势不可当", 2, "Power", "每当你获得格挡时，\n对随机一名敌人造成\n5 点伤害。", False, False,
                      _juggernaut_play)
 
 
@@ -1160,7 +1127,7 @@ def _limit_break_play(bc: BattleContext, item: CardQueueItem) -> None:
     bc.add_to_bot(Action(run))
 
 
-LIMIT_BREAK = CardDef("Limit Break", "极限突破", 1, "Skill", "力量翻倍。消耗。（升级后不消耗）", False, False, _limit_break_play)
+LIMIT_BREAK = CardDef("Limit Break", "突破极限", 1, "Skill", "将你的力量翻倍。\n消耗。", False, False, _limit_break_play)
 
 
 def _offering_play(bc: BattleContext, item: CardQueueItem) -> None:
@@ -1171,7 +1138,7 @@ def _offering_play(bc: BattleContext, item: CardQueueItem) -> None:
     bc.add_to_bot(Actions.draw_cards(5 if up else 3))
 
 
-OFFERING = CardDef("Offering", "献祭", 0, "Skill", "失去 6 点 HP。获得 2 点能量。抽 3 张牌。消耗。（升级抽 5 张）", False, True, _offering_play)
+OFFERING = CardDef("Offering", "祭品", 0, "Skill", "失去 6 点生命。\n获得 2 点能量。\n抽 3 张牌。\n消耗。", False, True, _offering_play)
 
 
 def _reaper_play(bc: BattleContext, item: CardQueueItem) -> None:
@@ -1195,7 +1162,7 @@ def _reaper_play(bc: BattleContext, item: CardQueueItem) -> None:
     bc.add_to_bot(Action(run))
 
 
-REAPER = CardDef("Reaper", "收割", 2, "Attack", "对所有敌人造成 4 点伤害。回复等同于未被格挡吸收的伤害的 HP。消耗。（升级 5 伤）", False, True, _reaper_play)
+REAPER = CardDef("Reaper", "死亡收割", 2, "Attack", "对所有敌人造成 4 点伤害。未被格挡的伤害将回复你的生命。\n消耗。", False, True, _reaper_play)
 
 
 def _rage_play(bc: BattleContext, item: CardQueueItem) -> None:
@@ -1204,7 +1171,7 @@ def _rage_play(bc: BattleContext, item: CardQueueItem) -> None:
     bc.add_to_bot(Actions.buff_player(PlayerStatus.RAGE, 5 if item.card.upgraded else 3))
 
 
-RAGE = CardDef("Rage", "狂怒", 0, "Skill", "本回合内每打出一张攻击牌，获得 3 点格挡。（升级 5 点）", False, False, _rage_play)
+RAGE = CardDef("Rage", "狂怒", 0, "Skill", "打出此牌后，你在这个回合内每打出一张攻击牌，获得 3 格挡。", False, False, _rage_play)
 
 
 __all__ = [

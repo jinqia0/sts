@@ -57,6 +57,7 @@ class CardDef:
     colorless: bool = False  # 无色卡标记（生成池筛选：Jack of All Trades/Transmutation/Magnetism 的 CombatColorlessCardPool 对应物）
     # ---- 2026-10-07 补齐批次 ----
     loses_ethereal_on_upgrade: bool = False  # 升级后不再虚无（Apparition+；引擎 CardInstance.is_ethereal 读取）
+    shuffle_back_into_draw_pile: bool = False  # 打出后洗回抽牌堆（Tantrum；本体 AbstractCard 同名字段，由出牌收尾 on_after_use_card 处理）
 
 
 def _strike_play(bc: BattleContext, item: CardQueueItem) -> None:

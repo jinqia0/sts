@@ -171,6 +171,34 @@ def test_draw_pile_reshuffle():
     assert len(bc.cards.exhaust_pile) == 0
 
 
+def test_draw_effect_cannot_draw_the_played_card_itself():
+    """回归（2026-10-07 时机修复）：抽/弃牌堆皆空时，打出抽一牌（Pommel
+    Strike）不能把自己抽回来——出牌收尾 on_after_card_used 为入队动作、
+    晚于卡牌效果执行（对齐本体 UseCardAction / lightspeed OnAfterCardUsed），
+    抽牌动作看到的弃牌堆不含刚打出的这张（本体 drawCards 空堆早退同理）。"""
+    from sts.content.cards.ironclad import POMMEL_STRIKE
+
+    bc = BattleContext(seed=1390, deck=[POMMEL_STRIKE])
+    assert len(bc.cards.hand) == 1
+    assert len(bc.cards.draw_pile) == 0
+    assert len(bc.cards.discard_pile) == 0
+    bc.play_card(0)
+    assert len(bc.cards.hand) == 0  # 无牌可抽
+    assert [c.card.name for c in bc.cards.discard_pile] == ["Pommel Strike"]
+
+
+def test_played_card_lands_after_its_effect_actions():
+    """回归：效果动作生成的弃牌先落堆，打出的牌最后落（出牌收尾入队化后
+    的稳定顺序，对齐本体 UseCardAction 的队列位置）。"""
+    from sts.content.cards.defect import OVERCLOCK, TURBO
+
+    for card in (TURBO, OVERCLOCK):
+        bc = BattleContext(seed=1391, deck=[card])
+        bc.play_card(0)
+        assert len(bc.cards.discard_pile) == 2
+        assert bc.cards.discard_pile[1].card.name == card.name  # 自身最后落堆
+
+
 def test_energy_enforced():
     bc = BattleContext(seed=14)
     from sts.content.cards import STRIKE

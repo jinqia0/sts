@@ -470,8 +470,8 @@ def test_louses_act_in_order():
     force_intent(red, red.BITE)
     force_intent(green, green.BITE)
     bc.end_turn()
-    red_line = next(i for i, s in enumerate(bc.log) if "红虱" in s and "啃咬" in s)
-    green_line = next(i for i, s in enumerate(bc.log) if "绿虱" in s and "啃咬" in s)
+    red_line = next(i for i, s in enumerate(bc.log) if "Red Louse" in s and "啃咬" in s)
+    green_line = next(i for i, s in enumerate(bc.log) if "Green Louse" in s and "啃咬" in s)
     assert red_line < green_line
     assert bc.player.hp == PLAYER_MAX_HP - red.bite_dmg - green.bite_dmg
 
@@ -4593,7 +4593,7 @@ def test_bear_hug_lunge_maul_cycle():
     ("colosseum_nobs", lambda bc: len(bc.monsters.monsters) == 2),
     ("mysterious_sphere", lambda bc: len(bc.monsters.monsters) == 2),
     ("masked_bandits", lambda bc: [m.display_name for m in bc.monsters.monsters]
-        == ["尖刺(Pointy)", "罗密欧(Romeo)", "大熊(Bear)"]),
+        == ["尖尖(Pointy)", "罗密欧(Romeo)", "熊(Bear)"]),
 ])
 def test_event_encounter_composition(name, check):
     for seed in range(6):

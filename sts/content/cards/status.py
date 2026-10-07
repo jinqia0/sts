@@ -31,7 +31,7 @@ def _unplayable_play(bc: BattleContext, item: CardQueueItem) -> None:
     pass
 
 
-WOUND = CardDef("Wound", "伤口", 0, "Status", "不可打出。回合结束时弃置。", False, False, _unplayable_play, unplayable=True)
+WOUND = CardDef("Wound", "伤口", 0, "Status", "不能被打出。", False, False, _unplayable_play, unplayable=True)
 
 
 # ============================================================
@@ -51,10 +51,10 @@ def _burn_effect(bc: BattleContext, item: CardQueueItem) -> None:
     bc.add_to_bot(Actions.damage_player(4 if up else 2, self_inflicted=True))
 
 
-SLIMED = CardDef("Slimed", "黏液", 1, "Status", "消耗。（被打出时无其他效果）", False, True, _slimed_play)
-DAZED = CardDef("Dazed", "眩晕", 0, "Status", "不可打出。虚无。", False, False, _unplayable_play,
+SLIMED = CardDef("Slimed", "黏液", 1, "Status", "消耗。", False, True, _slimed_play)
+DAZED = CardDef("Dazed", "晕眩", 0, "Status", "不能被打出。\n虚无。", False, False, _unplayable_play,
                 unplayable=True, ethereal=True)
-BURN = CardDef("Burn", "灼伤", 0, "Status", "回合结束时受到 2 点伤害。", False, False, _unplayable_play,
+BURN = CardDef("Burn", "灼伤", 0, "Status", "不能被打出。\n在你的回合结束时，你受到 2 点伤害。", False, False, _unplayable_play,
                unplayable=True, no_trigger_effect=_burn_effect)
-VOID = CardDef("Void", "虚空", 0, "Status", "不可打出。虚无。被抽到时失去 1 点能量。", False, False, _unplayable_play,
+VOID = CardDef("Void", "虚空", 0, "Status", "不能被打出。\n抽到这张牌时失去 1 点能量。\n虚无。", False, False, _unplayable_play,
                unplayable=True, ethereal=True, lose_energy_when_drawn=1)

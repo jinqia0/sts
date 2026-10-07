@@ -154,7 +154,7 @@ def test_silent_reexport_via_cards_module():
     assert cards_mod.SHIV is sc.SHIV
     assert cards_mod.SURVIVOR is sc.SURVIVOR
     assert cards_mod.NIGHTMARE is sc.NIGHTMARE
-    # 与铁甲的 STRIKE/DEFEND 不同对象，卡名刻意同名（CARD_INDEX 按名去重）
+    # 与铁甲的 STRIKE/DEFEND 不同对象，卡名刻意同名（观测词表按 "模块:常量名" 身份区分）
     assert cards_mod.STRIKE_S is sc.STRIKE_S
     assert cards_mod.STRIKE_S.name == "Strike"
     assert cards_mod.STRIKE_S is not cards_mod.STRIKE

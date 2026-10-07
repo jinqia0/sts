@@ -166,6 +166,24 @@ def test_pain_does_not_trigger_when_pain_card_is_not_in_hand():
     assert bc.player.hp == 80
 
 
+def test_pain_hp_loss_resolves_before_played_card_effect():
+    """顺序回归（2026-10-07 审计）：Pain 的掉血 addToTop 插队头、先于
+    打出牌的效果动作执行（本体 Pain.triggerOnOtherCardPlayed →
+    addToTop(LoseHPAction)；lightspeed triggerOnOtherCardPlayed 同）。
+    场景：玩家 1 HP + Pain 在手 + 打出足以击杀怪物的攻击牌——掉血先
+    结算 → 玩家先死（PLAYER_LOSS），攻击不再执行。"""
+    from sts.combat.types import Outcome
+
+    bc = BattleContext(seed=215)
+    setup_hand(bc, STRIKE, PAIN)
+    bc.player.hp = 1
+    m = bc.monsters.monsters[0]
+    m.hp = 1  # 攻击足以击杀
+    bc.play_card(0)
+    assert bc.outcome == Outcome.PLAYER_LOSS
+    assert m.hp == 1  # 攻击未结算
+
+
 # ---- 打出拦截：unplayable ----
 
 

@@ -54,7 +54,7 @@
 与包结构的关系：本文件为 Defect 卡唯一正式定义，经包 __init__
 eager re-export 暴露；CardDef 取自 _base.py，BURN/VOID/_strike_play/
 _defend_play 复用自 ironclad.py。STRIKE_D/DEFEND_D 沿用卡名
-"Strike"/"Defend"（CARD_INDEX 按名去重，观测层无冲突）。
+"Strike"/"Defend"（观测词表按 "模块:常量名" 身份区分，sts/vocab.py，同名跨职业不冲突）。
 """
 
 from __future__ import annotations
@@ -169,9 +169,9 @@ def _evoke_times(n: int) -> Action:
 # 基础 4 张
 # ============================================================
 
-STRIKE_D = CardDef("Strike", "打击", 1, "Attack", "造成 6 点伤害。（升级 9 点）",
+STRIKE_D = CardDef("Strike", "打击", 1, "Attack", "造成 6 点伤害。",
                    True, False, _strike_play)
-DEFEND_D = CardDef("Defend", "防御", 1, "Skill", "获得 5 点格挡。（升级 8 点）",
+DEFEND_D = CardDef("Defend", "防御", 1, "Skill", "获得 5 点格挡。",
                    False, False, _defend_play)
 
 
@@ -185,9 +185,9 @@ def _dualcast_play(bc: BattleContext, item: CardQueueItem) -> None:
     bc.add_to_bot(_evoke_times(2))
 
 
-ZAP = CardDef("Zap", "电击", 1, "Skill", "引导 1 个闪电球。（升级费用 0）",
+ZAP = CardDef("Zap", "电击", 1, "Skill", "生成 1 个闪电充能球。",
               False, False, _zap_play, upgraded_cost=0)
-DUALCAST = CardDef("Dualcast", "双重施法", 1, "Skill", "唤起你的下一个球 2 次。（升级费用 0）",
+DUALCAST = CardDef("Dualcast", "双重释放", 1, "Skill", "激发你最右侧的充能球 2 次。",
                    False, False, _dualcast_play, upgraded_cost=0)
 
 
@@ -302,13 +302,17 @@ def _leap_play(bc: BattleContext, item: CardQueueItem) -> None:
 
 def _rebound_play(bc: BattleContext, item: CardQueueItem) -> None:
     # wiki：造成 9（12）伤。本回合下一张打出的牌置于抽牌堆顶。REBOUND 状态
-    # 触发段需引擎接线（use_card 收尾对齐 C++ BattleContext.cpp:1975-1985 +
-    # 回合末移除）；本引擎出牌时序下 play 入队落状态时 Rebound 自身已落
-    # 弃牌堆（on_after_use_card 同步先行），置 1 即"下一张"生效，不会被
-    # 自身回弹
+    # 触发段在引擎出牌收尾 on_after_use_card（对齐 C++ BattleContext.cpp:1975-1985
+    # + 回合末移除）。本体 ReboundPower.justEvoked：刚施加时的第一张（即
+    # Rebound 自身）不回弹——施加动作先于收尾执行，标记由收尾消费
     dmg = bc.calculate_card_damage(item, item.target, 12 if item.card.upgraded else 9)
     bc.add_to_bot(Actions.attack_enemy(item.target, dmg))
-    bc.add_to_bot(Actions.buff_player(PlayerStatus.REBOUND, 1))
+
+    def run(bc2: BattleContext) -> None:
+        bc2.player.statuses.add(PlayerStatus.REBOUND, 1)
+        bc2.player.special["rebound_just_applied"] = True
+
+    bc.add_to_bot(Action(run))
 
 
 def _recursion_play(bc: BattleContext, item: CardQueueItem) -> None:
@@ -329,9 +333,10 @@ def _recursion_play(bc: BattleContext, item: CardQueueItem) -> None:
 
 
 def _stack_play(bc: BattleContext, item: CardQueueItem) -> None:
-    # wiki：获得等同弃牌堆卡数的格挡（升级 +3）。出牌时读数——此时 Stack
-    # 自身尚未落弃牌堆（on_after_use_card 在动作出队前同步执行，若在动作内
-    # 读会把自身计入，wiki Order 节明确不计自身），故在 play() 同步计数
+    # wiki：获得等同弃牌堆卡数的格挡（升级 +3）。出牌时同步计数——此时
+    # Stack 自身在 limbo（出牌收尾 on_after_card_used 为入队动作、晚于本
+    # 效果），不在弃牌堆，不会把自身计入（wiki Order 节明确不计自身；
+    # 本体 Stack.applyPowers 同样在打出瞬间读弃牌堆数）
     n = len(bc.cards.discard_pile) + (3 if item.card.upgraded else 0)
     bc.add_to_bot(Actions.gain_block(bc.calculate_card_block(n)))
 
@@ -366,56 +371,56 @@ def _turbo_play(bc: BattleContext, item: CardQueueItem) -> None:
 
 
 BALL_LIGHTNING = CardDef("Ball Lightning", "球状闪电", 1, "Attack",
-                          "造成 7 点伤害。引导 1 个闪电球。（升级 10 伤）", True, False,
+                          "造成 7 点伤害。生成 1 个闪电充能球。", True, False,
                           _ball_lightning_play)
-BARRAGE = CardDef("Barrage", "弹幕", 1, "Attack",
-                  "每有 1 个已引导的球，造成 4 点伤害。（升级 6 点）", True, False,
+BARRAGE = CardDef("Barrage", "弹幕齐射", 1, "Attack",
+                  "你每拥有一个充能球，造成 4 点伤害。", True, False,
                   _barrage_play)
-BEAM_CELL = CardDef("Beam Cell", "光束牢笼", 0, "Attack",
-                    "造成 3 点伤害。施加 1 层易伤。（升级 4 伤 2 层）", True, False,
+BEAM_CELL = CardDef("Beam Cell", "光束射线", 0, "Attack",
+                    "造成 3 点伤害。\n给予 1 层易伤。", True, False,
                     _beam_cell_play)
 CHARGE_BATTERY = CardDef("Charge Battery", "充电", 1, "Skill",
-                          "获得 7 点格挡。下回合获得 1 点能量。（升级 10 格挡）", False, False,
+                          "获得 7 点格挡。\n在下一回合获得 1 点能量。", False, False,
                           _charge_battery_play)
 CLAW = CardDef("Claw", "爪击", 0, "Attack",
-               "造成 3 点伤害。本场战斗所有爪击卡伤害 +2。（升级 5 伤）", True, False,
+               "造成 3 点伤害。\n在本场战斗中所有爪击牌的伤害增加 2。", True, False,
                _claw_play)
 COLD_SNAP = CardDef("Cold Snap", "寒流", 1, "Attack",
-                    "造成 6 点伤害。引导 1 个冰球。（升级 9 伤）", True, False,
+                    "造成 6 点伤害。生成 1 个冰霜充能球。", True, False,
                     _cold_snap_play)
-COMPILE_DRIVER = CardDef("Compile Driver", "编译驱动", 1, "Attack",
-                         "造成 7 点伤害。每有 1 种不同类型的球，抽 1 张牌。（升级 10 伤）",
+COMPILE_DRIVER = CardDef("Compile Driver", "编译冲击", 1, "Attack",
+                         "造成 7 点伤害。\n你每有一种不同的充能球，抽 1 张牌。",
                          True, False, _compile_driver_play)
-COOLHEADED = CardDef("Coolheaded", "冷静", 1, "Skill",
-                     "引导 1 个冰球。抽 1 张牌。（升级抽 2 张）", False, False,
+COOLHEADED = CardDef("Coolheaded", "冷静头脑", 1, "Skill",
+                     "生成 1 个冰霜充能球。\n抽 1 张牌。", False, False,
                      _coolheaded_play)
-GO_FOR_THE_EYES = CardDef("Go for the Eyes", "直击要害", 0, "Attack",
-                          "造成 3 点伤害。若该敌人意图为攻击，施加 1 层虚弱。（升级 4 伤 2 层）",
+GO_FOR_THE_EYES = CardDef("Go for the Eyes", "眼部攻击", 0, "Attack",
+                          "造成 3 点伤害。\n如果目标敌人的意图是攻击，则给予其 1 层虚弱。",
                           True, False, _go_for_the_eyes_play)
 HOLOGRAM = CardDef("Hologram", "全息影像", 1, "Skill",
-                   "获得 3 点格挡。从弃牌堆选 1 张牌回到手牌。消耗。（升级 5 格挡、不再消耗）",
+                   "获得 3 点格挡。\n将弃牌堆中的一张牌放入你的手牌。\n消耗。",
                    False, False, _hologram_play)
-LEAP = CardDef("Leap", "跃迁", 1, "Skill", "获得 9 点格挡。（升级 12 格挡）", False, False,
+LEAP = CardDef("Leap", "飞跃", 1, "Skill", "获得 9 点格挡。", False, False,
                _leap_play)
-REBOUND = CardDef("Rebound", "回弹", 1, "Attack",
-                  "造成 9 点伤害。本回合下一张打出的牌置于抽牌堆顶。（升级 12 伤）",
+REBOUND = CardDef("Rebound", "弹回", 1, "Attack",
+                  "造成 9 点伤害。\n你在这个回合打出的下一张牌将会被放置到抽牌堆的顶部。（只限会移入弃牌堆的牌）",
                   True, False, _rebound_play)
 RECURSION = CardDef("Recursion", "递归", 1, "Skill",
-                    "唤起你的下一个球。引导一个刚被唤起的球。（升级费用 0）", False, False,
+                    "激发你最右侧的充能球。\n然后生成一个刚才被激发的充能球。", False, False,
                     _recursion_play, upgraded_cost=0)
 STACK = CardDef("Stack", "堆栈", 1, "Skill",
-                "获得等同弃牌堆卡数的格挡。（升级额外 +3）", False, False, _stack_play)
-STEAM_BARRIER = CardDef("Steam Barrier", "蒸汽屏障", 0, "Skill",
-                        "获得 6 点格挡。本场战斗此牌格挡 -1。（升级 8 格挡）", False, False,
+                "获得与你当前弃牌堆中牌数相等的格挡值。", False, False, _stack_play)
+STEAM_BARRIER = CardDef("Steam Barrier", "蒸汽护壁", 0, "Skill",
+                        "获得 6 点格挡。\n这张牌每被打出一次，它在本场战斗中的基础格挡下降 1。", False, False,
                         _steam_barrier_play)
-STREAMLINE = CardDef("Streamline", "流线化", 2, "Attack",
-                     "造成 15 点伤害。此牌本场战斗费用 -1。（升级 20 伤）", True, False,
+STREAMLINE = CardDef("Streamline", "精简改良", 2, "Attack",
+                     "造成 15 点伤害。\n这张牌每被打出一次，它在本场战斗中的耗能减少 1。", True, False,
                      _streamline_play)
-SWEEPING_BEAM = CardDef("Sweeping Beam", "扫射光束", 1, "Attack",
-                        "对所有敌人造成 6 点伤害。抽 1 张牌。（升级 9 伤）", False, False,
+SWEEPING_BEAM = CardDef("Sweeping Beam", "扫荡射线", 1, "Attack",
+                        "对所有敌人造成 6 点伤害。\n抽 1 张牌。", False, False,
                         _sweeping_beam_play)
-TURBO = CardDef("TURBO", "涡轮", 0, "Skill",
-                "获得 2 点能量。1 张虚空加入弃牌堆。（升级 3 点能量）", False, False,
+TURBO = CardDef("TURBO", "内核加速", 0, "Skill",
+                "获得 2 点能量。\n将一张虚空放入你的弃牌堆中。", False, False,
                 _turbo_play)
 
 
@@ -742,111 +747,109 @@ def _white_noise_play(bc: BattleContext, item: CardQueueItem) -> None:
     bc.add_to_bot(Action(run))
 
 
-AGGREGATE = CardDef("Aggregate", "聚合", 1, "Skill",
-                    "每有 4 张抽牌堆的牌，获得 1 点能量。（升级每 3 张）", False, False,
+AGGREGATE = CardDef("Aggregate", "汇集", 1, "Skill",
+                    "你的抽牌堆中每有 4 张牌，获得 1 点能量。", False, False,
                     _aggregate_play)
 AUTO_SHIELDS = CardDef("Auto-Shields", "自动护盾", 1, "Skill",
-                       "若没有格挡，获得 11 点格挡。（升级 15 格挡）", False, False,
+                       "如果你没有格挡，获得 11 点格挡。", False, False,
                        _auto_shields_play)
-BLIZZARD = CardDef("Blizzard", "暴风雪", 1, "Attack",
-                   "对所有敌人造成 2 倍本场引导冰球数的伤害。（升级 3 倍）", False, False,
+BLIZZARD = CardDef("Blizzard", "暴雪", 1, "Attack",
+                   "对所有敌人造成你在本场战斗中生成过的冰霜充能球总数 2 倍的伤害。", False, False,
                    _blizzard_play)
-BOOT_SEQUENCE = CardDef("Boot Sequence", "启动序列", 0, "Skill",
-                        "固有。获得 10 点格挡。消耗。（升级 13 格挡）", False, True,
+BOOT_SEQUENCE = CardDef("Boot Sequence", "启动流程", 0, "Skill",
+                        "获得 10 点格挡。\n固有。\n消耗。", False, True,
                         _boot_sequence_play, innate=True)
-BULLSEYE = CardDef("Bullseye", "正中靶心", 1, "Attack",
-                   "造成 8 点伤害。施加 2 层锁定。（升级 11 伤 3 层）", True, False,
+BULLSEYE = CardDef("Bullseye", "瞄准靶心", 1, "Attack",
+                   "造成 8 点伤害。\n给予敌人 2 回合跟踪锁定效果。", True, False,
                    _bullseye_play)
-CAPACITOR = CardDef("Capacitor", "电容器", 1, "Power",
-                    "获得 2 个球位。（升级 3 个）", False, False, _capacitor_play)
+CAPACITOR = CardDef("Capacitor", "扩容", 1, "Power",
+                    "获得 2 个充能球栏位。", False, False, _capacitor_play)
 CHAOS = CardDef("Chaos", "混沌", 1, "Skill",
-                "引导 1 个随机球。（升级 2 个）", False, False, _chaos_play)
-CHILL = CardDef("Chill", "寒意", 0, "Skill",
-                "每有 1 个战斗中的敌人，引导 1 个冰球。消耗。（升级后固有）", False, True,
+                "生成 1 个随机充能球。", False, False, _chaos_play)
+CHILL = CardDef("Chill", "冰寒", 0, "Skill",
+                "当前每有一名敌人，生成 1 个冰霜充能球。\n消耗。", False, True,
                 _chill_play, innate_when_upgraded=True)
-CONSUME = CardDef("Consume", "消耗", 2, "Skill",
-                  "获得 2 点专长。失去 1 个球位。（升级 3 点专长）", False, False,
+CONSUME = CardDef("Consume", "耗尽", 2, "Skill",
+                  "获得 2 点集中。\n失去 1 个充能球栏位。", False, False,
                   _consume_play)
-DARKNESS = CardDef("Darkness", "黑暗", 1, "Skill",
-                   "引导 1 个暗球。（升级：额外触发所有暗球的被动）", False, False,
+DARKNESS = CardDef("Darkness", "漆黑", 1, "Skill",
+                   "生成 1 个黑暗充能球。", False, False,
                    _darkness_play)
 DEFRAGMENT = CardDef("Defragment", "碎片整理", 1, "Power",
-                     "获得 1 点专长。（升级 2 点）", False, False, _defragment_play)
-DOOM_AND_GLOOM = CardDef("Doom and Gloom", "阴郁末日", 2, "Attack",
-                         "对所有敌人造成 10 点伤害。引导 1 个暗球。（升级 14 伤）",
+                     "获得 1 点集中。", False, False, _defragment_play)
+DOOM_AND_GLOOM = CardDef("Doom and Gloom", "愁云惨淡", 2, "Attack",
+                         "对所有敌人造成 10 点伤害。\n生成 1 个黑暗充能球。",
                          False, False, _doom_and_gloom_play)
-DOUBLE_ENERGY = CardDef("Double Energy", "能量倍增", 1, "Skill",
-                        "能量翻倍。消耗。（升级费用 0）", False, True, _double_energy_play,
+DOUBLE_ENERGY = CardDef("Double Energy", "双倍能量", 1, "Skill",
+                        "将你的能量翻倍。\n消耗。", False, True, _double_energy_play,
                         upgraded_cost=0)
-EQUILIBRIUM = CardDef("Equilibrium", "平衡", 2, "Skill",
-                      "获得 13 点格挡。本回合保留手牌。（升级 16 格挡）", False, False,
+EQUILIBRIUM = CardDef("Equilibrium", "均衡", 2, "Skill",
+                      "获得 13 点格挡。\n在本回合保留你的手牌。", False, False,
                       _equilibrium_play)
-FTL = CardDef("FTL", "超光速", 0, "Attack",
-              "造成 5 点伤害。若本回合打出的牌少于 3 张，抽 1 张。（升级 6 伤、4 张）",
+FTL = CardDef("FTL", "超越光速", 0, "Attack",
+              "造成 5 点伤害。\n如果你在这回合打出的牌数少于 3 张，抽一张牌。",
               True, False, _ftl_play)
 FORCE_FIELD = CardDef("Force Field", "力场", 4, "Skill",
-                      "本场每打出 1 张能力牌，费用 -1。获得 12 点格挡。（升级 16 格挡）",
+                      "你在本场战斗中每打出一张能力牌，耗能就减少 1 点能量。\n获得 12 点格挡。",
                       False, False, _force_field_play, dynamic_cost=_force_field_cost)
 FUSION = CardDef("Fusion", "聚变", 2, "Skill",
-                 "引导 1 个等离子球。（升级费用 1）", False, False, _fusion_play,
+                 "生成 1 个等离子充能球。", False, False, _fusion_play,
                  upgraded_cost=1)
 GENETIC_ALGORITHM = CardDef("Genetic Algorithm", "遗传算法", 1, "Skill",
-                            "获得 1 点格挡。永久增加此牌格挡 2 点。消耗。（升级 +3）",
+                            "获得 1 点格挡。\n每打出一次，这张牌在本局游戏中的格挡值永久性增加 2。\n消耗。",
                             False, True, _genetic_algorithm_play)
 GLACIER = CardDef("Glacier", "冰川", 2, "Skill",
-                  "获得 7 点格挡。引导 2 个冰球。（升级 10 格挡）", False, False,
+                  "获得 7 点格挡。\n生成 2 个冰霜充能球。", False, False,
                   _glacier_play)
-HEATSINKS = CardDef("Heatsinks", "散热器", 1, "Power",
-                    "每打出 1 张能力牌，抽 1 张牌。（升级 2 张；special 槽位，接线见报告）",
+HEATSINKS = CardDef("Heatsinks", "散热片", 1, "Power",
+                    "你每打出一张能力牌，抽 1 张牌。",
                     False, False, _heatsinks_play)
-HELLO_WORLD = CardDef("Hello World", "你好世界", 1, "Power",
-                      "每回合开始加 1 张随机普通牌到手牌。（升级后固有；"
-                      "special 槽位，接线见报告）", False, False, _hello_world_play,
+HELLO_WORLD = CardDef("Hello World", "你好，世界", 1, "Power",
+                      "在你的回合开始时，增加一张随机普通牌到你的手牌。", False, False, _hello_world_play,
                       innate_when_upgraded=True)
 LOOP = CardDef("Loop", "循环", 1, "Power",
-               "回合开始时，下一个球的被动额外触发 1 次。（升级 2 次）", False, False,
+               "在你的回合开始时，使用你最右侧的 1 个充能球的被动能力。", False, False,
                _loop_play)
-MELTER = CardDef("Melter", "熔毁", 1, "Attack",
-                 "移除敌人全部格挡，造成 10 点伤害。（升级 14 伤）", True, False,
+MELTER = CardDef("Melter", "熔化", 1, "Attack",
+                 "去除一名敌人的所有格挡值。\n造成 10 点伤害。", True, False,
                  _melter_play)
 OVERCLOCK = CardDef("Overclock", "超频", 0, "Skill",
-                    "抽 2 张牌。1 张灼伤加入弃牌堆。（升级抽 3 张）", False, False,
+                    "抽 2 张牌。\n将一张灼伤放入你的弃牌堆中。", False, False,
                     _overclock_play)
 RECYCLE = CardDef("Recycle", "回收", 1, "Skill",
-                  "消耗 1 张手牌，获得等同其费用的能量。（升级费用 0）", False, False,
+                  "消耗一张牌。\n获得与其耗能相等的 1 点能量。", False, False,
                   _recycle_play, upgraded_cost=0)
-REINFORCED_BODY = CardDef("Reinforced Body", "强化机体", -1, "Skill",
-                          "X 费：获得 7 点格挡 X 次。（升级 9 点）", False, False,
+REINFORCED_BODY = CardDef("Reinforced Body", "硬化机体", -1, "Skill",
+                          "获得 7 点格挡 X 次。", False, False,
                           _reinforced_body_play, x_cost=True)
-REPROGRAM = CardDef("Reprogram", "重编程序", 1, "Skill",
-                    "失去 1 点专长。获得 1 点力量和 1 点敏捷。（升级各 2 点）",
+REPROGRAM = CardDef("Reprogram", "重编程", 1, "Skill",
+                    "失去 1 点集中。\n获得 1 点力量。\n获得 1 点敏捷。",
                     False, False, _reprogram_play)
-RIP_AND_TEAR = CardDef("Rip and Tear", "撕裂", 1, "Attack",
-                       "对随机敌人造成 7 点伤害 2 次。（升级 9 伤）", False, False,
+RIP_AND_TEAR = CardDef("Rip and Tear", "狂乱撕扯", 1, "Attack",
+                       "随机对敌人造成 7 点伤害 2 次。", False, False,
                        _rip_and_tear_play)
 SCRAPE = CardDef("Scrape", "刮削", 1, "Attack",
-                 "造成 7 点伤害。抽 4 张牌，弃置其中所有非 0 费牌。（升级 10 伤、抽 5 张）",
+                 "造成 7 伤害。\n抽 4 张牌。\n丢弃抽到的牌中耗能不为 0 的牌。",
                  True, False, _scrape_play)
 SELF_REPAIR = CardDef("Self Repair", "自我修复", 1, "Power",
-                      "战斗结束时回复 7 点 HP。（升级 10 点；special 槽位，接线见报告）",
+                      "在战斗结束时，回复 7 点生命。",
                       False, False, _self_repair_play)
-SKIM = CardDef("Skim", "略读", 1, "Skill", "抽 3 张牌。（升级 4 张）", False, False,
+SKIM = CardDef("Skim", "快速检索", 1, "Skill", "抽 3 张牌。", False, False,
                _skim_play)
 STATIC_DISCHARGE = CardDef("Static Discharge", "静电释放", 1, "Power",
-                           "每次受到未格挡的攻击伤害时，引导 1 个闪电球。（升级 2 个）",
+                           "每当你受到未被格挡的攻击伤害时，生成 1 个闪电充能球。",
                            False, False, _static_discharge_play)
-STORM = CardDef("Storm", "风暴", 1, "Power",
-                "每打出 1 张能力牌，引导 1 个闪电球。（升级后固有；"
-                "special 槽位，接线见报告）", False, False, _storm_play,
+STORM = CardDef("Storm", "雷暴", 1, "Power",
+                "你每打出一张能力牌，生成 1 个闪电充能球。", False, False, _storm_play,
                 innate_when_upgraded=True)
-SUNDER = CardDef("Sunder", "撕裂打击", 3, "Attack",
-                 "造成 24 点伤害。若击杀敌人，获得 3 点能量。（升级 32 伤）", True,
+SUNDER = CardDef("Sunder", "分离", 3, "Attack",
+                 "造成 24 点伤害。\n如果这张牌杀死了敌人，则获得 3 点能量。", True,
                  False, _sunder_play)
-TEMPEST = CardDef("Tempest", "雷暴", -1, "Skill",
-                  "X 费：引导 X 个闪电球。消耗。（升级 X+1 个）", False, True,
+TEMPEST = CardDef("Tempest", "暴风雨", -1, "Skill",
+                  "生成 X 个闪电充能球。\n消耗。", False, True,
                   _tempest_play, x_cost=True)
 WHITE_NOISE = CardDef("White Noise", "白噪声", 1, "Skill",
-                      "加 1 张随机能力牌到手牌，本回合费用 0。消耗。（升级费用 0）",
+                      "增加一张随机能力牌到你的手牌。\n这张牌在本回合耗能变为 0。\n消耗。",
                       False, True, _white_noise_play, upgraded_cost=0)
 
 
@@ -981,10 +984,10 @@ def _rainbow_play(bc: BattleContext, item: CardQueueItem) -> None:
 
 
 def _reboot_play(bc: BattleContext, item: CardQueueItem) -> None:
-    # wiki：手牌与弃牌堆洗入抽牌堆，抽 4（6）张。消耗。Reboot 自身执行时已在
-    # 消耗堆（on_after_use_card 同步先行），天然不参与洗回。弃牌堆洗回走引擎
-    # on_shuffle（洗牌遗物触发一次，对齐 Patch V1.1 修复后行为），手牌并入后
-    # 一并洗匀
+    # wiki：手牌与弃牌堆洗入抽牌堆，抽 4（6）张。消耗。Reboot 自身执行时尚在
+    # limbo（出牌收尾 on_after_card_used 晚于本效果），不参与洗回；收尾时才
+    # 落消耗堆。弃牌堆洗回走引擎 on_shuffle（洗牌遗物触发一次，对齐
+    # Patch V1.1 修复后行为），手牌并入后一并洗匀
     n = 6 if item.card.upgraded else 4
 
     def run(bc2: BattleContext) -> None:
@@ -1031,58 +1034,55 @@ def _thunder_strike_play(bc: BattleContext, item: CardQueueItem) -> None:
         bc.add_to_bot(Actions.attack_random_enemy(9 if item.card.upgraded else 7, hits))
 
 
-ALL_FOR_ONE = CardDef("All for One", "合众为一", 2, "Attack",
-                      "造成 10 点伤害。把弃牌堆所有 0 费牌放回手牌。（升级 14 伤）",
+ALL_FOR_ONE = CardDef("All for One", "万物一心", 2, "Attack",
+                      "造成 10 点伤害。\n将弃牌堆中所有 0 耗能的牌放入你的手牌。",
                       True, False, _all_for_one_play)
 AMPLIFY = CardDef("Amplify", "增幅", 1, "Skill",
-                  "本回合下一张能力牌结算两次。（升级 2 张；special 槽位，接线见报告）",
+                  "在这个回合，你的下一张能力牌会打出两次。",
                   False, False, _amplify_play)
-BIASED_COGNITION = CardDef("Biased Cognition", "偏执认知", 1, "Power",
-                           "获得 4 点专长。每回合开始失去 1 点专长。（升级 5 点；"
-                           "special 槽位近似 Bias，接线见报告）", False, False,
+BIASED_COGNITION = CardDef("Biased Cognition", "偏差认知", 1, "Power",
+                           "获得 4 点集中。\n在每回合开始时，失去 1 点集中。", False, False,
                            _biased_cognition_play)
 BUFFER = CardDef("Buffer", "缓冲", 2, "Power",
-                 "抵挡下一次 HP 损失。（升级 2 次；special 槽位，接线见报告）",
+                 "阻止下一次你受到的生命值损伤。",
                  False, False, _buffer_play)
-CORE_SURGE = CardDef("Core Surge", "核心涌动", 1, "Attack",
-                     "造成 11 点伤害。获得 1 层人工制品。消耗。（升级 15 伤）", True, True,
+CORE_SURGE = CardDef("Core Surge", "核心电涌", 1, "Attack",
+                     "造成 11 点伤害。\n获得 1 层人工制品。\n消耗。", True, True,
                      _core_surge_play)
-CREATIVE_AI = CardDef("Creative AI", "创造型 AI", 3, "Power",
-                      "每回合开始加 1 张随机能力牌到手牌。（升级费用 2；"
-                      "special 槽位，接线见报告）", False, False, _creative_ai_play,
+CREATIVE_AI = CardDef("Creative AI", "创造性AI", 3, "Power",
+                      "在每回合开始时，增加一张随机能力牌到你的手牌。", False, False, _creative_ai_play,
                       upgraded_cost=2)
-ECHO_FORM = CardDef("Echo Form", "回声形态", 3, "Power",
-                    "虚无。每回合首张打出的牌结算两次。（升级不再虚无；"
-                    "special 槽位，接线见报告）", False, False, _echo_form_play,
+ECHO_FORM = CardDef("Echo Form", "回响形态", 3, "Power",
+                    "你每回合打出的第一张牌会打出两次。\n虚无。", False, False, _echo_form_play,
                     ethereal=True)
 ELECTRODYNAMICS = CardDef("Electrodynamics", "电动力学", 2, "Power",
-                          "闪电球命中所有敌人。引导 2 个闪电球。（升级 3 个）",
+                          "闪电充能球现在会击中所有敌人。\n生成 2 个闪电充能球。",
                           False, False, _electrodynamics_play)
 FISSION = CardDef("Fission", "裂变", 0, "Skill",
-                  "移除所有球，每有 1 个球获得 1 点能量并抽 1 张。消耗。（升级改为唤起）",
+                  "移除所有充能球，每移除一个充能球获得 1 点能量并抽 1 张牌。\n消耗。",
                   False, True, _fission_play)
-HYPERBEAM = CardDef("Hyperbeam", "巨型光束", 2, "Attack",
-                    "对所有敌人造成 26 点伤害。失去 3 点专长。（升级 34 伤）",
+HYPERBEAM = CardDef("Hyperbeam", "超能光束", 2, "Attack",
+                    "对所有敌人造成 26 点伤害。\n失去 3 点集中。",
                     False, False, _hyperbeam_play)
 MACHINE_LEARNING = CardDef("Machine Learning", "机器学习", 1, "Power",
-                           "每回合开始多抽 1 张牌。（升级后固有）", False, False,
+                           "在每回合开始时额外抽 1 张牌。", False, False,
                            _machine_learning_play, innate_when_upgraded=True)
 METEOR_STRIKE = CardDef("Meteor Strike", "陨石打击", 5, "Attack",
-                        "造成 24 点伤害。引导 3 个等离子球。（升级 30 伤）", True, False,
+                        "造成 24 点伤害。\n生成 3 个等离子充能球。", True, False,
                         _meteor_strike_play)
-MULTI_CAST = CardDef("Multi-Cast", "多重施法", -1, "Skill",
-                     "X 费：唤起下一个球 X 次。（升级 X+1 次）", False, False,
+MULTI_CAST = CardDef("Multi-Cast", "多重释放", -1, "Skill",
+                     "激发你最右侧的充能球X次。", False, False,
                      _multi_cast_play, x_cost=True)
 RAINBOW = CardDef("Rainbow", "彩虹", 2, "Skill",
-                  "引导闪电、冰、暗球各 1 个。消耗。（升级不再消耗）", False, False,
+                  "生成闪电、冰霜、黑暗充能球各一个。\n消耗。", False, False,
                   _rainbow_play)
 REBOOT = CardDef("Reboot", "重启", 0, "Skill",
-                 "手牌与弃牌堆洗入抽牌堆。抽 4 张牌。消耗。（升级抽 6 张）", False, True,
+                 "将你所有未消耗的牌重新洗牌放入抽牌堆。\n抽 4 张牌。\n消耗。", False, True,
                  _reboot_play)
-SEEK = CardDef("Seek", "检索", 0, "Skill",
-               "从抽牌堆选 1 张牌到手牌。消耗。（升级 2 张）", False, True, _seek_play)
+SEEK = CardDef("Seek", "搜寻", 0, "Skill",
+               "从抽牌堆中选择 1 张牌放入你的手牌。\n消耗。", False, True, _seek_play)
 THUNDER_STRIKE = CardDef("Thunder Strike", "雷霆打击", 3, "Attack",
-                         "每引导过 1 个本场引导的闪电球，对随机敌人造成 7 点伤害。（升级 9 伤）",
+                         "你在本场战斗中每生成过一个闪电充能球，随机造成一次 7 点伤害。",
                          False, False, _thunder_strike_play)
 
 

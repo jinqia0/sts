@@ -54,7 +54,7 @@ wiki Conjure Blade 卡页在列），共 83 个 CardDef。
 与包结构的关系：本文件为 Watcher 卡唯一正式定义，经包 __init__
 eager re-export 暴露；CardDef 取自 _base.py，_strike_play 复用自
 ironclad.py。STRIKE_W/DEFEND_W 沿用卡名 "Strike"/"Defend"
-（CARD_INDEX 按名去重）。
+（观测词表按 "模块:常量名" 身份区分，sts/vocab.py）。
 """
 
 from __future__ import annotations
@@ -208,22 +208,6 @@ def _end_turn_from_play(bc: BattleContext) -> None:
     bc.end_turn_queued = True
 
 
-def _recall_played_to_draw(inst: CardInstance) -> Action:
-    """把刚打出的实例从弃牌堆洗回抽牌堆（Tantrum）。on_after_use_card 在
-    动作出队前已把该实例落入弃牌堆，故本动作在队列尾部执行时检索身份。"""
-
-    def run(bc: BattleContext) -> None:
-        for i, c in enumerate(bc.cards.discard_pile):
-            if c is inst:
-                del bc.cards.discard_pile[i]
-                pos = (bc.rngs.misc.int_inclusive(0, len(bc.cards.draw_pile))
-                       if bc.cards.draw_pile else 0)
-                bc.cards.draw_pile.insert(pos, inst)
-                return
-
-    return Action(run)
-
-
 def _shuffle_created_into_draw(card: "CardDef", upgraded: bool = False) -> Action:
     """生成牌洗入抽牌堆（随机位，misc 流；Master Reality 感知升级）。"""
 
@@ -258,13 +242,13 @@ def _vigilance_play(bc: BattleContext, item: CardQueueItem) -> None:
     bc.add_to_bot(_change_stance(Stance.CALM))
 
 
-STRIKE_W = CardDef("Strike", "打击", 1, "Attack", "造成 6 点伤害。（升级 9 点）", True, False,
+STRIKE_W = CardDef("Strike", "打击", 1, "Attack", "造成 6 点伤害。", True, False,
                    _strike_play)
-DEFEND_W = CardDef("Defend", "防御", 1, "Skill", "获得 5 点格挡。（升级 8 点）", False, False,
+DEFEND_W = CardDef("Defend", "防御", 1, "Skill", "获得 5 点格挡。", False, False,
                    _defend_w_play)
-ERUPTION = CardDef("Eruption", "爆发", 2, "Attack", "造成 9 点伤害。进入愤怒。（升级费用 1）",
+ERUPTION = CardDef("Eruption", "暴怒", 2, "Attack", "造成 9 点伤害。\n进入愤怒。",
                    True, False, _eruption_play, upgraded_cost=1)
-VIGILANCE = CardDef("Vigilance", "警醒", 2, "Skill", "获得 8 点格挡。进入平静。（升级 12 格挡）",
+VIGILANCE = CardDef("Vigilance", "警惕", 2, "Skill", "获得 8 点格挡。\n进入平静。",
                     False, False, _vigilance_play)
 
 
@@ -322,23 +306,22 @@ def _expunger_play(bc: BattleContext, item: CardQueueItem) -> None:
         bc.add_to_bot(Actions.attack_enemy(item.target, dmg))
 
 
-MIRACLE = CardDef("Miracle", "奇迹", 0, "Skill", "保留。获得 1 点能量。消耗。（升级 2 点能量）",
+MIRACLE = CardDef("Miracle", "奇迹", 0, "Skill", "保留。\n获得 1 点能量。\n消耗。",
                   False, True, _miracle_play, self_retain=True)
-INSIGHT = CardDef("Insight", "洞见", 0, "Skill", "保留。抽 2 张牌。消耗。（升级抽 3 张）",
+INSIGHT = CardDef("Insight", "洞见", 0, "Skill", "保留。\n抽 2 张牌。\n消耗。",
                   False, True, _insight_play, self_retain=True)
-SAFETY = CardDef("Safety", "安全庇护", 1, "Skill", "保留。获得 12 点格挡。消耗。（升级 16 格挡）",
+SAFETY = CardDef("Safety", "平安", 1, "Skill", "保留。\n获得 12 点格挡。\n消耗。",
                  False, True, _safety_play, self_retain=True)
-SMITE = CardDef("Smite", "天罚", 1, "Attack", "保留。造成 12 点伤害。消耗。（升级 16 伤）",
+SMITE = CardDef("Smite", "惩恶", 1, "Attack", "保留。\n造成 12 点伤害。\n消耗。",
                 True, True, _smite_play, self_retain=True)
-THROUGH_VIOLENCE = CardDef("Through Violence", "穿透暴力", 0, "Attack",
-                           "保留。造成 20 点伤害。消耗。（升级 30 伤）", True, True,
+THROUGH_VIOLENCE = CardDef("Through Violence", "以暴易暴", 0, "Attack",
+                           "保留。\n造成 20 点伤害。\n消耗。", True, True,
                            _through_violence_play, self_retain=True)
-BETA = CardDef("Beta", "贝塔", 2, "Skill", "洗入 1 张欧米伽。消耗。（升级费用 1）",
+BETA = CardDef("Beta", "贝塔", 2, "Skill", "将一张欧米伽放入你的抽牌堆中。\n消耗。",
                False, True, _beta_play, upgraded_cost=1)
-OMEGA = CardDef("Omega", "欧米伽", 3, "Power", "回合结束时对所有敌人造成 50 点伤害。（升级 60 点）",
+OMEGA = CardDef("Omega", "欧米伽", 3, "Power", "在你的回合结束时，对所有敌人造成 50 点伤害。",
                 False, False, _omega_play)
-EXPUNGER = CardDef("Expunger", "肃清者", 1, "Attack", "造成 9 点伤害 X 次。（升级 15 点；"
-                   "X = 召唤之刃消耗的能量）", True, False, _expunger_play)
+EXPUNGER = CardDef("Expunger", "灭除之刃", 1, "Attack", "造成 9 点伤害 X 次。", True, False, _expunger_play)
 
 
 # ============================================================
@@ -503,54 +486,54 @@ def _tranquility_play(bc: BattleContext, item: CardQueueItem) -> None:
     bc.add_to_bot(_change_stance(Stance.CALM))
 
 
-BOWLING_BASH = CardDef("Bowling Bash", "保龄强袭", 1, "Attack",
-                       "对单个敌人造成 7 点伤害，次数等同存活敌人数。（升级 10 点）",
+BOWLING_BASH = CardDef("Bowling Bash", "碰撞连击", 1, "Attack",
+                       "当前每有一名敌人，造成 7 点伤害。",
                        True, False, _bowling_bash_play)
-CONSECRATE = CardDef("Consecrate", "圣击", 0, "Attack", "对所有敌人造成 5 点伤害。（升级 8 点）",
+CONSECRATE = CardDef("Consecrate", "供奉", 0, "Attack", "对所有敌人造成 5 点伤害。",
                      False, False, _consecrate_play)
-CRESCENDO = CardDef("Crescendo", "渐强", 1, "Skill", "保留。进入愤怒。消耗。（升级费用 0）",
+CRESCENDO = CardDef("Crescendo", "渐强", 1, "Skill", "保留。\n进入愤怒。\n消耗。",
                     False, True, _crescendo_play, upgraded_cost=0, self_retain=True)
-CRUSH_JOINTS = CardDef("Crush Joints", "捶击关节", 1, "Attack",
-                       "造成 8 点伤害。若上一张打出的牌是技能牌，施加 1 层易伤。（升级 10 伤 2 层）",
+CRUSH_JOINTS = CardDef("Crush Joints", "粉碎关节", 1, "Attack",
+                       "造成 8 点伤害。\n如果本场战斗中打出的上一张牌是技能牌，给予 1 层易伤。",
                        True, False, _crush_joints_play)
-CUT_THROUGH_FATE = CardDef("Cut Through Fate", "斩断命运", 1, "Attack",
-                           "造成 7 点伤害。检视 2。抽 1 张牌。（升级 9 伤，检视 3）",
+CUT_THROUGH_FATE = CardDef("Cut Through Fate", "斩破命运", 1, "Attack",
+                           "造成 7 点伤害。\n预见 2。\n抽 1 张牌。",
                            True, False, _cut_through_fate_play)
-EMPTY_BODY = CardDef("Empty Body", "空寂之躯", 1, "Skill",
-                     "获得 7 点格挡。退出姿态。（升级 10 格挡）", False, False, _empty_body_play)
-EMPTY_FIST = CardDef("Empty Fist", "空寂之拳", 1, "Attack",
-                     "造成 9 点伤害。退出姿态。（升级 14 伤）", True, False, _empty_fist_play)
-EVALUATE = CardDef("Evaluate", "审视", 1, "Skill",
-                   "获得 6 点格挡。洗入 1 张洞见。（升级 10 格挡）", False, False, _evaluate_play)
-FLURRY_OF_BLOWS = CardDef("Flurry of Blows", "拳影连击", 0, "Attack",
-                           "造成 4 点伤害。每当你切换姿态，此牌从弃牌堆回到手牌。（升级 6 伤）",
+EMPTY_BODY = CardDef("Empty Body", "化体为空", 1, "Skill",
+                     "获得 7 点格挡。\n退出当前姿态。", False, False, _empty_body_play)
+EMPTY_FIST = CardDef("Empty Fist", "化拳为空", 1, "Attack",
+                     "造成 9 点伤害。\n退出当前姿态。", True, False, _empty_fist_play)
+EVALUATE = CardDef("Evaluate", "评估", 1, "Skill",
+                   "获得 6 点格挡。\n在你的抽牌堆中加入一张洞见。", False, False, _evaluate_play)
+FLURRY_OF_BLOWS = CardDef("Flurry of Blows", "疾风连击", 0, "Attack",
+                           "造成 4 点伤害。\n你每次转换姿态时，将这张牌从弃牌堆放回你的手牌。",
                            True, False, _flurry_of_blows_play)
-FLYING_SLEEVES = CardDef("Flying Sleeves", "飞袖", 1, "Attack",
-                         "保留。造成 4 点伤害 2 次。（升级 6 伤）", True, False,
+FLYING_SLEEVES = CardDef("Flying Sleeves", "流云飞袖", 1, "Attack",
+                         "保留。\n造成 4 点伤害两次。", True, False,
                          _flying_sleeves_play, self_retain=True)
-FOLLOW_UP = CardDef("Follow-Up", "后手追击", 1, "Attack",
-                    "造成 7 点伤害。若上一张打出的牌是攻击牌，获得 1 点能量。（升级 11 伤）",
+FOLLOW_UP = CardDef("Follow-Up", "追击", 1, "Attack",
+                    "造成 7 点伤害。\n如果本场战斗中打出的上一张牌是攻击牌，获得 1 点能量。",
                     True, False, _follow_up_play)
-HALT = CardDef("Halt", "止步", 0, "Skill",
-               "获得 3 点格挡。若处于愤怒，额外获得 9 点格挡。（升级 4/14）",
+HALT = CardDef("Halt", "停顿", 0, "Skill",
+               "获得 3 点格挡。\n愤怒：获得 9 点额外格挡。",
                False, False, _halt_play)
-JUST_LUCKY = CardDef("Just Lucky", "纯粹幸运", 0, "Attack",
-                     "检视 1。获得 2 点格挡。造成 3 点伤害。（升级 检视 2/3 格挡/4 伤）",
+JUST_LUCKY = CardDef("Just Lucky", "幸运一击", 0, "Attack",
+                     "预见 1。\n获得 2 点格挡。\n造成 3 点伤害。",
                      True, False, _just_lucky_play)
-PRESSURE_POINTS = CardDef("Pressure Points", "压穴", 1, "Skill",
-                          "对所有敌人施加 8 层标记。所有敌人失去等同其标记层数的 HP。（升级 11 层）",
+PRESSURE_POINTS = CardDef("Pressure Points", "点穴", 1, "Skill",
+                          "给予 8 层印记。\n所有拥有印记的敌人，失去与层数相等的生命。",
                           False, False, _pressure_points_play)
-PROSTRATE = CardDef("Prostrate", "俯首", 0, "Skill",
-                    "获得 2 层真言。获得 4 点格挡。（升级 3 层真言）", False, False, _prostrate_play)
-PROTECT = CardDef("Protect", "护持", 2, "Skill", "保留。获得 12 点格挡。（升级 16 格挡）",
+PROSTRATE = CardDef("Prostrate", "五体投地", 0, "Skill",
+                    "获得 2 层真言。\n获得 4 点格挡。", False, False, _prostrate_play)
+PROTECT = CardDef("Protect", "护身", 2, "Skill", "保留。\n获得 12 点格挡。",
                   False, False, _protect_play, self_retain=True)
-SASH_WHIP = CardDef("Sash Whip", "束腰鞭击", 1, "Attack",
-                    "造成 8 点伤害。若上一张打出的牌是攻击牌，施加 1 层虚弱。（升级 10 伤 2 层）",
+SASH_WHIP = CardDef("Sash Whip", "腰带抽打", 1, "Attack",
+                    "造成 8 点伤害。\n如果本场战斗中打出的上一张牌是攻击牌，给予 1 层虚弱。",
                     True, False, _sash_whip_play)
-THIRD_EYE = CardDef("Third Eye", "第三只眼", 1, "Skill",
-                    "获得 7 点格挡。检视 3。（升级 9 格挡，检视 5）", False, False, _third_eye_play)
-TRANQUILITY = CardDef("Tranquility", "宁静", 1, "Skill",
-                      "保留。进入平静。消耗。（升级费用 0）", False, True, _tranquility_play,
+THIRD_EYE = CardDef("Third Eye", "天眼", 1, "Skill",
+                    "获得 7 点格挡。\n预见 3。", False, False, _third_eye_play)
+TRANQUILITY = CardDef("Tranquility", "安宁", 1, "Skill",
+                      "保留。进入平静。\n消耗。", False, True, _tranquility_play,
                       upgraded_cost=0, self_retain=True)
 
 
@@ -828,14 +811,15 @@ def _talk_to_the_hand_play(bc: BattleContext, item: CardQueueItem) -> None:
 
 
 def _tantrum_play(bc: BattleContext, item: CardQueueItem) -> None:
-    # wiki：造成 3 伤 3（+：4）次。进入愤怒。将此牌洗入抽牌堆（本体语义
-    # 是这张实例本身而非副本——on_after_use_card 先落弃牌堆，再由
-    # _recall_played_to_draw 按实例身份捞出洗回）
+    # wiki：造成 3 伤 3（+：4）次。进入愤怒。将此牌洗入抽牌堆——本体语义
+    # 是这张实例本身而非副本：由出牌收尾 on_after_use_card 的
+    # shuffle_back_into_draw_pile 分支处理（对齐本体 UseCardAction 的
+    # moveToDeck(shuffle) / C++ onAfterUseCard 的 TANTRUM 分支），效果动作
+    # 只负责伤害与转姿
     dmg = bc.calculate_card_damage(item, item.target, 3)
     for _ in range(4 if item.card.upgraded else 3):
         bc.add_to_bot(Actions.attack_enemy(item.target, dmg))
     bc.add_to_bot(_change_stance(Stance.WRATH))
-    bc.add_to_bot(_recall_played_to_draw(item.card))
 
 
 def _wallop_play(bc: BattleContext, item: CardQueueItem) -> None:
@@ -904,105 +888,99 @@ def _wreath_of_flame_play(bc: BattleContext, item: CardQueueItem) -> None:
 
 
 BATTLE_HYMN = CardDef("Battle Hymn", "战歌", 1, "Power",
-                      "每回合开始时加 1 张天罚到手牌。（升级：固有）", False, False,
+                      "在每回合开始时，将一张惩恶加入你的手牌。", False, False,
                       _battle_hymn_play, innate_when_upgraded=True)
-CARVE_REALITY = CardDef("Carve Reality", "雕琢现实", 1, "Attack",
-                        "造成 6 点伤害。加 1 张天罚到手牌。（升级 10 伤）", True, False,
+CARVE_REALITY = CardDef("Carve Reality", "改造现实", 1, "Attack",
+                        "造成 6 点伤害。\n将一张惩恶加入你的手牌。", True, False,
                         _carve_reality_play)
-COLLECT = CardDef("Collect", "收纳", -1, "Skill",
-                  "X 费：接下来 X 个回合的每回合开始，加 1 张奇迹+到手牌。消耗。（升级 X+1）",
+COLLECT = CardDef("Collect", "收集", -1, "Skill",
+                  "在你的下X个回合开始时，增加一张奇迹+ 到你的手牌。\n消耗。",
                   False, True, _collect_play, x_cost=True)
-CONCLUDE = CardDef("Conclude", "了结", 1, "Attack",
-                   "对所有敌人造成 12 点伤害。结束你的回合。（升级 16 伤）",
+CONCLUDE = CardDef("Conclude", "结末", 1, "Attack",
+                   "对所有敌人造成 12 点伤害。\n结束你的回合。",
                    False, False, _conclude_play)
-DECEIVE_REALITY = CardDef("Deceive Reality", "幻惑现实", 1, "Skill",
-                          "获得 4 点格挡。加 1 张安全庇护到手牌。（升级 7 格挡）",
+DECEIVE_REALITY = CardDef("Deceive Reality", "欺瞒现实", 1, "Skill",
+                          "获得 4 点格挡。\n将一张平安加入你的手牌。",
                           False, False, _deceive_reality_play)
-EMPTY_MIND = CardDef("Empty Mind", "空寂之心", 1, "Skill",
-                     "退出姿态。抽 2 张牌。（升级 3 张）", False, False, _empty_mind_play)
+EMPTY_MIND = CardDef("Empty Mind", "化智为空", 1, "Skill",
+                     "抽 2 张牌。\n退出当前姿态。", False, False, _empty_mind_play)
 FASTING = CardDef("Fasting", "斋戒", 2, "Power",
-                  "获得 3 点力量和 3 点敏捷。每回合开始少获得 1 点能量。（升级 4/4）",
+                  "获得 3 点力量。\n获得 3 敏捷。\n每回合开始时少获得 1 点能量。",
                   False, False, _fasting_play)
-FEAR_NO_EVIL = CardDef("Fear No Evil", "直面邪恶", 1, "Attack",
-                       "造成 8 点伤害。若该敌人意图为攻击，进入平静。（升级 11 伤）",
+FEAR_NO_EVIL = CardDef("Fear No Evil", "不惧妖邪", 1, "Attack",
+                       "造成 8 点伤害。\n如果目标敌人的意图是攻击，则进入平静。",
                        True, False, _fear_no_evil_play)
-FOREIGN_INFLUENCE = CardDef("Foreign Influence", "异域影响", 0, "Skill",
-                            "3 张随机攻击牌选 1 加入手牌。消耗。（升级：该牌本回合 0 费）",
+FOREIGN_INFLUENCE = CardDef("Foreign Influence", "他山之石", 0, "Skill",
+                            "从 3 张任意颜色的攻击牌中选择 1 张加入你的手牌。\n消耗。",
                             False, True, _foreign_influence_play)
-FORESIGHT = CardDef("Foresight", "预视", 1, "Power",
-                    "每回合开始时检视 3。（升级 4）", False, False, _foresight_play)
-INDIGNATION = CardDef("Indignation", "愤慨", 1, "Skill",
-                      "若处于愤怒，对所有敌人施加 3 层易伤；否则进入愤怒。（升级 5 层）",
+FORESIGHT = CardDef("Foresight", "先见之明", 1, "Power",
+                    "在你的回合开始时，预见 3。", False, False, _foresight_play)
+INDIGNATION = CardDef("Indignation", "义愤填膺", 1, "Skill",
+                      "愤怒：给予所有敌人 3 层易伤。\n否则，进入愤怒。",
                       False, False, _indignation_play)
-INNER_PEACE = CardDef("Inner Peace", "内心平和", 1, "Skill",
-                      "若处于平静，抽 3 张牌；否则进入平静。（升级 4 张）",
+INNER_PEACE = CardDef("Inner Peace", "内心宁静", 1, "Skill",
+                      "平静：抽 3 张牌。\n否则，进入平静。",
                       False, False, _inner_peace_play)
 LIKE_WATER = CardDef("Like Water", "如水", 1, "Power",
-                     "回合结束时若处于平静，获得 5 点格挡。（升级 7 格挡；"
-                     "引擎常量 3×层，偏差见迁移报告）", False, False, _like_water_play)
-MEDITATE = CardDef("Meditate", "冥思", 1, "Skill",
-                   "从弃牌堆选 1 张牌到手牌并保留。进入平静。结束你的回合。（升级 2 张）",
+                     "在你的回合结束时，如果你处于平静，则获得 5 点格挡。", False, False, _like_water_play)
+MEDITATE = CardDef("Meditate", "冥想", 1, "Skill",
+                   "将弃牌堆中的一张牌放入你的手牌，并将其保留。\n进入平静。\n结束你的回合。",
                    False, False, _meditate_play)
-MENTAL_FORTRESS = CardDef("Mental Fortress", "心灵壁垒", 1, "Power",
-                          "每切换一次姿态获得 4 点格挡。（升级 6 格挡；"
-                          "引擎常量 3×层，偏差见迁移报告）", False, False, _mental_fortress_play)
+MENTAL_FORTRESS = CardDef("Mental Fortress", "心灵堡垒", 1, "Power",
+                          "每当你转换姿态时，获得 4 点格挡。", False, False, _mental_fortress_play)
 NIRVANA = CardDef("Nirvana", "涅槃", 1, "Power",
-                  "每当你检视，获得 3 点格挡。（升级 4 格挡；"
-                  "special 槽位，接线见迁移报告）", False, False, _nirvana_play)
-PERSEVERANCE = CardDef("Perseverance", "百折不挠", 1, "Skill",
-                       "保留。获得 5 点格挡。此牌被保留时本场战斗格挡 +2。（升级 7/+3）",
+                  "你每次预见时，获得 3 点格挡。", False, False, _nirvana_play)
+PERSEVERANCE = CardDef("Perseverance", "坚韧", 1, "Skill",
+                       "保留。\n获得 5 点格挡。\n每当这张牌被保留时，将其在本场战斗的格挡增加 2 点。",
                        False, False, _perseverance_play, self_retain=True)
 PRAY = CardDef("Pray", "祈祷", 1, "Skill",
-               "获得 3 层真言。洗入 1 张洞见。（升级 4 层真言）", False, False, _pray_play)
-REACH_HEAVEN = CardDef("Reach Heaven", "直抵天堂", 2, "Attack",
-                       "造成 10 点伤害。洗入 1 张穿透暴力。（升级 15 伤）",
+               "获得 3 层真言。\n在你的抽牌堆中加入 1 张洞见。", False, False, _pray_play)
+REACH_HEAVEN = CardDef("Reach Heaven", "立地升天", 2, "Attack",
+                       "造成 10 点伤害。在你的抽牌堆中加入 1 张\n以暴易暴。",
                        True, False, _reach_heaven_play)
-RUSHDOWN = CardDef("Rushdown", "猛攻", 1, "Power",
-                   "每当你进入愤怒，抽 2 张牌。（升级费用 0）", False, False,
+RUSHDOWN = CardDef("Rushdown", "猛虎下山", 1, "Power",
+                   "每当你进入愤怒时，抽 2 张牌。", False, False,
                    _rushdown_play, upgraded_cost=0)
 SANCTITY = CardDef("Sanctity", "圣洁", 1, "Skill",
-                   "获得 6 点格挡。若上一张打出的牌是技能牌，抽 2 张牌。（升级 9 格挡）",
+                   "获得 6 点格挡。\n如果本场战斗中打出的上一张牌是技能牌，抽 2 张牌。",
                    False, False, _sanctity_play)
 SANDS_OF_TIME = CardDef("Sands of Time", "时之沙", 4, "Attack",
-                        "保留。造成 20 点伤害。此牌被保留时本场战斗费用 -1。（升级 26 伤）",
+                        "保留。\n造成 20 点伤害。\n每当这张牌被保留时，将其在本场战斗的耗能减少 1。",
                         True, False, _sands_of_time_play, self_retain=True)
-SIGNATURE_MOVE = CardDef("Signature Move", "王牌绝技", 2, "Attack",
-                         "只有当此牌是手牌中唯一的攻击牌时才能打出。造成 30 点伤害。（升级 40 伤）",
+SIGNATURE_MOVE = CardDef("Signature Move", "招牌技", 2, "Attack",
+                         "只有当这张牌是你手中唯一的一张攻击牌时才可以被打出。造成 30 点伤害。",
                          True, False, _signature_move_play, play_condition=_signature_move_condition)
-SIMMERING_FURY = CardDef("Simmering Fury", "蓄怒", 1, "Skill",
-                         "下回合开始时进入愤怒并抽 2 张牌。（升级 3 张）",
+SIMMERING_FURY = CardDef("Simmering Fury", "怒火中烧", 1, "Skill",
+                         "在你的下个回合开始时，进入愤怒并抽 2 张牌。",
                          False, False, _simmering_fury_play)
-STUDY = CardDef("Study", "修习", 2, "Power",
-                "每回合结束时洗入 1 张洞见。（升级费用 1；"
-                "special 槽位，接线见迁移报告）", False, False, _study_play, upgraded_cost=1)
-SWIVEL = CardDef("Swivel", "转身", 2, "Skill",
-                 "获得 8 点格挡。你的下一张攻击牌费用变为 0。（升级 11 格挡；"
-                 "special 槽位，接线见迁移报告）", False, False, _swivel_play)
-TALK_TO_THE_HAND = CardDef("Talk to the Hand", "且听手言", 1, "Attack",
-                           "造成 5 点伤害。每当你攻击该敌人，获得 2 点格挡。消耗。（升级 7 伤 3 格挡）",
+STUDY = CardDef("Study", "研习", 2, "Power",
+                "在你的回合结束时，在你的抽牌堆中加入一张洞见。", False, False, _study_play, upgraded_cost=1)
+SWIVEL = CardDef("Swivel", "旋身", 2, "Skill",
+                 "获得 8 点格挡。\n你打出的下一张攻击牌耗能变为 0。", False, False, _swivel_play)
+TALK_TO_THE_HAND = CardDef("Talk to the Hand", "以手拒之", 1, "Attack",
+                           "造成 5 点伤害。\n每当目标敌人受到攻击时，你获得 2 点格挡。\n消耗。",
                            True, True, _talk_to_the_hand_play)
 TANTRUM = CardDef("Tantrum", "发泄", 1, "Attack",
-                  "造成 3 点伤害 3 次。进入愤怒。将此牌洗入抽牌堆。（升级 4 次）",
-                  True, False, _tantrum_play)
-WALLOP = CardDef("Wallop", "痛击", 2, "Attack",
-                 "造成 9 点伤害。获得等同未被格挡吸收伤害的格挡。（升级 12 伤）",
+                  "造成 3 点伤害 3 次。\n进入愤怒。\n将这张牌放入你的抽牌堆。",
+                  True, False, _tantrum_play,
+                  shuffle_back_into_draw_pile=True)
+WALLOP = CardDef("Wallop", "当头棒喝", 2, "Attack",
+                 "造成 9 点伤害。\n获得与所造成的未被格挡的伤害相等的格挡。",
                  True, False, _wallop_play)
-WAVE_OF_THE_HAND = CardDef("Wave of the Hand", "挥手", 1, "Skill",
-                           "本回合每当你获得格挡，对所有敌人施加 1 层虚弱。（升级 2 层；"
-                           "special 槽位，接线见迁移报告）", False, False, _wave_of_the_hand_play)
-WEAVE = CardDef("Weave", "织击", 0, "Attack",
-                "造成 4 点伤害。每当你检视，此牌从弃牌堆回到手牌。（升级 6 伤；"
-                "special 槽位，接线见迁移报告）", True, False, _weave_play)
-WHEEL_KICK = CardDef("Wheel Kick", "旋风踢", 2, "Attack",
-                     "造成 15 点伤害。抽 2 张牌。（升级 20 伤）", True, False, _wheel_kick_play)
-WINDMILL_STRIKE = CardDef("Windmill Strike", "风车击", 2, "Attack",
-                          "保留。造成 7 点伤害。此牌被保留时本场战斗伤害 +4。（升级 10 伤 +5）",
+WAVE_OF_THE_HAND = CardDef("Wave of the Hand", "摆手", 1, "Skill",
+                           "在本回合，你每次获得格挡时，给予所有敌人 1 层虚弱。", False, False, _wave_of_the_hand_play)
+WEAVE = CardDef("Weave", "迂回", 0, "Attack",
+                "造成 4 点伤害。\n你每次预见时，将这张牌从弃牌堆放回你的手牌。", True, False, _weave_play)
+WHEEL_KICK = CardDef("Wheel Kick", "回环踢", 2, "Attack",
+                     "造成 15 点伤害。\n抽 2 张牌。", True, False, _wheel_kick_play)
+WINDMILL_STRIKE = CardDef("Windmill Strike", "旋转打击", 2, "Attack",
+                          "保留。\n造成 7 点伤害。\n每当这张牌被保留时，将其在本场战斗的伤害增加 4 点。",
                           True, False, _windmill_strike_play, self_retain=True)
-WORSHIP = CardDef("Worship", "崇奉", 2, "Skill",
-                  "获得 5 层真言。（升级：保留）", False, False, _worship_play,
+WORSHIP = CardDef("Worship", "敬拜", 2, "Skill",
+                  "获得 5 层真言。", False, False, _worship_play,
                   retain_when_upgraded=True)
-WREATH_OF_FLAME = CardDef("Wreath of Flame", "焰环", 1, "Skill",
-                          "你的下一张攻击牌造成 5 点额外伤害。（升级 8 点）",
+WREATH_OF_FLAME = CardDef("Wreath of Flame", "火焰纹", 1, "Skill",
+                          "你的下一张攻击牌造成 5 点额外伤害。",
                           False, False, _wreath_of_flame_play)
 
 
@@ -1236,56 +1214,53 @@ def _wish_play(bc: BattleContext, item: CardQueueItem) -> None:
 
 
 ALPHA = CardDef("Alpha", "阿尔法", 1, "Skill",
-                "洗入 1 张贝塔。消耗。（升级：固有）", False, True, _alpha_play,
+                "将一张贝塔放入你的抽牌堆中。\n消耗。", False, True, _alpha_play,
                 innate_when_upgraded=True)
-BLASPHEMY = CardDef("Blasphemy", "亵渎", 1, "Skill",
-                    "进入神威。下回合开始时死亡。消耗。（升级：保留）", False, True,
+BLASPHEMY = CardDef("Blasphemy", "渎神", 1, "Skill",
+                    "进入神格。\n在下回合死亡。\n消耗。", False, True,
                     _blasphemy_play, retain_when_upgraded=True)
-BRILLIANCE = CardDef("Brilliance", "辉耀", 1, "Attack",
-                     "造成 12 点伤害，额外伤害等同本场战斗获得的真言数。（升级 16 伤）",
+BRILLIANCE = CardDef("Brilliance", "光辉", 1, "Attack",
+                     "造成 12 点伤害。\n额外造成本场战斗中获得的真言总层数的伤害。",
                      True, False, _brilliance_play)
-CONJURE_BLADE = CardDef("Conjure Blade", "咒刃", -1, "Skill",
-                        "X 费：洗入 1 张肃清者（造成 9 点伤害 X 次）。消耗。（升级 X+1 次、肃清者 15 伤）",
+CONJURE_BLADE = CardDef("Conjure Blade", "聚能成刃", -1, "Skill",
+                        "将一张灭除之刃放入你的抽牌堆中。\n消耗。",
                         False, True, _conjure_blade_play, x_cost=True)
 DEUS_EX_MACHINA = CardDef("Deus Ex Machina", "机械降神", -2, "Skill",
-                          "不可打出。抽到此牌时，加 2 张奇迹到手牌并消耗此牌。（升级 3 张）",
+                          "不能被打出。\n当你抽到这张牌时，在你的手牌中加入 2 张奇迹，然后消耗。",
                           False, True, _unplayable_noop, unplayable=True,
                           on_drawn_effect=_deus_ex_machina_on_drawn)
-DEVA_FORM = CardDef("Deva Form", "天神形态", 3, "Power",
-                    "虚无。每回合开始获得 1 点能量，且该增益每回合 +1。（升级：不再虚无；"
-                    "special 槽位，接线见迁移报告）", False, False, _deva_form_play, ethereal=True)
-DEVOTION = CardDef("Devotion", "奉献", 1, "Power",
-                   "每回合开始时获得 2 层真言。（升级 3 层）", False, False, _devotion_play)
-ESTABLISHMENT = CardDef("Establishment", "建制", 1, "Power",
-                        "每当有牌被保留，该牌本场战斗费用 -1。（升级：固有；"
-                        "special 槽位，接线见迁移报告）", False, False, _establishment_play,
+DEVA_FORM = CardDef("Deva Form", "天人形态", 3, "Power",
+                    "虚无。\n在你的回合开始时获得 1 点能量，每回合增加 1。", False, False, _deva_form_play, ethereal=True)
+DEVOTION = CardDef("Devotion", "虔信", 1, "Power",
+                   "在你的回合开始时，获得 2 层真言。", False, False, _devotion_play)
+ESTABLISHMENT = CardDef("Establishment", "确立基础", 1, "Power",
+                        "每当有卡牌被保留时，将其在本场战斗的耗能减少 1。", False, False, _establishment_play,
                         innate_when_upgraded=True)
-JUDGMENT = CardDef("Judgment", "裁决", 1, "Skill",
-                   "若该敌人 HP 不超过 30，将其 HP 置为 0。（升级 40）", True, False,
+JUDGMENT = CardDef("Judgment", "审判", 1, "Skill",
+                   "如果目标敌人的生命值小于等于 30 点，\n则将其生命值变为 0。", True, False,
                    _judgment_play)
-LESSON_LEARNED = CardDef("Lesson Learned", "传道授业", 2, "Attack",
-                         "造成 10 点伤害。若此伤害致命，升级 1 张随机的牌。消耗。（升级 13 伤）",
+LESSON_LEARNED = CardDef("Lesson Learned", "勤学精进", 2, "Attack",
+                         "造成 10 点伤害。\n斩杀时，升级你牌组中的一张随机牌。消耗。",
                          True, True, _lesson_learned_play)
-MASTER_REALITY = CardDef("Master Reality", "现实大师", 1, "Power",
-                         "战斗中每当有牌被生成，将其升级。（升级费用 0）", False, False,
+MASTER_REALITY = CardDef("Master Reality", "操控现实", 1, "Power",
+                         "所有在战斗中临时增加的牌将被升级。", False, False,
                          _master_reality_play, upgraded_cost=0)
-OMNISCIENCE = CardDef("Omniscience", "全知全能", 4, "Skill",
-                      "选择抽牌堆中的 1 张牌。打出该牌两次并消耗它。消耗。（升级费用 3）",
+OMNISCIENCE = CardDef("Omniscience", "通晓万物", 4, "Skill",
+                      "选择你抽牌堆中的一张牌。将这张牌打出两次然后将其消耗。\n消耗。",
                       False, True, _omniscience_play, upgraded_cost=3)
-RAGNAROK = CardDef("Ragnarok", "诸神黄昏", 3, "Attack",
-                   "对随机敌人造成 5 点伤害 5 次。（升级 6 伤 6 次）", False, False,
+RAGNAROK = CardDef("Ragnarok", "诸神之黄昏", 3, "Attack",
+                   "随机对敌人造成 5 点伤害 5 次。", False, False,
                    _ragnarok_play)
-SCRAWL = CardDef("Scrawl", "挥毫", 1, "Skill",
-                 "抽牌直到手牌满。消耗。（升级费用 0）", False, True, _scrawl_play,
+SCRAWL = CardDef("Scrawl", "潦草急就", 1, "Skill",
+                 "抽牌直到将手牌抽满。\n消耗。", False, True, _scrawl_play,
                  upgraded_cost=0)
-SPIRIT_SHIELD = CardDef("Spirit Shield", "灵魂护盾", 2, "Skill",
-                        "每有 1 张手牌，获得 3 点格挡。（升级 4 点）", False, False,
+SPIRIT_SHIELD = CardDef("Spirit Shield", "精神护盾", 2, "Skill",
+                        "你每有一张手牌，获得 3 点格挡。", False, False,
                         _spirit_shield_play)
-VAULT = CardDef("Vault", "穹顶", 3, "Skill",
-               "在这之后进行一个额外回合。结束你的回合。消耗。（升级费用 2；"
-               "降级实现：跳过敌方阶段）", False, True, _vault_play, upgraded_cost=2)
-WISH = CardDef("Wish", "祈愿", 3, "Skill",
-               "三选一：获得 6 层重甲、3 点力量，或 25 金币。消耗。（升级 8/4/30）",
+VAULT = CardDef("Vault", "腾跃", 3, "Skill",
+               "在本回合结束后，额外获得一回合。\n结束你的回合。\n消耗。", False, True, _vault_play, upgraded_cost=2)
+WISH = CardDef("Wish", "许愿", 3, "Skill",
+               "选择：获得 6 层多层护甲、 3 点力量、或 25 金币。\n消耗。",
                False, True, _wish_play)
 
 
@@ -1306,7 +1281,7 @@ def _unraveling_play(bc: BattleContext, item: CardQueueItem) -> None:
 
 
 UNRAVELING = CardDef("Unraveling", "彻悟", 2, "Skill",
-                     "从左至右打出你手牌中的所有牌，需要目标的牌随机选择目标。消耗。（升级费用 1）",
+                     "从左至右打出你手牌中的所有牌。需要选择目标的牌将随机选择目标。\n消耗。",
                      False, True, _unraveling_play, upgraded_cost=1)
 
 

@@ -157,7 +157,7 @@ def test_defect_reexport_via_cards_module():
 
     assert cards_mod.ZAP is d.ZAP
     assert cards_mod.METEOR_STRIKE is d.METEOR_STRIKE
-    # 与其他职业的 Strike/Defend 不同对象，卡名刻意同名（CARD_INDEX 按名去重）
+    # 与其他职业的 Strike/Defend 不同对象，卡名刻意同名（观测词表按 "模块:常量名" 身份区分）
     assert cards_mod.STRIKE_D is d.STRIKE_D
     assert cards_mod.STRIKE_D.name == "Strike"
     assert cards_mod.STRIKE_D is not cards_mod.STRIKE
@@ -636,9 +636,10 @@ def test_turbo_energy_and_void():
     bc.player.energy = 3
     bc.play_card(0)
     assert bc.player.energy == 5  # 3 - 0 + 2
-    # 不消耗：自身落弃牌堆，Void 洗入其后
-    assert pile_names(bc, bc.cards.discard_pile) == ["TURBO", "Void"]
-    assert bc.cards.discard_pile[1].card is VOID
+    # 不消耗：效果动作（Void 落弃牌堆）先于出牌收尾，自身最后落堆
+    #（对齐本体 UseCardAction 晚于 MakeTempCardInDiscardAction）
+    assert pile_names(bc, bc.cards.discard_pile) == ["Void", "TURBO"]
+    assert bc.cards.discard_pile[0].card is VOID
     assert pile_names(bc, bc.cards.exhaust_pile) == []
 
 
@@ -647,7 +648,7 @@ def test_turbo_upgraded_3_energy():
     setup_hand_upgraded(bc, TURBO)
     bc.play_card(0)
     assert bc.player.energy == 6  # 3 + 3
-    assert pile_names(bc, bc.cards.discard_pile) == ["TURBO", "Void"]
+    assert pile_names(bc, bc.cards.discard_pile) == ["Void", "TURBO"]
 
 
 # ---- 非普通 36 张 ----
@@ -1043,8 +1044,9 @@ def test_overclock_draw_and_burn():
     setup_hand(bc, OVERCLOCK)
     bc.play_card(0)
     assert len(bc.cards.hand) == 2
-    assert pile_names(bc, bc.cards.discard_pile) == ["Overclock", "Burn"]
-    assert bc.cards.discard_pile[1].card is BURN
+    # Burn 为效果动作先落堆，Overclock 出牌收尾最后落（对齐本体）
+    assert pile_names(bc, bc.cards.discard_pile) == ["Burn", "Overclock"]
+    assert bc.cards.discard_pile[0].card is BURN
 
 
 def test_overclock_upgraded_draw_3():
@@ -1053,7 +1055,7 @@ def test_overclock_upgraded_draw_3():
     setup_hand_upgraded(bc, OVERCLOCK)
     bc.play_card(0)
     assert len(bc.cards.hand) == 3
-    assert pile_names(bc, bc.cards.discard_pile) == ["Overclock", "Burn"]
+    assert pile_names(bc, bc.cards.discard_pile) == ["Burn", "Overclock"]
 
 
 def test_recycle_exhaust_for_energy():
@@ -1151,7 +1153,8 @@ def test_scrape_draw_and_discard_nonzero():
     bc.play_card(0)
     assert m.hp == hp0 - 7
     assert pile_names(bc, bc.cards.hand) == ["Claw", "Claw"]  # 0 费保留
-    assert pile_names(bc, bc.cards.discard_pile) == ["Scrape", "Strike", "Strike"]
+    # 弃牌为效果动作先落堆，Scrape 出牌收尾最后落（对齐本体）
+    assert pile_names(bc, bc.cards.discard_pile) == ["Strike", "Strike", "Scrape"]
 
 
 def test_scrape_upgraded_10_damage_5_draw():
@@ -1165,7 +1168,7 @@ def test_scrape_upgraded_10_damage_5_draw():
     bc.play_card(0)
     assert m.hp == hp0 - 10
     assert pile_names(bc, bc.cards.hand) == ["Claw"] * 4
-    assert pile_names(bc, bc.cards.discard_pile) == ["Scrape", "Strike"]
+    assert pile_names(bc, bc.cards.discard_pile) == ["Strike", "Scrape"]
 
 
 def test_self_repair_slot():

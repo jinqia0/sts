@@ -47,7 +47,7 @@
 与包结构的关系：本文件为 Silent 卡唯一正式定义，经包 __init__
 eager re-export 暴露；CardDef 取自 _base.py，_strike_play 复用自
 ironclad.py。STRIKE_S/DEFEND_S 沿用卡名 "Strike"/"Defend"
-（CARD_INDEX 按名去重，观测层无冲突）。
+（观测词表按 "模块:常量名" 身份区分，sts/vocab.py，同名跨职业不冲突）。
 """
 
 from __future__ import annotations
@@ -150,13 +150,13 @@ def _shiv_play(bc: BattleContext, item: CardQueueItem) -> None:
     bc.add_to_bot(Actions.attack_enemy(item.target, dmg))
 
 
-STRIKE_S = CardDef("Strike", "打击", 1, "Attack", "造成 6 点伤害。（升级 9 点）", True, False, _strike_play)
-DEFEND_S = CardDef("Defend", "防御", 1, "Skill", "获得 5 点格挡。（升级 8 点）", False, False, _defend_s_play)
-NEUTRALIZE = CardDef("Neutralize", "中和", 0, "Attack", "造成 3 点伤害。施加 1 层虚弱。（升级 4 伤 2 弱）",
+STRIKE_S = CardDef("Strike", "打击", 1, "Attack", "造成 6 点伤害。", True, False, _strike_play)
+DEFEND_S = CardDef("Defend", "防御", 1, "Skill", "获得 5 点格挡。", False, False, _defend_s_play)
+NEUTRALIZE = CardDef("Neutralize", "中和", 0, "Attack", "造成 3 点伤害。\n给予 1 层虚弱。",
                      True, False, _neutralize_play)
-SURVIVOR = CardDef("Survivor", "幸存者", 1, "Skill", "获得 8 点格挡。弃 1 张牌。（升级 11 格挡）",
+SURVIVOR = CardDef("Survivor", "生存者", 1, "Skill", "获得 8 点格挡。\n丢弃一张牌。",
                    False, False, _survivor_play)
-SHIV = CardDef("Shiv", "袖剑", 0, "Attack", "造成 4 点伤害。消耗。（升级 6 点）", True, True, _shiv_play)
+SHIV = CardDef("Shiv", "小刀", 0, "Attack", "造成 4 点伤害。\n消耗。", True, True, _shiv_play)
 
 
 # ============================================================
@@ -322,43 +322,43 @@ def _sucker_punch_play(bc: BattleContext, item: CardQueueItem) -> None:
     bc.add_to_bot(Actions.debuff_enemy(item.target, MonsterStatus.WEAK, 2 if up else 1, False))
 
 
-ACROBATICS = CardDef("Acrobatics", "杂技", 1, "Skill", "抽 3 张牌。弃 1 张牌。（升级抽 4 张）",
+ACROBATICS = CardDef("Acrobatics", "杂技", 1, "Skill", "抽 3 张牌。\n丢弃 1 张牌。",
                      False, False, _acrobatics_play)
-BACKFLIP = CardDef("Backflip", "后空翻", 1, "Skill", "获得 5 点格挡。抽 2 张牌。（升级 8 格挡）",
+BACKFLIP = CardDef("Backflip", "后空翻", 1, "Skill", "获得 5 点格挡。\n抽 2 张牌。",
                    False, False, _backflip_play)
-BANE = CardDef("Bane", "灾祸", 1, "Attack", "造成 7 点伤害。若敌人有中毒，再造成 7 点伤害。（升级 10/10）",
+BANE = CardDef("Bane", "灾祸", 1, "Attack", "造成 7 点伤害。\n如果敌人有中毒状态，则再次造成 7 点伤害。",
                True, False, _bane_play)
-BLADE_DANCE = CardDef("Blade Dance", "刀舞", 1, "Skill", "加 3 张袖剑到手牌。（升级 4 张）",
+BLADE_DANCE = CardDef("Blade Dance", "刀刃之舞", 1, "Skill", "增加 3 张小刀到你的手牌。",
                      False, False, _blade_dance_play)
-CLOAK_AND_DAGGER = CardDef("Cloak and Dagger", "暗斗篷", 1, "Skill", "获得 6 点格挡。加 1 张袖剑到手牌。（升级 2 张）",
+CLOAK_AND_DAGGER = CardDef("Cloak and Dagger", "斗篷与匕首", 1, "Skill", "获得 6 点格挡。\n增加 1 张小刀到你的手牌。",
                           False, False, _cloak_and_dagger_play)
-DAGGER_SPRAY = CardDef("Dagger Spray", "飞刀溅射", 1, "Attack", "对所有敌人造成 4 点伤害两次。（升级 6 点）",
+DAGGER_SPRAY = CardDef("Dagger Spray", "匕首雨", 1, "Attack", "对所有敌人造成 4 点伤害两次。",
                        False, False, _dagger_spray_play)
-DAGGER_THROW = CardDef("Dagger Throw", "飞刀投掷", 1, "Attack", "造成 9 点伤害。抽 1 张牌。弃 1 张牌。（升级 12 伤）",
+DAGGER_THROW = CardDef("Dagger Throw", "投掷匕首", 1, "Attack", "造成 9 点伤害。\n抽一张牌。\n丢弃一张牌。",
                        True, False, _dagger_throw_play)
-DEADLY_POISON = CardDef("Deadly Poison", "致命毒素", 1, "Skill", "施加 5 层中毒。（升级 7 层）",
+DEADLY_POISON = CardDef("Deadly Poison", "致命毒药", 1, "Skill", "给予 5 层中毒。",
                        True, False, _deadly_poison_play)
-DEFLECT = CardDef("Deflect", "偏转", 0, "Skill", "获得 4 点格挡。（升级 7 点）",
+DEFLECT = CardDef("Deflect", "偏折", 0, "Skill", "获得 4 点格挡。",
                   False, False, _deflect_play)
-DODGE_AND_ROLL = CardDef("Dodge and Roll", "闪躲翻滚", 1, "Skill", "获得 4 点格挡。下回合再获得 4 点格挡。（升级 6/6）",
+DODGE_AND_ROLL = CardDef("Dodge and Roll", "闪躲翻滚", 1, "Skill", "获得 4 点格挡。\n在下一回合获得 4 点格挡。",
                          False, False, _dodge_and_roll_play)
-FLYING_KNEE = CardDef("Flying Knee", "飞膝", 1, "Attack", "造成 8 点伤害。下回合获得 1 点能量。（升级 11 伤）",
+FLYING_KNEE = CardDef("Flying Knee", "飞膝", 1, "Attack", "造成 8 点伤害。\n在下一回合获得 1 点能量。",
                       True, False, _flying_knee_play)
-OUTMANEUVER = CardDef("Outmaneuver", "运筹", 1, "Skill", "下回合获得 2 点能量。（升级 3 点）",
+OUTMANEUVER = CardDef("Outmaneuver", "抢占先机", 1, "Skill", "下一回合\n获得 2 点能量。",
                       False, False, _outmaneuver_play)
-PIERCING_WAIL = CardDef("Piercing Wail", "刺耳哀嚎", 1, "Skill", "所有敌人本回合失去 6 点力量。消耗。（升级 8 点）",
+PIERCING_WAIL = CardDef("Piercing Wail", "尖啸", 1, "Skill", "所有敌人失去 6 力量 1 回合。\n消耗。",
                         False, True, _piercing_wail_play)
-POISONED_STAB = CardDef("Poisoned Stab", "毒刃", 1, "Attack", "造成 6 点伤害。施加 3 层中毒。（升级 8 伤 4 层）",
+POISONED_STAB = CardDef("Poisoned Stab", "带毒刺击", 1, "Attack", "造成 6 点伤害。\n给予 3 层中毒。",
                         True, False, _poisoned_stab_play)
-PREPARED = CardDef("Prepared", "预备", 0, "Skill", "抽 1 张牌。弃 1 张牌。（升级各 2 张）",
+PREPARED = CardDef("Prepared", "早有准备", 0, "Skill", "抽 1 张牌。\n丢弃 1 张牌。",
                    False, False, _prepared_play)
-QUICK_SLASH = CardDef("Quick Slash", "快斩", 1, "Attack", "造成 8 点伤害。抽 1 张牌。（升级 12 伤）",
+QUICK_SLASH = CardDef("Quick Slash", "快斩", 1, "Attack", "造成 8 点伤害。\n抽 1 张牌。",
                       True, False, _quick_slash_play)
-SLICE = CardDef("Slice", "切割", 0, "Attack", "造成 6 点伤害。（升级 9 点）",
+SLICE = CardDef("Slice", "切割", 0, "Attack", "造成 6 点伤害。",
                 True, False, _slice_play)
-SNEAKY_STRIKE = CardDef("Sneaky Strike", "鬼击", 2, "Attack", "造成 12 点伤害。若本回合弃过牌，获得 2 点能量。（升级 16 伤）",
+SNEAKY_STRIKE = CardDef("Sneaky Strike", "隐秘打击", 2, "Attack", "造成 12 点伤害。\n如果你在这回合丢弃过牌，获得 2 点能量。",
                         True, False, _sneaky_strike_play)
-SUCKER_PUNCH = CardDef("Sucker Punch", "偷拳", 1, "Attack", "造成 7 点伤害。施加 1 层虚弱。（升级 9 伤 2 层）",
+SUCKER_PUNCH = CardDef("Sucker Punch", "突然一拳", 1, "Attack", "造成 7 点伤害。\n给予 1 层虚弱。",
                        True, False, _sucker_punch_play)
 
 
@@ -692,80 +692,80 @@ def _well_laid_plans_play(bc: BattleContext, item: CardQueueItem) -> None:
     bc.player.special["wlp"] = 2 if item.card.upgraded else 1
 
 
-ACCURACY = CardDef("Accuracy", "精准", 1, "Power", "袖剑造成 4 点额外伤害。（升级 6 点）",
+ACCURACY = CardDef("Accuracy", "精准", 1, "Power", "小刀造成的伤害增加 4。",
                    False, False, _accuracy_play)
-ALL_OUT_ATTACK = CardDef("All-Out Attack", "全力一击", 1, "Attack", "对所有敌人造成 10 点伤害。随机弃 1 张牌。（升级 14 伤）",
+ALL_OUT_ATTACK = CardDef("All-Out Attack", "全力攻击", 1, "Attack", "对所有敌人造成 10 点伤害。\n丢弃一张随机手牌。",
                          False, False, _all_out_attack_play)
-BACKSTAB = CardDef("Backstab", "背刺", 0, "Attack", "固有。造成 11 点伤害。消耗。（升级 15 伤）",
+BACKSTAB = CardDef("Backstab", "背刺", 0, "Attack", "造成 11 点伤害。\n固有。\n消耗。",
                    True, True, _backstab_play, innate=True)
-BLUR = CardDef("Blur", "模糊", 1, "Skill", "获得 5 点格挡。格挡在下回合开始时不消失。（升级 8 格挡）",
+BLUR = CardDef("Blur", "残影", 1, "Skill", "获得 5 点格挡。\n你的下一回合开始时格挡不会消失。",
                False, False, _blur_play)
-BOUNCING_FLASK = CardDef("Bouncing Flask", "弹跳药瓶", 2, "Skill", "对随机敌人施加 3 层中毒，共 3 次。（升级 4 次）",
+BOUNCING_FLASK = CardDef("Bouncing Flask", "弹跳药瓶", 2, "Skill", "随机给予敌人 3 层中毒  3 次。",
                          False, False, _bouncing_flask_play)
-CALCULATED_GAMBLE = CardDef("Calculated Gamble", "算计", 0, "Skill", "弃掉所有手牌，抽等量的牌。消耗。（升级不消耗）",
+CALCULATED_GAMBLE = CardDef("Calculated Gamble", "计算下注", 0, "Skill", "丢弃所有手牌。\n然后抽相同数量张牌。\n消耗。",
                             False, False, _calculated_gamble_play)
-CALTROPS = CardDef("Caltrops", "铁蒺藜", 1, "Power", "受到攻击时对攻击者反弹 3 点伤害。（升级 5 点）",
+CALTROPS = CardDef("Caltrops", "铁蒺藜", 1, "Power", "每当你被攻击时，对攻击者造成 3 点伤害。",
                    False, False, _caltrops_play)
-CATALYST = CardDef("Catalyst", "催化剂", 1, "Skill", "使敌人的中毒翻倍。消耗。（升级：三倍）",
+CATALYST = CardDef("Catalyst", "催化剂", 1, "Skill", "将一名敌人的中毒层数翻倍。\n消耗。",
                    True, True, _catalyst_play)
-CHOKE = CardDef("Choke", "窒息", 2, "Attack", "造成 12 点伤害。本回合你每打出一张牌，该敌人失去 3 点 HP。（升级 5 点）",
+CHOKE = CardDef("Choke", "勒脖", 2, "Attack", "造成 12 点伤害。\n你在这个回合内每打出一张牌，该名敌人都会失去 3 点生命。",
                 True, False, _choke_play)
-CONCENTRATE = CardDef("Concentrate", "凝神", 0, "Skill", "弃 3 张牌。获得 2 点能量。（升级弃 2 张）",
+CONCENTRATE = CardDef("Concentrate", "全神贯注", 0, "Skill", "丢弃 3 张牌。\n获得 2 点能量。",
                       False, False, _concentrate_play)
-CRIPPLING_CLOUD = CardDef("Crippling Cloud", "致残云", 2, "Skill", "对所有敌人施加 4 层中毒和 2 层虚弱。消耗。（升级 7 层中毒）",
+CRIPPLING_CLOUD = CardDef("Crippling Cloud", "致残毒云", 2, "Skill", "给予所有敌人 4 层中毒和 2 层虚弱。\n消耗。",
                           False, True, _crippling_cloud_play)
-DASH = CardDef("Dash", "冲刺", 2, "Attack", "获得 10 点格挡。造成 10 点伤害。（升级 13/13）",
+DASH = CardDef("Dash", "冲刺", 2, "Attack", "获得 10 点格挡。\n造成 10 点伤害。",
                True, False, _dash_play)
-DISTRACTION = CardDef("Distraction", "障眼法", 1, "Skill", "随机 1 张技能牌加入手牌，本回合 0 费。消耗。（升级费用 0）",
+DISTRACTION = CardDef("Distraction", "声东击西", 1, "Skill", "增加一张随机技能牌到你的手牌。\n这张牌在本回合耗能变为 0。\n消耗。",
                       False, True, _distraction_play, upgraded_cost=0)
 def _endless_agony_on_drawn(bc: BattleContext, inst) -> None:
     # 引擎 on_drawn_effect 钩子（已接线）：抽到时复制 1 张入手（保留升级态）
     bc.cards.create_temp_card_in_hand(inst.card, inst.upgraded)
 
 
-ENDLESS_AGONY = CardDef("Endless Agony", "无尽痛苦", 0, "Attack", "抽到这张牌时，将一张它的副本加入手牌。造成 4 点伤害。消耗。（升级 6 伤）",
+ENDLESS_AGONY = CardDef("Endless Agony", "无尽苦痛", 0, "Attack", "造成 4 点伤害。\n每当你抽到这张牌，都增加一张其复制品到你的手牌。\n消耗。",
                         True, True, _endless_agony_play, on_drawn_effect=_endless_agony_on_drawn)
-ESCAPE_PLAN = CardDef("Escape Plan", "逃跑计划", 0, "Skill", "抽 1 张牌。若抽到的是技能牌，获得 3 点格挡。（升级 5 格挡）",
+ESCAPE_PLAN = CardDef("Escape Plan", "逃脱计划", 0, "Skill", "抽 1 张牌。\n如果抽到的是技能牌，获得 3 点格挡。",
                       False, False, _escape_plan_play)
 def _eviscerate_cost(bc: BattleContext, inst) -> int:
     return max(0, 3 - bc.player.cards_discarded_this_turn)
 
 
-EVISCERATE = CardDef("Eviscerate", "剜割", 3, "Attack", "本回合每弃 1 张牌费用 -1。造成 7 点伤害 3 次。（升级 9 伤）",
+EVISCERATE = CardDef("Eviscerate", "内脏切除", 3, "Attack", "你在这个回合内每丢弃一张牌，耗能就减少 1 点能量。\n造成 7 点伤害三次。",
                      True, False, _eviscerate_play, dynamic_cost=_eviscerate_cost)
-EXPERTISE = CardDef("Expertise", "专长", 1, "Skill", "抽牌直到手牌有 6 张。（升级 7 张）",
+EXPERTISE = CardDef("Expertise", "独门技术", 1, "Skill", "抽牌直到你的手牌有 6 张牌。",
                     False, False, _expertise_play)
-FINISHER = CardDef("Finisher", "终结", 1, "Attack", "本回合每打出过 1 张攻击牌，造成 6 点伤害。（升级 8 点）",
+FINISHER = CardDef("Finisher", "终结技", 1, "Attack", "你在这个回合内每打出过一张攻击牌，就造成一次 6 点伤害。",
                    True, False, _finisher_play)
-FLECHETTES = CardDef("Flechettes", "飞镖", 1, "Attack", "手中每有 1 张技能牌，造成 4 点伤害。（升级 6 点）",
+FLECHETTES = CardDef("Flechettes", "飞镖", 1, "Attack", "手牌中每有一张技能牌，造成 4 点伤害。",
                      True, False, _flechettes_play)
-FOOTWORK = CardDef("Footwork", "步伐", 1, "Power", "获得 2 点敏捷。（升级 3 点）",
+FOOTWORK = CardDef("Footwork", "灵动步法", 1, "Power", "获得 2 点敏捷。",
                    False, False, _footwork_play)
-HEEL_HOOK = CardDef("Heel Hook", "脚跟勾", 1, "Attack", "造成 5 点伤害。若敌人有虚弱，获得 1 点能量并抽 1 张牌。（升级 8 伤）",
+HEEL_HOOK = CardDef("Heel Hook", "足跟勾", 1, "Attack", "造成 5 点伤害。\n如果敌人有虚弱状态，\n获得 1 点能量并且\n抽 1 张牌。",
                     True, False, _heel_hook_play)
-INFINITE_BLADES = CardDef("Infinite Blades", "无限刀刃", 1, "Power", "回合开始时加 1 张袖剑到手牌。（升级：固有）",
+INFINITE_BLADES = CardDef("Infinite Blades", "无限刀刃", 1, "Power", "在你的回合开始时，增加一张小刀到你的手牌。",
                           False, False, _infinite_blades_play, innate_when_upgraded=True)
-LEG_SWEEP = CardDef("Leg Sweep", "扫腿", 2, "Skill", "施加 2 层虚弱。获得 11 点格挡。（升级 3 层 / 14 格挡）",
+LEG_SWEEP = CardDef("Leg Sweep", "扫腿", 2, "Skill", "给予 2 层虚弱 .\n获得 11 点格挡。",
                     True, False, _leg_sweep_play)
-MASTERFUL_STAB = CardDef("Masterful Stab", "大师刺", 0, "Attack", "本场战斗你每次失去 HP，此牌费用 +1。造成 12 点伤害。（升级 16 伤）",
+MASTERFUL_STAB = CardDef("Masterful Stab", "精巧刺击", 0, "Attack", "造成 12 点伤害。\n你每次受到伤害，这张牌的耗能增加 1。",
                          True, False, _masterful_stab_play, cost_delta_on_damage=1)
-NOXIOUS_FUMES = CardDef("Noxious Fumes", "剧毒瘴气", 1, "Power", "回合开始时对所有敌人施加 2 层中毒。（升级 3 层）",
+NOXIOUS_FUMES = CardDef("Noxious Fumes", "毒雾", 1, "Power", "在你的回合开始时，给予所有敌人 2 层中毒。",
                         False, False, _noxious_fumes_play)
-PREDATOR = CardDef("Predator", "掠食者", 2, "Attack", "造成 15 点伤害。下回合多抽 2 张牌。（升级 20 伤）",
+PREDATOR = CardDef("Predator", "猎杀者", 2, "Attack", "造成 15 点伤害。\n在下一回合多抽 2 张牌。",
                    True, False, _predator_play)
-REFLEX = CardDef("Reflex", "反射", 0, "Skill", "不可打出。从手中被弃置时，抽 2 张牌。（升级 3 张）",
+REFLEX = CardDef("Reflex", "本能反应", 0, "Skill", "不能被打出。\n如果这张牌从你的手牌中被丢弃，抽 2 张牌。",
                  False, False, _unplayable_noop, unplayable=True, on_discard_effect=_reflex_on_discard)
-RIDDLE_WITH_HOLES = CardDef("Riddle with Holes", "谜之孔", 2, "Attack", "造成 3 点伤害 5 次。（升级 4 伤）",
+RIDDLE_WITH_HOLES = CardDef("Riddle with Holes", "千穿百刺", 2, "Attack", "造成 3 点伤害 5 次。",
                            True, False, _riddle_with_holes_play)
-SETUP = CardDef("Setup", "布置", 1, "Skill", "将 1 张手牌置于抽牌堆顶。它 0 费直到被打出。（升级费用 0）",
+SETUP = CardDef("Setup", "部署", 1, "Skill", "将手牌中的一张牌放到抽牌堆的顶部。\n并且在其被打出之前，其耗能变为 0。",
                 False, False, _setup_play, upgraded_cost=0)
-SKEWER = CardDef("Skewer", "串刺", -1, "Attack", "X 费：造成 7 点伤害 X 次。（升级 10 伤）",
+SKEWER = CardDef("Skewer", "串刺", -1, "Attack", "造成 7 点伤害X次。",
                  True, False, _skewer_play, x_cost=True)
-TACTICIAN = CardDef("Tactician", "谋士", 0, "Skill", "不可打出。从手中被弃置时，获得 1 点能量。（升级 2 点）",
+TACTICIAN = CardDef("Tactician", "战术大师", 0, "Skill", "不能被打出。\n如果这张牌从你的手牌中被丢弃，获得 1 点能量。",
                     False, False, _unplayable_noop, unplayable=True, on_discard_effect=_tactician_on_discard)
-TERROR = CardDef("Terror", "恐惧", 1, "Skill", "施加 99 层易伤。消耗。（升级费用 0）",
+TERROR = CardDef("Terror", "恐怖", 1, "Skill", "给予 99 层易伤。\n消耗。",
                  True, True, _terror_play, upgraded_cost=0)
-WELL_LAID_PLANS = CardDef("Well-Laid Plans", "周密计划", 1, "Power", "回合结束时保留至多 1 张牌。（升级 2 张）",
+WELL_LAID_PLANS = CardDef("Well-Laid Plans", "计划妥当", 1, "Power", "在你的回合结束时，保留最多 1 张牌。",
                           False, False, _well_laid_plans_play)
 
 
@@ -943,41 +943,41 @@ def _wraith_form_play(bc: BattleContext, item: CardQueueItem) -> None:
         wraith_form_dex=bc2.player.special.get("wraith_form_dex", 0) + 1)))
 
 
-A_THOUSAND_CUTS = CardDef("A Thousand Cuts", "千刀万剐", 2, "Power", "你每打出一张牌，对所有敌人造成 1 点伤害。（升级 2 点）",
+A_THOUSAND_CUTS = CardDef("A Thousand Cuts", "凌迟", 2, "Power", "你每打出一张牌，就对所有敌人造成 1 点伤害。",
                           False, False, _thousand_cuts_play)
-ADRENALINE = CardDef("Adrenaline", "肾上腺素", 0, "Skill", "获得 1 点能量。抽 2 张牌。消耗。（升级 2 点能量）",
+ADRENALINE = CardDef("Adrenaline", "肾上腺素", 0, "Skill", "获得 1 点能量。\n抽 2 张牌。\n消耗。",
                      False, True, _adrenaline_play)
-AFTER_IMAGE = CardDef("After Image", "残像", 1, "Power", "你每打出一张牌，获得 1 点格挡。（升级：固有）",
+AFTER_IMAGE = CardDef("After Image", "余像", 1, "Power", "你每打出一张牌，都获得 1 点格挡。",
                       False, False, _after_image_play, innate_when_upgraded=True)
-BULLET_TIME = CardDef("Bullet Time", "子弹时间", 3, "Skill", "本回合不能再抽牌。手牌费用本轮全部降为 0。（升级费用 2）",
+BULLET_TIME = CardDef("Bullet Time", "子弹时间", 3, "Skill", "你在本回合内不能再抽牌。你手牌中的所有牌在本回合的耗能变为 0 点。",
                       False, False, _bullet_time_play, upgraded_cost=2)
-BURST = CardDef("Burst", "爆发", 1, "Skill", "本回合你的下一张技能牌结算两次。（升级：下 2 张）",
+BURST = CardDef("Burst", "爆发", 1, "Skill", "在这个回合，你打出的下一张技能牌会打出两次。",
                 False, False, _burst_play)
-CORPSE_EXPLOSION = CardDef("Corpse Explosion", "尸体爆炸", 2, "Skill", "施加 6 层中毒。该敌人死亡时，对所有敌人造成等同其最大 HP 的伤害。（升级 9 层）",
+CORPSE_EXPLOSION = CardDef("Corpse Explosion", "尸爆术", 2, "Skill", "给予 6 层中毒。\n当这名敌人死亡时，对所有敌人造成等于其最大生命值的伤害。",
                            True, False, _corpse_explosion_play)
-DIE_DIE_DIE = CardDef("Die Die Die", "死死死", 1, "Attack", "对所有敌人造成 13 点伤害。消耗。（升级 17 伤）",
+DIE_DIE_DIE = CardDef("Die Die Die", "死吧死吧死吧", 1, "Attack", "对所有敌人造成 13 点伤害。\n消耗。",
                       False, True, _die_die_die_play)
-DOPPELGANGER = CardDef("Doppelganger", "分身", -1, "Skill", "X 费：下回合抽 X 张牌并获得 X 点能量。消耗。（升级 X+1）",
+DOPPELGANGER = CardDef("Doppelganger", "双重存在", -1, "Skill", "下一回合，抽X张牌，获得X 1 点能量。\n消耗。",
                        False, True, _doppelganger_play, x_cost=True)
-ENVENOM = CardDef("Envenom", "淬毒", 2, "Power", "你的攻击造成未被格挡的伤害时，施加 1 层中毒。（升级费用 1）",
+ENVENOM = CardDef("Envenom", "涂毒", 2, "Power", "每有一次攻击造成未被格挡的伤害，就给予 1 层中毒。",
                   False, False, _envenom_play, upgraded_cost=1)
-GLASS_KNIFE = CardDef("Glass Knife", "玻璃刀", 1, "Attack", "造成 8 点伤害 2 次。每次打出，此牌本场伤害 -2。（升级 12 伤）",
+GLASS_KNIFE = CardDef("Glass Knife", "玻璃刀刃", 1, "Attack", "造成 8 点伤害两次。\n这张牌每被打出一次，在本场战斗中其基础伤害减少 2。",
                       True, False, _glass_knife_play)
-GRAND_FINALE = CardDef("Grand Finale", "大终章", 0, "Attack", "只有抽牌堆为空时才能打出。对所有敌人造成 50 点伤害。（升级 60 伤）",
+GRAND_FINALE = CardDef("Grand Finale", "华丽收场", 0, "Attack", "只有当抽牌堆中没有牌时才能打出。\n对所有敌人造成 50 点伤害。",
                        False, False, _grand_finale_play, play_condition=_grand_finale_condition)
-MALAISE = CardDef("Malaise", "萎靡", -1, "Skill", "X 费：敌人失去 X 点力量，施加 X 层虚弱。消耗。（升级 X+1）",
+MALAISE = CardDef("Malaise", "萎靡", -1, "Skill", "敌人失去X点力量，给予X层虚弱。\n消耗。",
                   True, True, _malaise_play, x_cost=True)
-NIGHTMARE = CardDef("Nightmare", "梦魇", 3, "Skill", "选择一张牌。下回合将 3 张它的副本加入手牌。消耗。（升级费用 2）",
+NIGHTMARE = CardDef("Nightmare", "夜魇", 3, "Skill", "选择一张牌，\n在下一回合，将 3 份这张牌的复制品放入你的手牌中。消耗。",
                    False, True, _nightmare_play, upgraded_cost=2)
-PHANTASMAL_KILLER = CardDef("Phantasmal Killer", "幻影杀手", 1, "Skill", "下回合你的攻击伤害翻倍。（升级费用 0）",
+PHANTASMAL_KILLER = CardDef("Phantasmal Killer", "幻影杀手", 1, "Skill", "在你的下个回合，你所有的攻击伤害翻倍。",
                            False, False, _phantasmal_killer_play, upgraded_cost=0)
-STORM_OF_STEEL = CardDef("Storm of Steel", "钢铁风暴", 1, "Skill", "弃掉所有手牌。每弃 1 张，加 1 张袖剑到手牌。（升级：加 Shiv+）",
+STORM_OF_STEEL = CardDef("Storm of Steel", "钢铁风暴", 1, "Skill", "丢弃所有手牌。\n每丢弃一张牌，在你的手牌中增加一张小刀。",
                         False, False, _storm_of_steel_play)
-TOOLS_OF_THE_TRADE = CardDef("Tools of the Trade", "行业工具", 1, "Power", "回合开始时抽 1 张牌并弃 1 张牌。（升级费用 0）",
+TOOLS_OF_THE_TRADE = CardDef("Tools of the Trade", "必备工具", 1, "Power", "在你的回合开始时，抽 1 张牌，丢弃 1 张牌。",
                              False, False, _tools_of_the_trade_play, upgraded_cost=0)
-UNLOAD = CardDef("Unload", "倾泻", 1, "Attack", "造成 14 点伤害。弃掉手中所有非攻击牌。（升级 18 伤）",
+UNLOAD = CardDef("Unload", "乾坤一掷", 1, "Attack", "造成 14 点伤害。\n丢弃所有非攻击牌。",
                  True, False, _unload_play)
-WRAITH_FORM = CardDef("Wraith Form", "巫妖形态", 3, "Power", "获得 2 层无实体。回合结束时失去 1 点敏捷。（升级 3 层）",
+WRAITH_FORM = CardDef("Wraith Form", "幽魂形态", 3, "Power", "获得 2 层无实体。\n在每回合结束时失去 1 点敏捷。",
                      False, False, _wraith_form_play)
 
 
@@ -993,7 +993,7 @@ def _venomology_play(bc: BattleContext, item: CardQueueItem) -> None:
 
 
 VENOLOGY = CardDef("Alchemize", "炼制药水", 1, "Skill",
-                   "获得一瓶随机药水。消耗。（升级费用 0）",
+                   "获得一瓶随机药水。\n消耗。",
                    False, True, _venomology_play, upgraded_cost=0)
 
 

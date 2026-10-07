@@ -162,7 +162,7 @@ def test_watcher_reexport_via_cards_module():
     assert cards_mod.ERUPTION is w.ERUPTION
     assert cards_mod.WORSHIP is w.WORSHIP
     assert cards_mod.MIRACLE is w.MIRACLE
-    # 与铁甲/静默的 Strike/Defend 不同对象，卡名刻意同名（CARD_INDEX 按名去重）
+    # 与铁甲/静默的 Strike/Defend 不同对象，卡名刻意同名（观测词表按 "模块:常量名" 身份区分）
     assert cards_mod.STRIKE_W is w.STRIKE_W
     assert cards_mod.STRIKE_W.name == "Strike"
     assert cards_mod.STRIKE_W is not cards_mod.STRIKE
@@ -1099,11 +1099,15 @@ def test_foreign_influence_choose_one():
     cands = bc.card_select_info.candidates
     assert len(cands) == 3
     assert all(c.ctype == "Attack" for c in cands)
-    assert pile_names(bc, bc.cards.exhaust_pile) == ["Foreign Influence"]
+    # 选卡挂起期间打出牌尚在 limbo（出牌收尾动作排在选卡动作之后），
+    # 未落消耗堆（对齐本体 UseCardAction 晚于选卡动作）
+    assert pile_names(bc, bc.cards.exhaust_pile) == []
     bc.choose_card(0)
     chosen = bc.cards.hand[-1]
     assert chosen.card.ctype == "Attack"
     assert chosen.cost_for_turn == -1  # 基础版不改费
+    # 选卡完成后收尾动作执行，Foreign Influence 落消耗堆
+    assert pile_names(bc, bc.cards.exhaust_pile) == ["Foreign Influence"]
 
 
 def test_foreign_influence_upgraded_zero_cost():
@@ -1205,8 +1209,9 @@ def test_meditate_retains_discard_card_and_ends_turn():
     bc.cards.discard_pile.append(bc.cards.instantiate(STRIKE_W))
     setup_hand(bc, MEDITATE)
     bc.play_card(0)
-    assert bc.input_state == InputState.CARD_SELECT
-    bc.choose_card(0)
+    # 候选只有弃牌堆的 1 张（打出的 Meditate 收尾前在 limbo、不在弃牌堆，
+    # 对齐本体 MeditateAction 的弃牌堆候选池）——单候选直执（对齐本体
+    # MeditateAction.java:36 "张数≤选择数直接全选"），无需手动选卡
     assert "Strike" in pile_names(bc, bc.cards.hand)
     assert bc.player.stance == Stance.CALM
     assert bc.turn == 2  # 结束回合

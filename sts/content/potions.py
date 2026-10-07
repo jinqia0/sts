@@ -404,49 +404,49 @@ def _ambrosia_use(bc, target, potency, choice):
 # ============================================================
 
 BLOCK_POTION = PotionDef("Block Potion", "Block Potion", "格挡药水", "获得 12 点格挡。", 12, use=_block_potion_use)
-DEXTERITY_POTION = PotionDef("Dexterity Potion", "Dexterity Potion", "灵巧药水", "获得 2 层敏捷。", 2, use=_dexterity_potion_use)
+DEXTERITY_POTION = PotionDef("Dexterity Potion", "Dexterity Potion", "敏捷药水", "获得 2 点敏捷。", 2, use=_dexterity_potion_use)
 ENERGY_POTION = PotionDef("Energy Potion", "Energy Potion", "能量药水", "获得 2 点能量。", 2, use=_energy_potion_use)
 EXPLOSIVE_POTION = PotionDef("Explosive Potion", "Explosive Potion", "爆炸药水", "对所有敌人造成 10 点伤害。", 10, use=_explosive_potion_use)
-FIRE_POTION = PotionDef("Fire Potion", "Fire Potion", "火焰药水", "对一个敌人造成 20 点伤害。", 20, targeting=True, use=_fire_potion_use)
-STRENGTH_POTION = PotionDef("Strength Potion", "Strength Potion", "力量药水", "获得 2 层力量。", 2, use=_strength_potion_use)
+FIRE_POTION = PotionDef("Fire Potion", "Fire Potion", "火焰药水", "造成 20 点伤害。", 20, targeting=True, use=_fire_potion_use)
+STRENGTH_POTION = PotionDef("Strength Potion", "Strength Potion", "力量药水", "获得 2 点力量。", 2, use=_strength_potion_use)
 SWIFT_POTION = PotionDef("Swift Potion", "Swift Potion", "迅捷药水", "抽 3 张牌。", 3, use=_swift_potion_use)
-WEAK_POTION = PotionDef("Weak Potion", "Weak Potion", "虚弱药水", "施加 3 层虚弱。", 3, targeting=True, use=_weaken_potion_use)
-FEAR_POTION = PotionDef("FearPotion", "FearPotion", "恐惧药水", "施加 3 层易伤。", 3, targeting=True, use=_fear_potion_use)
-ATTACK_POTION = PotionDef("AttackPotion", "AttackPotion", "攻击药水", "从 3 张随机攻击牌中选择 1 张加入手牌，本回合 0 费。", 1, use=_attack_potion_use)
-SKILL_POTION = PotionDef("SkillPotion", "SkillPotion", "技能药水", "从 3 张随机技能牌中选择 1 张加入手牌，本回合 0 费。", 1, use=_skill_potion_use)
-POWER_POTION = PotionDef("PowerPotion", "PowerPotion", "能力药水", "从 3 张随机能力牌中选择 1 张加入手牌，本回合 0 费。", 1, use=_power_potion_use)
-COLORLESS_POTION = PotionDef("ColorlessPotion", "ColorlessPotion", "无色药水", "从 3 张随机无色牌中选择 1 张加入手牌，本回合 0 费。", 1, use=_colorless_potion_use)
-STEROID_POTION = PotionDef("SteroidPotion", "SteroidPotion", "类固醇药水", "获得 5 层力量。回合结束失去。", 5, use=_steroid_potion_use)
-SPEED_POTION = PotionDef("SpeedPotion", "SpeedPotion", "迅捷药水", "获得 5 层敏捷。回合结束失去。", 5, use=_speed_potion_use)
-BLESSING_OF_THE_FORGE = PotionDef("BlessingOfTheForge", "BlessingOfTheForge", "熔炉的祝福", "本场战斗中升级手牌中的所有牌。", 0, use=_blessing_of_the_forge_use)
-REGEN_POTION = PotionDef("Regen Potion", "Regen Potion", "再生药水", "获得 5 层再生。", 5, use=_regen_potion_use)
-ANCIENT_POTION = PotionDef("Ancient Potion", "Ancient Potion", "远古药水", "获得 1 层人工制品。", 1, use=_ancient_potion_use)
-LIQUID_BRONZE = PotionDef("LiquidBronze", "LiquidBronze", "液态青铜", "获得 3 层荆棘。", 3, use=_liquid_bronze_use)
-GAMBLERS_BREW = PotionDef("GamblersBrew", "GamblersBrew", "赌徒特酿", "丢弃任意张牌，然后抽相同数量的牌。", 0, use=_gamblers_brew_use)
-ESSENCE_OF_STEEL = PotionDef("EssenceOfSteel", "EssenceOfSteel", "钢铁精华", "获得 4 层重甲。", 4, use=_essence_of_steel_use)
-DUPLICATION_POTION = PotionDef("DuplicationPotion", "DuplicationPotion", "复制药水", "本回合你的下一张牌将被打出两次。", 1, use=_duplication_potion_use)
-DISTILLED_CHAOS = PotionDef("DistilledChaos", "DistilledChaos", "精炼混沌", "打出你抽牌堆顶部的 3 张牌。", 3, use=_distilled_chaos_use)
-LIQUID_MEMORIES = PotionDef("LiquidMemories", "LiquidMemories", "液态记忆", "选择弃牌堆中的一张牌放入手牌，本回合 0 费。", 1, use=_liquid_memories_use)
-CULTIST_POTION = PotionDef("CultistPotion", "CultistPotion", "邪教徒药水", "在你的回合结束时获得 1 层力量。", 1, use=_cultist_potion_use)
-FRUIT_JUICE = PotionDef("Fruit Juice", "Fruit Juice", "果汁", "获得 5 点最大生命值。", 5, use=_fruit_juice_use)
-SNECKO_OIL = PotionDef("SneckoOil", "SneckoOil", "唤蛇油", "抽 5 张牌。随机化手牌费用。", 5, use=_snecko_oil_use)
-FAIRY_POTION = PotionDef("FairyPotion", "FairyPotion", "瓶中精灵", "当你要死亡时，免死并回复到 30% 最大生命值。", 30, auto_only=True, on_player_death=True)
-SMOKE_BOMB = PotionDef("SmokeBomb", "SmokeBomb", "烟雾弹", "从一场非 Boss 战斗中逃离。", 0, escape_only=True, use=_smoke_bomb_use)
-ENTROPIC_BREW = PotionDef("EntropicBrew", "EntropicBrew", "熵变酿制", "在所有空药水栏位中获得随机药水。", 0, use=_entropic_brew_use)
+WEAK_POTION = PotionDef("Weak Potion", "Weak Potion", "虚弱药水", "给予 3 层虚弱。", 3, targeting=True, use=_weaken_potion_use)
+FEAR_POTION = PotionDef("FearPotion", "FearPotion", "恐惧药水", "给予 3 层易伤。", 3, targeting=True, use=_fear_potion_use)
+ATTACK_POTION = PotionDef("AttackPotion", "AttackPotion", "攻击药水", "从 3 张随机攻击牌中选择 1 张加入你的手牌。这张牌在本回合耗能变为 0。", 1, use=_attack_potion_use)
+SKILL_POTION = PotionDef("SkillPotion", "SkillPotion", "技能药水", "从 3 张随机技能牌中选择 1 张加入你的手牌。这张牌在本回合耗能变为 0。", 1, use=_skill_potion_use)
+POWER_POTION = PotionDef("PowerPotion", "PowerPotion", "能力药水", "从 3 张随机能力牌中选择 1 张加入你的手牌。这张牌在本回合耗能变为 0。", 1, use=_power_potion_use)
+COLORLESS_POTION = PotionDef("ColorlessPotion", "ColorlessPotion", "无色药水", "从 3 张随机无色牌中选择 1 张加入你的手牌。这张牌在本回合耗能变为 0。", 1, use=_colorless_potion_use)
+STEROID_POTION = PotionDef("SteroidPotion", "SteroidPotion", "类固醇药水", "获得 5 点力量。在你的回合结束时，失去 5 点力量。", 5, use=_steroid_potion_use)
+SPEED_POTION = PotionDef("SpeedPotion", "SpeedPotion", "速度药水", "获得 5 点敏捷。在你的回合结束时，失去 5 点敏捷。", 5, use=_speed_potion_use)
+BLESSING_OF_THE_FORGE = PotionDef("BlessingOfTheForge", "BlessingOfTheForge", "熔炉的祝福", "在本场战斗中升级手牌中的所有牌。", 0, use=_blessing_of_the_forge_use)
+REGEN_POTION = PotionDef("Regen Potion", "Regen Potion", "再生药水", "获得 5 层再生。", 5, use=_regen_potion_use, rarity="uncommon")
+ANCIENT_POTION = PotionDef("Ancient Potion", "Ancient Potion", "先古药水", "获得 1 层人工制品。", 1, use=_ancient_potion_use, rarity="uncommon")
+LIQUID_BRONZE = PotionDef("LiquidBronze", "LiquidBronze", "流动铜液", "获得 3 点荆棘。", 3, use=_liquid_bronze_use, rarity="uncommon")
+GAMBLERS_BREW = PotionDef("GamblersBrew", "GamblersBrew", "赌徒特酿", "丢弃任意张牌，然后抽相同数量的牌。", 0, use=_gamblers_brew_use, rarity="uncommon")
+ESSENCE_OF_STEEL = PotionDef("EssenceOfSteel", "EssenceOfSteel", "钢之精华", "获得 4 层多层护甲。", 4, use=_essence_of_steel_use, rarity="uncommon")
+DUPLICATION_POTION = PotionDef("DuplicationPotion", "DuplicationPotion", "复制药水", "本回合你的下一张牌将被打出两次。", 1, use=_duplication_potion_use, rarity="uncommon")
+DISTILLED_CHAOS = PotionDef("DistilledChaos", "DistilledChaos", "精炼混沌", "打出你抽牌堆顶部的 3 张牌。", 3, use=_distilled_chaos_use, rarity="uncommon")
+LIQUID_MEMORIES = PotionDef("LiquidMemories", "LiquidMemories", "液态记忆", "选择弃牌堆中的一张牌放入你的手牌。这张牌在本回合的耗能变为 0。", 1, use=_liquid_memories_use, rarity="uncommon")
+CULTIST_POTION = PotionDef("CultistPotion", "CultistPotion", "邪教徒药水", "获得 1 层仪式。", 1, use=_cultist_potion_use, rarity="rare")
+FRUIT_JUICE = PotionDef("Fruit Juice", "Fruit Juice", "果汁", "获得 5 点最大生命。", 5, use=_fruit_juice_use, rarity="rare")
+SNECKO_OIL = PotionDef("SneckoOil", "SneckoOil", "异蛇之油", "抽 5 张牌。随机化你手牌的耗能。", 5, use=_snecko_oil_use, rarity="rare")
+FAIRY_POTION = PotionDef("FairyPotion", "FairyPotion", "瓶中精灵", "当你要被杀死时，免死并回复到最大生命值的 30%，丢弃这瓶药水。", 30, auto_only=True, on_player_death=True, rarity="rare")
+SMOKE_BOMB = PotionDef("SmokeBomb", "SmokeBomb", "烟雾弹", "从一场非Boss战斗中逃离，不获得任何奖励。", 0, escape_only=True, use=_smoke_bomb_use, rarity="rare")
+ENTROPIC_BREW = PotionDef("EntropicBrew", "EntropicBrew", "混沌药水", "在所有空药水栏位中获得随机药水。", 0, use=_entropic_brew_use, rarity="rare")
 
 # ---- 职业专属（随机全池包含；铁甲初始掉落池为其前 3 个 + 通用 30）----
-BLOOD_POTION = PotionDef("BloodPotion", "BloodPotion", "血瓶", "回复 20% 最大生命值。", 20, use=_blood_potion_use, rarity="class")
-ELIXIR_POTION = PotionDef("ElixirPotion", "ElixirPotion", "万灵药", "消耗任意张手牌。", 0, use=_elixir_use, rarity="class")
-HEART_OF_IRON = PotionDef("HeartOfIron", "HeartOfIron", "铁之心", "获得 6 层金属化。", 6, use=_heart_of_iron_use, rarity="class")
-POISON_POTION = PotionDef("Poison Potion", "Poison Potion", "剧毒药水", "施加 6 层中毒。", 6, targeting=True, use=_poison_potion_use, rarity="class")
-CUNNING_POTION = PotionDef("CunningPotion", "CunningPotion", "狡诈药水", "将 3 张升级的瞬步加入手牌。", 3, use=_cunning_potion_use, rarity="class")
-GHOST_IN_A_JAR = PotionDef("GhostInAJar", "GhostInAJar", "罐中幽灵", "获得 1 层无实体。", 1, use=_ghost_in_a_jar_use, rarity="class")
-FOCUS_POTION = PotionDef("FocusPotion", "FocusPotion", "专注药水", "获得 2 层聚能。", 2, use=_focus_potion_use, rarity="class")
-POTION_OF_CAPACITY = PotionDef("PotionOfCapacity", "PotionOfCapacity", "容量药水", "获得 2 个充能球栏位。", 2, use=_potion_of_capacity_use, rarity="class")
-ESSENCE_OF_DARKNESS = PotionDef("EssenceOfDarkness", "EssenceOfDarkness", "暗之精华", "每个充能球栏位生成暗球（0 球时无效果——源码怪癖）。", 1, use=_essence_of_darkness_use, rarity="class")
-BOTTLED_MIRACLE = PotionDef("BottledMiracle", "BottledMiracle", "瓶装奇迹", "将 2 张奇迹加入手牌。", 2, use=_bottled_miracle_use, rarity="class")
-STANCE_POTION = PotionDef("StancePotion", "StancePotion", "姿态药水", "进入平静或愤怒。", 0, choices=("wrath", "calm"), use=_stance_potion_use, rarity="class")
-AMBROSIA = PotionDef("Ambrosia", "Ambrosia", "神酒", "进入神威。", 2, use=_ambrosia_use, rarity="class")
+BLOOD_POTION = PotionDef("BloodPotion", "BloodPotion", "鲜血药水", "回复最大生命值的 20%。", 20, use=_blood_potion_use, rarity="common")
+ELIXIR_POTION = PotionDef("ElixirPotion", "ElixirPotion", "万灵药水", "消耗任意张手牌。", 0, use=_elixir_use, rarity="uncommon")
+HEART_OF_IRON = PotionDef("HeartOfIron", "HeartOfIron", "铁之心", "获得 6 层金属化。", 6, use=_heart_of_iron_use, rarity="rare")
+POISON_POTION = PotionDef("Poison Potion", "Poison Potion", "毒药水", "给予 6 层中毒。", 6, targeting=True, use=_poison_potion_use, rarity="common")
+CUNNING_POTION = PotionDef("CunningPotion", "CunningPotion", "狡诈药水", "增加 3 张小刀+ 到你的手牌。", 3, use=_cunning_potion_use, rarity="uncommon")
+GHOST_IN_A_JAR = PotionDef("GhostInAJar", "GhostInAJar", "罐装幽灵", "获得 1 层无实体。", 1, use=_ghost_in_a_jar_use, rarity="rare")
+FOCUS_POTION = PotionDef("FocusPotion", "FocusPotion", "集中药水", "获得 2 点集中。", 2, use=_focus_potion_use, rarity="common")
+POTION_OF_CAPACITY = PotionDef("PotionOfCapacity", "PotionOfCapacity", "扩容药水", "获得 2 个充能球栏位。", 2, use=_potion_of_capacity_use, rarity="uncommon")
+ESSENCE_OF_DARKNESS = PotionDef("EssenceOfDarkness", "EssenceOfDarkness", "暗之精华", "每个充能球栏位生成 1 个黑暗充能球。", 1, use=_essence_of_darkness_use, rarity="rare")
+BOTTLED_MIRACLE = PotionDef("BottledMiracle", "BottledMiracle", "瓶装奇迹", "增加 2 张奇迹到你的手牌。", 2, use=_bottled_miracle_use, rarity="common")
+STANCE_POTION = PotionDef("StancePotion", "StancePotion", "姿态药水", "进入平静或愤怒。", 0, choices=("wrath", "calm"), use=_stance_potion_use, rarity="uncommon")
+AMBROSIA = PotionDef("Ambrosia", "Ambrosia", "仙馔密酒", "进入神格姿态。", 2, use=_ambrosia_use, rarity="rare")
 
 ALL_POTIONS: list[PotionDef] = [
     # 通用 30
@@ -463,10 +463,29 @@ ALL_POTIONS: list[PotionDef] = [
     ESSENCE_OF_DARKNESS, BOTTLED_MIRACLE, STANCE_POTION, AMBROSIA,
 ]
 
-# 铁甲战士的药水掉落池（PotionHelper.getPotions(IRONCLAD)：3 专属 + 通用 30）
+# 铁甲战士的药水掉落池（PotionHelper.getPotions(IRONCLAD)：3 专属 +
+# 通用 30 = 33；稀有度分层按源码 65/25/10，见 run_env）
 IRONCLAD_POTION_POOL: list[PotionDef] = [
     BLOOD_POTION, ELIXIR_POTION, HEART_OF_IRON,
-    *[p for p in ALL_POTIONS if p.rarity == "common"],
+    *[
+        p
+        for p in ALL_POTIONS
+        if p.pid
+        not in (
+            "BloodPotion",
+            "ElixirPotion",
+            "HeartOfIron",
+            "Poison Potion",
+            "CunningPotion",
+            "GhostInAJar",
+            "FocusPotion",
+            "PotionOfCapacity",
+            "EssenceOfDarkness",
+            "BottledMiracle",
+            "StancePotion",
+            "Ambrosia",
+        )
+    ],
 ]
 
 

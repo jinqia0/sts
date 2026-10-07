@@ -137,16 +137,13 @@ def _deep_breath_play(bc: BattleContext, item: CardQueueItem) -> None:
     # C++ DEEP_BREATH：弃牌堆非空 → 洗回抽牌堆（onShuffle + EmptyDeckShuffle +
     # ShuffleDrawPile 三个动作，本项目 on_shuffle 一体完成），随后抽 1/2。
     # C++/wiki 均无消耗（doesCardExhaust 未收录；任务口径"消耗"为笔误）。
-    # 时序：C++ 的洗牌动作先于 OnAfterCardUsed（打出牌落弃牌堆）入队执行，
-    # 本引擎 on_after_use_card 同步先行——临时移出自身再洗、洗完放回弃牌堆，
-    # 对齐 C++ 净状态（自身不参与洗回，落弃牌堆待后续循环）。
+    # 时序：洗牌动作先于出牌收尾（on_after_card_used）执行，刚打出的
+    # Deep Breath 尚在 limbo、不在弃牌堆——不参与本次洗回，落弃牌堆待
+    # 后续循环（对齐 C++ 净状态，空堆判定也天然不含自身）。
     def run(bc2: BattleContext) -> None:
-        pile = bc2.cards.discard_pile
-        if not any(c is not item.card for c in pile):
-            return  # 除自身外无弃牌 → 不洗（对齐 C++ 出牌时的空堆判定）
-        pile.remove(item.card)
+        if not bc2.cards.discard_pile:
+            return  # 空堆：不洗（对齐 C++ 出牌时的空堆判定）
         bc2.on_shuffle()
-        pile.append(item.card)
 
     bc.add_to_bot(Action(run))
     bc.add_to_bot(Actions.draw_cards(2 if item.card.upgraded else 1))
@@ -340,15 +337,12 @@ def _trip_play(bc: BattleContext, item: CardQueueItem) -> None:
 
 def _apotheosis_play(bc: BattleContext, item: CardQueueItem) -> None:
     # C++ ApotheosisAction：四堆（手/抽/弃/消耗）全部可升级实例升级
-    # （canUpgrade：非状态/诅咒、未升级或可多次升级）。时序：C++ 动作先于
-    # OnAfterCardUsed 入队，打出的神化不在任何堆；本引擎 on_after_use_card
-    # 同步先行，神化已落消耗堆——按实例身份排除以对齐 C++ 净效果
-    # （wiki：不升级自身）。
+    # （canUpgrade：非状态/诅咒、未升级或可多次升级）。时序：升级动作先于
+    # 出牌收尾（on_after_card_used）执行，打出的神化尚在 limbo、不在任何
+    # 堆——天然不升级自身（wiki：不升级自身）。
     def run(bc2: BattleContext) -> None:
         for pile in (bc2.cards.hand, bc2.cards.draw_pile, bc2.cards.discard_pile, bc2.cards.exhaust_pile):
             for inst in pile:
-                if inst is item.card:
-                    continue
                 if (not inst.upgraded or inst.card.multiple_upgrades) and inst.card.ctype not in ("Status", "Curse"):
                     _upgrade_in_place(inst)
 
@@ -536,73 +530,73 @@ def _violence_play(bc: BattleContext, item: CardQueueItem) -> None:
 # ============================================================
 
 
-BANDAGE_UP = CardDef("Bandage Up", "包扎", 0, "Skill", "回复 4 点 HP。消耗。（升级回复 6）",
+BANDAGE_UP = CardDef("Bandage Up", "包扎", 0, "Skill", "回复 4 生命。\n消耗。",
                      False, True, _bandage_up_play, colorless=True)
-BLIND = CardDef("Blind", "目盲", 0, "Skill", "施加 2 层虚弱。（升级：所有敌人）",
+BLIND = CardDef("Blind", "致盲", 0, "Skill", "给予 2 层虚弱。",
                 True, False, _blind_play, colorless=True)
-DARK_SHACKLES = CardDef("Dark Shackles", "黑暗镣铐", 0, "Skill", "敌人本回合失去 9 点力量。消耗。（升级 15）",
+DARK_SHACKLES = CardDef("Dark Shackles", "黑暗镣铐", 0, "Skill", "让一名敌人在本回合内失去 9 点力量。\n消耗。",
                        True, True, _dark_shackles_play, colorless=True)
-DEEP_BREATH = CardDef("Deep Breath", "深呼吸", 0, "Skill", "洗弃牌堆回抽牌堆。抽 1 张牌。（升级抽 2 张）",
+DEEP_BREATH = CardDef("Deep Breath", "深呼吸", 0, "Skill", "将你的弃牌堆洗牌后放入你的抽牌堆。\n抽 1 张牌。",
                       False, False, _deep_breath_play, colorless=True)
-DISCOVERY = CardDef("Discovery", "发现", 1, "Skill", "3 张随机牌选 1 加入手牌，本回合 0 费。消耗。（升级不消耗）",
+DISCOVERY = CardDef("Discovery", "发现", 1, "Skill", "从 3 张随机牌中选择 1 张加入你的手牌。这张牌在本回合耗能变为 0。\n消耗。",
                     False, False, _discovery_play, colorless=True)
-DRAMATIC_ENTRANCE = CardDef("Dramatic Entrance", "登场亮相", 0, "Attack", "固有。对所有敌人造成 8 点伤害。消耗。（升级 12 点）",
+DRAMATIC_ENTRANCE = CardDef("Dramatic Entrance", "闪亮登场", 0, "Attack", "固有。\n对所有敌人造成 8 点伤害。\n消耗。",
                             False, True, _dramatic_entrance_play, innate=True, colorless=True)
-ENLIGHTENMENT = CardDef("Enlightenment", "启蒙", 0, "Skill", "手牌费用降为 1 直到回合结束。（升级：本场战斗）",
+ENLIGHTENMENT = CardDef("Enlightenment", "开悟", 0, "Skill", "在这个回合，你当前手牌中所有牌的耗能降低到 1。",
                         False, False, _enlightenment_play, colorless=True)
-FINESSE = CardDef("Finesse", "巧技", 0, "Skill", "获得 2 点格挡。抽 1 张牌。（升级 4 点格挡）",
+FINESSE = CardDef("Finesse", "妙计", 0, "Skill", "获得 2 点格挡。\n抽 1 张牌。",
                   False, False, _finesse_play, colorless=True)
-FLASH_OF_STEEL = CardDef("Flash of Steel", "钢铁闪光", 0, "Attack", "造成 3 点伤害。抽 1 张牌。（升级 6 点）",
+FLASH_OF_STEEL = CardDef("Flash of Steel", "亮剑", 0, "Attack", "造成 3 点伤害。\n抽 1 张牌。",
                          True, False, _flash_of_steel_play, colorless=True)
-FORETHOUGHT = CardDef("Forethought", "深谋远虑", 0, "Skill", "1 张手牌放到抽牌堆底，0 费直到打出。（升级：任意张）",
+FORETHOUGHT = CardDef("Forethought", "预谋", 0, "Skill", "将手牌中的一张牌放到抽牌堆的底部。\n并且这张牌在被打出之前，耗能变为 0。",
                       False, False, _forethought_play, colorless=True)
-GOOD_INSTINCTS = CardDef("Good Instincts", "良好直觉", 0, "Skill", "获得 6 点格挡。（升级 9 点）",
+GOOD_INSTINCTS = CardDef("Good Instincts", "优秀直觉", 0, "Skill", "获得 6 点格挡。",
                          False, False, _good_instincts_play, colorless=True)
-IMPATIENCE = CardDef("Impatience", "急不可耐", 0, "Skill", "手牌无攻击牌时抽 2 张牌。（升级 3 张）",
+IMPATIENCE = CardDef("Impatience", "急躁", 0, "Skill", "如果你的手牌中没有攻击牌，抽 2 张牌。",
                      False, False, _impatience_play, colorless=True)
-JACK_OF_ALL_TRADES = CardDef("Jack of All Trades", "万金油", 0, "Skill", "1 张随机无色牌加入手牌。消耗。（升级 2 张）",
+JACK_OF_ALL_TRADES = CardDef("Jack of All Trades", "花样百出", 0, "Skill", "增加 1 张随机无色牌到你的手牌。\n消耗。",
                              False, True, _jack_of_all_trades_play, colorless=True)
-MADNESS = CardDef("Madness", "疯狂", 1, "Skill", "1 张随机手牌本场战斗费用为 0。消耗。",
+MADNESS = CardDef("Madness", "疯狂", 1, "Skill", "你手牌中一张随机牌在本场战斗中耗能变为 0。\n消耗。",
                   False, True, _madness_play, upgraded_cost=0, colorless=True)
-MIND_BLAST = CardDef("Mind Blast", "精神冲击", 2, "Attack", "固有。造成等同于抽牌堆数量的伤害。（升级费用 1）",
+MIND_BLAST = CardDef("Mind Blast", "心灵震慑", 2, "Attack", "固有。\n造成你抽牌堆中剩余牌数的伤害。",
                      True, False, _mind_blast_play, innate=True, upgraded_cost=1, colorless=True)
-PANACEA = CardDef("Panacea", "万灵药", 0, "Skill", "获得 1 层人工制品。消耗。（升级 2 层）",
+PANACEA = CardDef("Panacea", "万能药", 0, "Skill", "获得 1 层人工制品。\n消耗。",
                   False, True, _panacea_play, colorless=True)
-PANIC_BUTTON = CardDef("Panic Button", "应急按钮", 0, "Skill", "获得 30 点格挡。之后 2 回合无法获得格挡。消耗。（升级 40 点）",
+PANIC_BUTTON = CardDef("Panic Button", "应急按钮", 0, "Skill", "获得 30 点格挡。\n你在接下来 2 回合内无法再从卡牌中获得格挡。\n消耗。",
                        False, True, _panic_button_play, colorless=True)
-PURITY = CardDef("Purity", "纯净", 0, "Skill", "消耗至多 3 张手牌。消耗。（升级至多 5 张）",
+PURITY = CardDef("Purity", "净化", 0, "Skill", "从手牌中选择最多 3 张牌消耗。\n消耗。",
                  False, True, _purity_play, colorless=True)
-SWIFT_STRIKE = CardDef("Swift Strike", "迅捷打击", 0, "Attack", "造成 7 点伤害。（升级 10 点）",
+SWIFT_STRIKE = CardDef("Swift Strike", "迅捷打击", 0, "Attack", "造成 7 点伤害。",
                        True, False, _swift_strike_play, colorless=True)
-TRIP = CardDef("Trip", "绊倒", 0, "Skill", "施加 2 层易伤。（升级：所有敌人）",
+TRIP = CardDef("Trip", "绊倒", 0, "Skill", "给予 2 层易伤。",
                True, False, _trip_play, colorless=True)  # wiki 口径：0 费（此前误记 1）
-APOTHEOSIS = CardDef("Apotheosis", "神化", 2, "Skill", "升级本场战斗的所有牌（四堆）。消耗。（升级费用 1）",
+APOTHEOSIS = CardDef("Apotheosis", "神化", 2, "Skill", "在本场战斗中升级你的所有牌。\n消耗。",
                      False, True, _apotheosis_play, upgraded_cost=1, colorless=True)
-CHRYSALIS = CardDef("Chrysalis", "结茧", 2, "Skill", "3 张随机技能 0 费洗入抽牌堆。消耗。（升级 5 张）",
+CHRYSALIS = CardDef("Chrysalis", "结茧", 2, "Skill", "在你的抽牌堆中加入\n3 张随机技能牌。他们\n在本场战斗中耗能为 0。\n消耗。",
                     False, True, _chrysalis_play, colorless=True)
-MAGNETISM = CardDef("Magnetism", "磁力", 2, "Power", "每回合开始 1 张随机无色牌加入手牌。（升级费用 1）",
+MAGNETISM = CardDef("Magnetism", "磁力", 2, "Power", "在每回合开始时，增加一张随机无色牌到你的手牌。",
                     False, False, _magnetism_play, upgraded_cost=1, colorless=True)
-MASTER_OF_STRATEGY = CardDef("Master of Strategy", "战略大师", 0, "Skill", "抽 3 张牌。消耗。（升级抽 4 张）",
+MASTER_OF_STRATEGY = CardDef("Master of Strategy", "战略大师", 0, "Skill", "抽 3 张牌。\n消耗。",
                               False, True, _master_of_strategy_play, colorless=True)
-MAYHEM = CardDef("Mayhem", "混乱", 2, "Power", "每回合开始打出抽牌堆顶的牌。（升级费用 1）",
+MAYHEM = CardDef("Mayhem", "乱战", 2, "Power", "在你的回合开始时，打出你抽牌堆顶部的牌。",
                  False, False, _mayhem_play, upgraded_cost=1, colorless=True)
-METAMORPHOSIS = CardDef("Metamorphosis", "变形", 2, "Skill", "3 张随机攻击 0 费洗入抽牌堆。消耗。（升级 5 张）",
+METAMORPHOSIS = CardDef("Metamorphosis", "羽化", 2, "Skill", "在你的抽牌堆中加入\n3 张随机攻击牌。他们\n在本场战斗中耗能为 0。\n消耗。",
                         False, True, _metamorphosis_play, colorless=True)
-PANACHE = CardDef("Panache", "潇洒", 0, "Power", "每回合每打出 5 张牌，对所有敌人造成 10 点伤害。（升级 14 点）",
+PANACHE = CardDef("Panache", "神气制胜", 0, "Power", "你每在同个回合内打出 5 张牌，就对所有敌人造成 10 点伤害。",
                   False, False, _panache_play, colorless=True)
-SADISTIC_NATURE = CardDef("Sadistic Nature", "施虐本性", 0, "Power", "敌人被施加 debuff 时受到 5 点伤害。（升级 7 点）",
+SADISTIC_NATURE = CardDef("Sadistic Nature", "残虐天性", 0, "Power", "每当你对一名敌人造成负面状态，使对方受到 5 点伤害。",
                          False, False, _sadistic_nature_play, colorless=True)
-SECRET_TECHNIQUE = CardDef("Secret Technique", "秘术", 0, "Skill", "从抽牌堆选 1 张技能牌入手。消耗。（升级不消耗）",
+SECRET_TECHNIQUE = CardDef("Secret Technique", "秘密技法", 0, "Skill", "从抽牌堆中选择一张技能牌放入你的手牌。\n消耗。",
                            False, False, _secret_technique_play, colorless=True)
-SECRET_WEAPON = CardDef("Secret Weapon", "秘密武器", 0, "Skill", "从抽牌堆选 1 张攻击牌入手。消耗。（升级不消耗）",
+SECRET_WEAPON = CardDef("Secret Weapon", "秘密武器", 0, "Skill", "从抽牌堆中选择一张攻击牌放入你的手牌。\n消耗。",
                        False, False, _secret_weapon_play, colorless=True)
-THE_BOMB = CardDef("The Bomb", "炸弹", 2, "Skill", "3 回合结束后对所有敌人造成 40 点伤害。（升级 50 点）",
+THE_BOMB = CardDef("The Bomb", "炸弹", 2, "Skill", "在 3 回合结束后，对所有敌人造成 40 点伤害。",
                    False, False, _the_bomb_play, colorless=True)
-THINKING_AHEAD = CardDef("Thinking Ahead", "未雨绸缪", 0, "Skill", "抽 2 张牌。1 张手牌置于抽牌堆顶。消耗。（升级不消耗）",
+THINKING_AHEAD = CardDef("Thinking Ahead", "深谋远虑", 0, "Skill", "抽 2 张牌，然后将手牌中的一张牌放到你抽牌堆的顶端。消耗。",
                          False, False, _thinking_ahead_play, colorless=True)
-TRANSMUTATION = CardDef("Transmutation", "转化", -1, "Skill", "X 费：X 张随机无色牌加入手牌，本回合 0 费。（升级生成升级牌）",
+TRANSMUTATION = CardDef("Transmutation", "转化", -1, "Skill", "在你的手牌中加入 X 张随机无色牌。它们在本回合的耗能变为 0。\n消耗。",
                         False, True, _transmutation_play, x_cost=True, colorless=True)
-VIOLENCE = CardDef("Violence", "暴力", 0, "Skill", "抽牌堆 3 张随机攻击牌入手。消耗。（升级 4 张）",
+VIOLENCE = CardDef("Violence", "暴力", 0, "Skill", "随机将你抽牌堆中 3 张攻击牌加入你的手牌。\n消耗。",
                     False, True, _violence_play, colorless=True)
 
 def _hand_of_greed_play(bc: BattleContext, item: CardQueueItem) -> None:
@@ -625,7 +619,7 @@ def _hand_of_greed_play(bc: BattleContext, item: CardQueueItem) -> None:
     bc.add_to_bot(Action(run))
 
 
-HAND_OF_GREED = CardDef("Hand of Greed", "贪婪之手", 2, "Attack", "造成 20 点伤害。若击杀敌人，获得 20 金币。（升级 25 伤 25 金币）",
+HAND_OF_GREED = CardDef("Hand of Greed", "贪婪之手", 2, "Attack", "造成 20 点伤害。\n斩杀时，获得 20 金币。",
                         True, False, _hand_of_greed_play, colorless=True)
 
 
@@ -642,7 +636,7 @@ def _apparition_play(bc: BattleContext, item: CardQueueItem) -> None:
 
 
 APPARITION = CardDef("Apparition", "灵体", 1, "Skill",
-                     "获得 1 层无实体。消耗。虚无。（升级后不再虚无）",
+                     "获得 1 层无实体。\n消耗。\n虚无。",
                      False, True, _apparition_play,
                      ethereal=True, loses_ethereal_on_upgrade=True)
 
@@ -656,7 +650,7 @@ def _bite_play(bc: BattleContext, item: CardQueueItem) -> None:
 
 
 BITE = CardDef("Bite", "噬咬", 1, "Attack",
-               "造成 7 点伤害。回复 2 点 HP。（升级 8 伤 / 回复 3）",
+               "造成 7 点伤害。\n回复 2 点生命。",
                True, False, _bite_play)
 
 
@@ -667,7 +661,7 @@ def _jax_play(bc: BattleContext, item: CardQueueItem) -> None:
 
 
 JAX = CardDef("J.A.X.", "J.A.X.", 0, "Skill",
-              "失去 3 点 HP。获得 2 点力量。（升级 3 点力量）", False, False, _jax_play)
+              "失去 3 点生命。\n获得 2 点力量。", False, False, _jax_play)
 
 
 def _ritual_dagger_play(bc: BattleContext, item: CardQueueItem) -> None:
@@ -690,7 +684,7 @@ def _ritual_dagger_play(bc: BattleContext, item: CardQueueItem) -> None:
 
 
 RITUAL_DAGGER = CardDef("Ritual Dagger", "仪式匕首", 1, "Attack",
-                        "造成 15 点伤害。若斩杀，本局游戏内此牌伤害永久 +3。消耗。（升级 +5）",
+                        "造成 15 点伤害。\n斩杀时，它在本局游戏中的伤害永久性增加 3。\n消耗。",
                         True, True, _ritual_dagger_play)
 
 

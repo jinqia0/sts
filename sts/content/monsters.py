@@ -234,7 +234,7 @@ class Cultist(Monster):
     hp_range = (48, 54)
     hp_range_high = (50, 56)
 
-    INCANTATION = MoveDef("Incantation", "咒语", "buff", intent_text="获得 3 层仪式")
+    INCANTATION = MoveDef("Incantation", "念咒", "buff", intent_text="获得 3 层仪式")
     DARK_STRIKE = MoveDef("Dark Strike", "黑暗打击", "attack", base_damage=6)
 
     def __init__(self, idx: int, hp: int, max_hp: int):
@@ -258,7 +258,7 @@ class Cultist(Monster):
                 # buff<RITUAL> 自带 justApplied（skipFirst）：见 entities.Monster.buff
                 ritual = 5 if bc.ascension >= 17 else 4 if bc.ascension >= 2 else 3
                 self.buff(MonsterStatus.RITUAL, ritual)
-                bc.log.append(f"{self.display_name} 使用 咒语(Incantation)，获得 {ritual} 层仪式。")
+                bc.log.append(f"{self.display_name} 使用 念咒(Incantation)，获得 {ritual} 层仪式。")
             case "Dark Strike":
                 dmg = bc.calculate_monster_damage(self, 6)
                 bc.log.append(f"{self.display_name} 使用 黑暗打击(Dark Strike)。")
@@ -287,7 +287,7 @@ class JawWorm(Monster):
     """
 
     name = "Jaw Worm"
-    zh = "颚虫"
+    zh = "大颚虫"
     hp_range = (40, 44)
     hp_range_high = (42, 46)
 
@@ -296,7 +296,7 @@ class JawWorm(Monster):
     BELLOW = MoveDef("Bellow", "咆哮", "buff", intent_text="力量+3，格挡+6")
 
     def __init__(self, idx: int, hp: int, max_hp: int):
-        super().__init__(idx, hp, max_hp, "颚虫(Jaw Worm)")
+        super().__init__(idx, hp, max_hp, "大颚虫(Jaw Worm)")
 
     @classmethod
     def create(cls, bc: BattleContext, idx: int) -> "JawWorm":
@@ -360,7 +360,7 @@ class Louse(Monster):
     """
 
     name = "Louse"
-    zh = "虱子"
+    zh = "虱虫"
     hp_range = (10, 15)  # 子类覆盖
 
     def __init__(self, idx: int, hp: int, max_hp: int, display_name: str, bite_dmg: int, curl_up: int):
@@ -422,11 +422,11 @@ class RedLouse(Louse):
     HP 10-15（A7 起 11-16）。"""
 
     name = "Red Louse"
-    zh = "红虱"
+    zh = "虱虫"
     hp_range = (10, 15)
     hp_range_high = (11, 16)
 
-    GROW = MoveDef("Grow", "生长", "buff", intent_text="力量+3")
+    GROW = MoveDef("Grow", "成长", "buff", intent_text="力量+3")
 
     def _second_move(self) -> MoveDef:
         return self.GROW
@@ -434,7 +434,7 @@ class RedLouse(Louse):
     def _second_move_turn(self, bc: BattleContext) -> None:
         amt = 4 if bc.ascension >= 17 else 3
         self.statuses.add(MonsterStatus.STRENGTH, amt)
-        bc.log.append(f"{self.display_name} 使用 生长(Grow)，力量+{amt}。")
+        bc.log.append(f"{self.display_name} 使用 成长(Grow)，力量+{amt}。")
 
 
 class GreenLouse(Louse):
@@ -446,17 +446,17 @@ class GreenLouse(Louse):
     """
 
     name = "Green Louse"
-    zh = "绿虱"
+    zh = "虱虫"
     hp_range = (11, 17)
     hp_range_high = (12, 18)
 
-    SPIT_WEB = MoveDef("Spit Web", "吐丝", "debuff", intent_text="施加 2 层虚弱")
+    SPIT_WEB = MoveDef("Spit Web", "吐网", "debuff", intent_text="施加 2 层虚弱")
 
     def _second_move(self) -> MoveDef:
         return self.SPIT_WEB
 
     def _second_move_turn(self, bc: BattleContext) -> None:
-        bc.log.append(f"{self.display_name} 使用 吐丝(Spit Web)。")
+        bc.log.append(f"{self.display_name} 使用 吐网(Spit Web)。")
         bc.add_to_bot(Actions.debuff_player(PlayerStatus.WEAK, 2, True))
 
 
@@ -630,8 +630,8 @@ class AcidSlimeM(Monster):
     hp_range = (28, 32)
     hp_range_high = (29, 34)
 
-    CORROSIVE_SPIT = MoveDef("Corrosive Spit", "腐蚀唾液", "attack", base_damage=7)
-    LICK = MoveDef("Lick", "舔舐", "debuff", intent_text="施加 1 层虚弱")
+    CORROSIVE_SPIT = MoveDef("Corrosive Spit", "腐蚀喷吐", "attack", base_damage=7)
+    LICK = MoveDef("Lick", "舔舔", "debuff", intent_text="施加 1 层虚弱")
     TACKLE = MoveDef("Tackle", "冲撞", "attack", base_damage=10)
 
     def __init__(self, idx: int, hp: int, max_hp: int):
@@ -673,11 +673,11 @@ class AcidSlimeM(Monster):
         match move.name:
             case "Corrosive Spit":
                 dmg = bc.calculate_monster_damage(self, 8 if bc.ascension >= 2 else 7)
-                bc.log.append(f"{self.display_name} 使用 腐蚀唾液(Corrosive Spit)。")
+                bc.log.append(f"{self.display_name} 使用 腐蚀喷吐(Corrosive Spit)。")
                 bc.add_to_bot(Actions.attack_player(self.idx, dmg))
                 bc.add_to_bot(Actions.make_temp_card_in_discard(SLIMED))
             case "Lick":
-                bc.log.append(f"{self.display_name} 使用 舔舐(Lick)。")
+                bc.log.append(f"{self.display_name} 使用 舔舔(Lick)。")
                 bc.add_to_bot(Actions.debuff_player(PlayerStatus.WEAK, 1, True))
             case "Tackle":
                 dmg = bc.calculate_monster_damage(self, 12 if bc.ascension >= 2 else 10)
@@ -705,7 +705,7 @@ class SpikeSlimeM(Monster):
     hp_range = (28, 32)
     hp_range_high = (29, 34)
 
-    LICK = MoveDef("Lick", "舔舐", "debuff", intent_text="施加 1 层脆弱")
+    LICK = MoveDef("Lick", "舔舔", "debuff", intent_text="施加 1 层脆弱")
     FLAME_TACKLE = MoveDef("Flame Tackle", "烈焰冲撞", "attack", base_damage=8)
 
     def __init__(self, idx: int, hp: int, max_hp: int):
@@ -729,7 +729,7 @@ class SpikeSlimeM(Monster):
         move = self.move_history[0]
         match move.name:
             case "Lick":
-                bc.log.append(f"{self.display_name} 使用 舔舐(Lick)。")
+                bc.log.append(f"{self.display_name} 使用 舔舔(Lick)。")
                 bc.add_to_bot(Actions.debuff_player(PlayerStatus.FRAIL, 1, True))
             case "Flame Tackle":
                 dmg = bc.calculate_monster_damage(self, 10 if bc.ascension >= 2 else 8)
@@ -752,15 +752,15 @@ class BlueSlaver(Monster):
     """
 
     name = "Blue Slaver"
-    zh = "蓝奴役者"
+    zh = "奴隶贩子"
     hp_range = (46, 50)
     hp_range_high = (48, 52)
 
     STAB = MoveDef("Stab", "刺击", "attack", base_damage=12)
-    RAKE = MoveDef("Rake", "耙击", "attack", base_damage=7)  # 另施加 1 层虚弱
+    RAKE = MoveDef("Rake", "耙伤", "attack", base_damage=7)  # 另施加 1 层虚弱
 
     def __init__(self, idx: int, hp: int, max_hp: int):
-        super().__init__(idx, hp, max_hp, "蓝奴役者(Blue Slaver)")
+        super().__init__(idx, hp, max_hp, "奴隶贩子(Blue Slaver)")
 
     @classmethod
     def create(cls, bc: BattleContext, idx: int) -> "BlueSlaver":
@@ -783,7 +783,7 @@ class BlueSlaver(Monster):
                 bc.add_to_bot(Actions.attack_player(self.idx, dmg))
             case "Rake":
                 dmg = bc.calculate_monster_damage(self, 8 if bc.ascension >= 2 else 7)
-                bc.log.append(f"{self.display_name} 使用 耙击(Rake)。")
+                bc.log.append(f"{self.display_name} 使用 耙伤(Rake)。")
                 bc.add_to_bot(Actions.attack_player(self.idx, dmg))
                 bc.add_to_bot(Actions.debuff_player(PlayerStatus.WEAK, 2 if bc.ascension >= 17 else 1, True))
             case _:
@@ -806,16 +806,16 @@ class RedSlaver(Monster):
     """
 
     name = "Red Slaver"
-    zh = "红奴役者"
+    zh = "奴隶贩子"
     hp_range = (46, 50)
     hp_range_high = (48, 52)
 
     STAB = MoveDef("Stab", "刺击", "attack", base_damage=13)
-    ENTANGLE = MoveDef("Entangle", "缠绕", "debuff", intent_text="施加 1 层缠绕")
-    SCRAPE = MoveDef("Scrape", "刮擦", "attack", base_damage=8)  # 另施加 1 层易伤
+    ENTANGLE = MoveDef("Entangle", "丢网", "debuff", intent_text="施加 1 层缠绕")
+    SCRAPE = MoveDef("Scrape", "刮伤", "attack", base_damage=8)  # 另施加 1 层易伤
 
     def __init__(self, idx: int, hp: int, max_hp: int):
-        super().__init__(idx, hp, max_hp, "红奴役者(Red Slaver)")
+        super().__init__(idx, hp, max_hp, "奴隶贩子(Red Slaver)")
 
     @classmethod
     def create(cls, bc: BattleContext, idx: int) -> "RedSlaver":
@@ -842,12 +842,12 @@ class RedSlaver(Monster):
                 bc.log.append(f"{self.display_name} 使用 刺击(Stab)。")
                 bc.add_to_bot(Actions.attack_player(self.idx, dmg))
             case "Entangle":
-                bc.log.append(f"{self.display_name} 使用 缠绕(Entangle)。")
+                bc.log.append(f"{self.display_name} 使用 丢网(Entangle)。")
                 bc.add_to_bot(Actions.debuff_player(PlayerStatus.ENTANGLED, 1, True))
                 self.misc_info = 1  # 已用过（本体语义；lightspeed 漏写，见类注释）
             case "Scrape":
                 dmg = bc.calculate_monster_damage(self, 9 if bc.ascension >= 2 else 8)
-                bc.log.append(f"{self.display_name} 使用 刮擦(Scrape)。")
+                bc.log.append(f"{self.display_name} 使用 刮伤(Scrape)。")
                 bc.add_to_bot(Actions.attack_player(self.idx, dmg))
                 bc.add_to_bot(Actions.debuff_player(PlayerStatus.VULNERABLE, 2 if bc.ascension >= 17 else 1, True))
             case _:
@@ -864,14 +864,14 @@ class SneakyGremlin(Monster):
     """
 
     name = "Sneaky Gremlin"
-    zh = "狡诈小鬼"
+    zh = "卑鄙地精"
     hp_range = (10, 14)
     hp_range_high = (11, 15)
 
     PUNCTURE = MoveDef("Puncture", "穿刺", "attack", base_damage=9)
 
     def __init__(self, idx: int, hp: int, max_hp: int):
-        super().__init__(idx, hp, max_hp, "狡诈小鬼(Sneaky Gremlin)")
+        super().__init__(idx, hp, max_hp, "卑鄙地精(Sneaky Gremlin)")
 
     @classmethod
     def create(cls, bc: BattleContext, idx: int) -> "SneakyGremlin":
@@ -898,14 +898,14 @@ class FatGremlin(Monster):
     """
 
     name = "Fat Gremlin"
-    zh = "肥硕小鬼"
+    zh = "胖地精"
     hp_range = (13, 17)
     hp_range_high = (14, 18)
 
-    SMASH = MoveDef("Smash", "重击", "attack", base_damage=4)  # 另施加 1 层虚弱
+    SMASH = MoveDef("Smash", "粉碎", "attack", base_damage=4)  # 另施加 1 层虚弱
 
     def __init__(self, idx: int, hp: int, max_hp: int):
-        super().__init__(idx, hp, max_hp, "肥硕小鬼(Fat Gremlin)")
+        super().__init__(idx, hp, max_hp, "胖地精(Fat Gremlin)")
 
     @classmethod
     def create(cls, bc: BattleContext, idx: int) -> "FatGremlin":
@@ -917,7 +917,7 @@ class FatGremlin(Monster):
 
     def take_turn(self, bc: BattleContext) -> None:
         dmg = bc.calculate_monster_damage(self, 5 if bc.ascension >= 2 else 4)
-        bc.log.append(f"{self.display_name} 使用 重击(Smash)。")
+        bc.log.append(f"{self.display_name} 使用 粉碎(Smash)。")
         bc.add_to_bot(Actions.attack_player(self.idx, dmg))
         bc.add_to_bot(Actions.debuff_player(PlayerStatus.WEAK, 1, True))
         if bc.ascension >= 17:
@@ -938,15 +938,15 @@ class ShieldGremlin(Monster):
     """
 
     name = "Shield Gremlin"
-    zh = "盾牌小鬼"
+    zh = "持盾地精"
     hp_range = (12, 15)
     hp_range_high = (13, 17)
 
-    PROTECT = MoveDef("Protect", "防护", "defend", intent_text="为随机存活友军提供格挡")
+    PROTECT = MoveDef("Protect", "保护", "defend", intent_text="为随机存活友军提供格挡")
     SHIELD_BASH = MoveDef("Shield Bash", "盾击", "attack", base_damage=6)
 
     def __init__(self, idx: int, hp: int, max_hp: int):
-        super().__init__(idx, hp, max_hp, "盾牌小鬼(Shield Gremlin)")
+        super().__init__(idx, hp, max_hp, "持盾地精(Shield Gremlin)")
 
     @classmethod
     def create(cls, bc: BattleContext, idx: int) -> "ShieldGremlin":
@@ -981,7 +981,7 @@ class ShieldGremlin(Monster):
         move = self.move_history[0]
         match move.name:
             case "Protect":
-                bc.log.append(f"{self.display_name} 使用 防护(Protect)。")
+                bc.log.append(f"{self.display_name} 使用 保护(Protect)。")
                 bc.add_to_bot(self._gain_block_random_ally(self._protect_amount(bc)))
                 if bc.monsters.alive_count <= 1:
                     self.set_move(self.SHIELD_BASH)
@@ -1006,15 +1006,15 @@ class GremlinWizard(Monster):
     """
 
     name = "Gremlin Wizard"
-    zh = "小鬼法师"
+    zh = "地精法师"
     hp_range = (21, 25)
     hp_range_high = (22, 26)
 
-    CHARGING = MoveDef("Charging", "充能", "unknown", intent_text="正在充能（无动作）")
-    ULTIMATE_BLAST = MoveDef("Ultimate Blast", "终极冲击", "attack", base_damage=25)
+    CHARGING = MoveDef("Charging", "蓄能", "unknown", intent_text="正在充能（无动作）")
+    ULTIMATE_BLAST = MoveDef("Ultimate Blast", "终极大爆炸", "attack", base_damage=25)
 
     def __init__(self, idx: int, hp: int, max_hp: int):
-        super().__init__(idx, hp, max_hp, "小鬼法师(Gremlin Wizard)")
+        super().__init__(idx, hp, max_hp, "地精法师(Gremlin Wizard)")
 
     @classmethod
     def create(cls, bc: BattleContext, idx: int) -> "GremlinWizard":
@@ -1035,7 +1035,7 @@ class GremlinWizard(Monster):
                     self.set_move(self.ULTIMATE_BLAST)
             case "Ultimate Blast":
                 dmg = bc.calculate_monster_damage(self, 30 if bc.ascension >= 2 else 25)
-                bc.log.append(f"{self.display_name} 使用 终极冲击(Ultimate Blast)！")
+                bc.log.append(f"{self.display_name} 使用 终极大爆炸(Ultimate Blast)！")
                 bc.add_to_bot(Actions.attack_player(self.idx, dmg))
                 if bc.ascension < 17:
                     self.misc_info = 0
@@ -1120,14 +1120,14 @@ class MadGremlin(Monster):
     """
 
     name = "Mad Gremlin"
-    zh = "狂怒小鬼"
+    zh = "火大地精"
     hp_range = (20, 24)
     hp_range_high = (21, 25)
 
     SCRATCH = MoveDef("Scratch", "抓挠", "attack", base_damage=4)
 
     def __init__(self, idx: int, hp: int, max_hp: int):
-        super().__init__(idx, hp, max_hp, "狂怒小鬼(Mad Gremlin)")
+        super().__init__(idx, hp, max_hp, "火大地精(Mad Gremlin)")
 
     @classmethod
     def create(cls, bc: BattleContext, idx: int) -> "MadGremlin":
@@ -1168,17 +1168,17 @@ class GremlinNob(Monster):
     """
 
     name = "Gremlin Nob"
-    zh = "小鬼巨汉"
+    zh = "地精大块头"
     hp_range = (82, 86)
     hp_range_high = (85, 90)
     hp_high_asc = 8
 
     BELLOW = MoveDef("Bellow", "怒吼", "buff", intent_text="获得 2 层激怒（玩家打出技能牌时 +2 力量）")
     RUSH = MoveDef("Rush", "冲锋", "attack", base_damage=14)
-    SKULL_BASH = MoveDef("Skull Bash", "颅骨猛击", "attack", base_damage=6)  # 另施加 2 层易伤
+    SKULL_BASH = MoveDef("Skull Bash", "颅骨重击", "attack", base_damage=6)  # 另施加 2 层易伤
 
     def __init__(self, idx: int, hp: int, max_hp: int):
-        super().__init__(idx, hp, max_hp, "小鬼巨汉(Gremlin Nob)")
+        super().__init__(idx, hp, max_hp, "地精大块头(Gremlin Nob)")
 
     @classmethod
     def create(cls, bc: BattleContext, idx: int) -> "GremlinNob":
@@ -1216,7 +1216,7 @@ class GremlinNob(Monster):
                 bc.add_to_bot(Actions.attack_player(self.idx, dmg))
             case "Skull Bash":
                 dmg = bc.calculate_monster_damage(self, 8 if bc.ascension >= 3 else 6)
-                bc.log.append(f"{self.display_name} 使用 颅骨猛击(Skull Bash)。")
+                bc.log.append(f"{self.display_name} 使用 颅骨重击(Skull Bash)。")
                 bc.add_to_bot(Actions.attack_player(self.idx, dmg))
                 bc.add_to_bot(Actions.debuff_player(PlayerStatus.VULNERABLE, 2, True))
             case _:
@@ -1246,17 +1246,17 @@ class Lagavulin(Monster):
     """
 
     name = "Lagavulin"
-    zh = "拉格维林"
+    zh = "乐加维林"
     hp_range = (109, 111)
     hp_range_high = (112, 115)
     hp_high_asc = 8
 
     SLEEP = MoveDef("Sleep", "沉睡", "unknown", intent_text="沉睡中（不受击则 3 回合后自然醒来）")
     ATTACK = MoveDef("Attack", "攻击", "attack", base_damage=18)
-    SIPHON_SOUL = MoveDef("Siphon Soul", "汲取灵魂", "debuff", intent_text="力量与敏捷 -1")
+    SIPHON_SOUL = MoveDef("Siphon Soul", "灵魂吸取", "debuff", intent_text="力量与敏捷 -1")
 
     def __init__(self, idx: int, hp: int, max_hp: int):
-        super().__init__(idx, hp, max_hp, "拉格维林(Lagavulin)")
+        super().__init__(idx, hp, max_hp, "乐加维林(Lagavulin)")
 
     @classmethod
     def create(cls, bc: BattleContext, idx: int) -> "Lagavulin":
@@ -1295,7 +1295,7 @@ class Lagavulin(Monster):
                     self.set_move(self.ATTACK)
             case "Siphon Soul":
                 n = 2 if bc.ascension >= 18 else 1
-                bc.log.append(f"{self.display_name} 使用 汲取灵魂(Siphon Soul)，你的力量与敏捷 -{n}。")
+                bc.log.append(f"{self.display_name} 使用 灵魂吸取(Siphon Soul)，你的力量与敏捷 -{n}。")
                 # 对齐 C++ DebuffPlayer<...>(±n).actFunc：立即结算，不入队
                 Actions.debuff_player(PlayerStatus.DEXTERITY, -n, True).fn(bc)
                 Actions.debuff_player(PlayerStatus.STRENGTH, -n, True).fn(bc)
@@ -1336,21 +1336,21 @@ class TheGuardian(Monster):
     """
 
     name = "The Guardian"
-    zh = "守卫者"
+    zh = "守护者"
     hp_range = (240, 240)
     hp_range_high = (250, 250)
     hp_high_asc = 9
 
     CHARGING_UP = MoveDef("Charging Up", "蓄能", "defend", intent_text="获得 9 点格挡")
-    FIERCE_BASH = MoveDef("Fierce Bash", "猛烈重击", "attack", base_damage=32)
-    VENT_STEAM = MoveDef("Vent Steam", "排放蒸汽", "debuff", intent_text="施加 2 层易伤与 2 层虚弱")
+    FIERCE_BASH = MoveDef("Fierce Bash", "猛烈痛击", "attack", base_damage=32)
+    VENT_STEAM = MoveDef("Vent Steam", "蒸汽喷射", "debuff", intent_text="施加 2 层易伤与 2 层虚弱")
     WHIRLWIND = MoveDef("Whirlwind", "旋风", "attack", base_damage=5)  # ×4 段
     DEFENSIVE_MODE = MoveDef("Defensive Mode", "防御模式", "buff", intent_text="获得 3 层利爪隐蔽（打出攻击牌即受反伤）")
     ROLL_ATTACK = MoveDef("Roll Attack", "滚动攻击", "attack", base_damage=9)
-    TWIN_SLAM = MoveDef("Twin Slam", "双重猛击", "attack", base_damage=8)  # ×2 段
+    TWIN_SLAM = MoveDef("Twin Slam", "双斩", "attack", base_damage=8)  # ×2 段
 
     def __init__(self, idx: int, hp: int, max_hp: int):
-        super().__init__(idx, hp, max_hp, "守卫者(The Guardian)")
+        super().__init__(idx, hp, max_hp, "守护者(The Guardian)")
 
     @classmethod
     def create(cls, bc: BattleContext, idx: int) -> "TheGuardian":
@@ -1388,11 +1388,11 @@ class TheGuardian(Monster):
                 self.set_move(self.FIERCE_BASH)
             case "Fierce Bash":
                 dmg = bc.calculate_monster_damage(self, 36 if bc.ascension >= 4 else 32)
-                bc.log.append(f"{self.display_name} 使用 猛烈重击(Fierce Bash)。")
+                bc.log.append(f"{self.display_name} 使用 猛烈痛击(Fierce Bash)。")
                 bc.add_to_bot(Actions.attack_player(self.idx, dmg))
                 self.set_move(self.VENT_STEAM)
             case "Vent Steam":
-                bc.log.append(f"{self.display_name} 使用 排放蒸汽(Vent Steam)。")
+                bc.log.append(f"{self.display_name} 使用 蒸汽喷射(Vent Steam)。")
                 bc.add_to_bot(Actions.debuff_player(PlayerStatus.VULNERABLE, 2, True))
                 bc.add_to_bot(Actions.debuff_player(PlayerStatus.WEAK, 2, True))
                 self.set_move(self.WHIRLWIND)
@@ -1414,7 +1414,7 @@ class TheGuardian(Monster):
                 self.set_move(self.TWIN_SLAM)
             case "Twin Slam":
                 dmg = bc.calculate_monster_damage(self, 8)
-                bc.log.append(f"{self.display_name} 使用 双重猛击(Twin Slam)，8 点伤害 ×2！")
+                bc.log.append(f"{self.display_name} 使用 双斩(Twin Slam)，8 点伤害 ×2！")
                 for _ in range(2):
                     bc.add_to_bot(Actions.attack_player(self.idx, dmg))
                 self.statuses.remove(MonsterStatus.SHARP_HIDE)
@@ -1444,7 +1444,7 @@ class Hexaghost(Monster):
     """
 
     name = "Hexaghost"
-    zh = "六火幽灵"
+    zh = "六火亡魂"
     hp_range = (250, 250)
     hp_range_high = (264, 264)
     hp_high_asc = 9
@@ -1453,11 +1453,11 @@ class Hexaghost(Monster):
     DIVIDER = MoveDef("Divider", "分割", "attack", base_damage=7)  # ×6 段（单段=激活时锁定值）
     SEAR = MoveDef("Sear", "灼烧", "attack", base_damage=6)  # 另塞灼伤进弃牌堆
     TACKLE = MoveDef("Tackle", "冲撞", "attack", base_damage=5)  # ×2 段
-    INFLAME = MoveDef("Inflame", "燃焰", "buff", intent_text="获得 12 点格挡，力量 +2")
-    INFERNO = MoveDef("Inferno", "炼狱", "attack", base_damage=2)  # ×6 段
+    INFLAME = MoveDef("Inflame", "高热", "buff", intent_text="获得 12 点格挡，力量 +2")
+    INFERNO = MoveDef("Inferno", "地狱火", "attack", base_damage=2)  # ×6 段
 
     def __init__(self, idx: int, hp: int, max_hp: int):
-        super().__init__(idx, hp, max_hp, "六火幽灵(Hexaghost)")
+        super().__init__(idx, hp, max_hp, "六火亡魂(Hexaghost)")
 
     @classmethod
     def create(cls, bc: BattleContext, idx: int) -> "Hexaghost":
@@ -1508,12 +1508,12 @@ class Hexaghost(Monster):
             case "Inflame":
                 self.block += 12  # 对齐 C++ addBlock：立即结算
                 self.statuses.add(MonsterStatus.STRENGTH, 3 if bc.ascension >= 19 else 2)
-                bc.log.append(f"{self.display_name} 使用 燃焰(Inflame)，格挡 +12、力量 +2。")
+                bc.log.append(f"{self.display_name} 使用 高热(Inflame)，格挡 +12、力量 +2。")
                 self.unique_power0 += 1
                 self.set_move(self.TACKLE)
             case "Inferno":
                 dmg = bc.calculate_monster_damage(self, 3 if bc.ascension >= 4 else 2)
-                bc.log.append(f"{self.display_name} 使用 炼狱(Inferno)，{3 if bc.ascension >= 4 else 2} 点伤害 ×6！")
+                bc.log.append(f"{self.display_name} 使用 地狱火(Inferno)，{3 if bc.ascension >= 4 else 2} 点伤害 ×6！")
                 for _ in range(6):
                     bc.add_to_bot(Actions.attack_player(self.idx, dmg))
                 self.unique_power0 = 0
@@ -1537,7 +1537,7 @@ class Taskmaster(Monster):
     """
 
     name = "Taskmaster"
-    zh = "监工"
+    zh = "奴隶头子"
     hp_range = (54, 60)
     hp_range_high = (57, 64)
     hp_high_asc = 8
@@ -1545,7 +1545,7 @@ class Taskmaster(Monster):
     SCOURING_WHIP = MoveDef("Scouring Whip", "鞭挞", "attack", base_damage=7)  # 另塞伤口进弃牌堆
 
     def __init__(self, idx: int, hp: int, max_hp: int):
-        super().__init__(idx, hp, max_hp, "监工(Taskmaster)")
+        super().__init__(idx, hp, max_hp, "奴隶头子(Taskmaster)")
 
     @classmethod
     def create(cls, bc: BattleContext, idx: int) -> "Taskmaster":
@@ -1636,8 +1636,8 @@ class AcidSlimeL(Monster):
     hp_range = (65, 69)
     hp_range_high = (68, 72)
 
-    CORROSIVE_SPIT = MoveDef("Corrosive Spit", "腐蚀唾液", "attack", base_damage=11)  # 另塞 2 张黏液
-    LICK = MoveDef("Lick", "舔舐", "debuff", intent_text="施加 2 层虚弱")
+    CORROSIVE_SPIT = MoveDef("Corrosive Spit", "腐蚀喷吐", "attack", base_damage=11)  # 另塞 2 张黏液
+    LICK = MoveDef("Lick", "舔舔", "debuff", intent_text="施加 2 层虚弱")
     TACKLE = MoveDef("Tackle", "冲撞", "attack", base_damage=16)
     SPLIT = MoveDef("Split", "分裂", "unknown", intent_text="分裂为两只酸液史莱姆（中）")
 
@@ -1684,13 +1684,13 @@ class AcidSlimeL(Monster):
         match move.name:
             case "Corrosive Spit":
                 dmg = bc.calculate_monster_damage(self, 12 if bc.ascension >= 2 else 11)
-                bc.log.append(f"{self.display_name} 使用 腐蚀唾液(Corrosive Spit)。")
+                bc.log.append(f"{self.display_name} 使用 腐蚀喷吐(Corrosive Spit)。")
                 bc.add_to_bot(Actions.attack_player(self.idx, dmg))
                 for _ in range(2):
                     bc.add_to_bot(Actions.make_temp_card_in_discard(SLIMED))
                 bc.add_to_bot(Actions.roll_move(self.idx))
             case "Lick":
-                bc.log.append(f"{self.display_name} 使用 舔舐(Lick)。")
+                bc.log.append(f"{self.display_name} 使用 舔舔(Lick)。")
                 bc.add_to_bot(Actions.debuff_player(PlayerStatus.WEAK, 2, True))
                 bc.add_to_bot(Actions.roll_move(self.idx))
             case "Tackle":
@@ -1723,7 +1723,7 @@ class SpikeSlimeL(Monster):
     hp_range_high = (67, 73)
 
     FLAME_TACKLE = MoveDef("Flame Tackle", "烈焰冲撞", "attack", base_damage=16)  # 另塞 2 张黏液
-    LICK = MoveDef("Lick", "舔舐", "debuff", intent_text="施加 2 层脆弱")
+    LICK = MoveDef("Lick", "舔舔", "debuff", intent_text="施加 2 层脆弱")
     SPLIT = MoveDef("Split", "分裂", "unknown", intent_text="分裂为两只尖刺史莱姆（中）")
 
     def __init__(self, idx: int, hp: int, max_hp: int):
@@ -1759,7 +1759,7 @@ class SpikeSlimeL(Monster):
                     bc.add_to_bot(Actions.make_temp_card_in_discard(SLIMED))
                 bc.add_to_bot(Actions.roll_move(self.idx))
             case "Lick":
-                bc.log.append(f"{self.display_name} 使用 舔舐(Lick)。")
+                bc.log.append(f"{self.display_name} 使用 舔舔(Lick)。")
                 bc.add_to_bot(Actions.debuff_player(PlayerStatus.FRAIL, 3 if bc.ascension >= 17 else 2, True))
                 bc.add_to_bot(Actions.roll_move(self.idx))
             case "Split":
@@ -1820,8 +1820,8 @@ class SlimeBoss(Monster):
     hp_high_asc = 9
 
     GOOP_SPRAY = MoveDef("Goop Spray", "黏液喷射", "debuff", intent_text="塞 3 张黏液进弃牌堆")
-    PREPARING = MoveDef("Preparing", "蓄势", "unknown", intent_text="（无动作）")
-    SLAM = MoveDef("Slam", "猛击", "attack", base_damage=35)
+    PREPARING = MoveDef("Preparing", "准备", "unknown", intent_text="（无动作）")
+    SLAM = MoveDef("Slam", "猛撞", "attack", base_damage=35)
     SPLIT = MoveDef("Split", "分裂", "unknown", intent_text="分裂为尖刺史莱姆（大）与酸液史莱姆（大）")
 
     def __init__(self, idx: int, hp: int, max_hp: int):
@@ -1855,11 +1855,11 @@ class SlimeBoss(Monster):
                     Actions.make_temp_card_in_discard(SLIMED).fn(bc)
                 self.set_move(self.PREPARING)
             case "Preparing":
-                bc.log.append(f"{self.display_name} 使用 蓄势(Preparing)。")
+                bc.log.append(f"{self.display_name} 使用 准备(Preparing)。")
                 self.set_move(self.SLAM)
             case "Slam":
                 dmg = bc.calculate_monster_damage(self, 38 if bc.ascension >= 4 else 35)
-                bc.log.append(f"{self.display_name} 使用 猛击(Slam)。")
+                bc.log.append(f"{self.display_name} 使用 猛撞(Slam)。")
                 # 先入队攻击再设下回合意图：反伤触发的 onHpLost 可覆盖为 SPLIT
                 bc.add_to_bot(Actions.attack_player(self.idx, dmg))
                 self.set_move(self.GOOP_SPRAY)
@@ -1888,7 +1888,7 @@ class Looter(Monster):
     """
 
     name = "Looter"
-    zh = "窃贼"
+    zh = "抢劫的"
     hp_range = (44, 48)
     hp_range_high = (46, 50)
 
@@ -1898,7 +1898,7 @@ class Looter(Monster):
     ESCAPE = MoveDef("Escape", "逃跑", "unknown", intent_text="逃离战斗")
 
     def __init__(self, idx: int, hp: int, max_hp: int):
-        super().__init__(idx, hp, max_hp, "窃贼(Looter)")
+        super().__init__(idx, hp, max_hp, "抢劫的(Looter)")
 
     @classmethod
     def create(cls, bc: BattleContext, idx: int) -> "Looter":
@@ -1956,7 +1956,7 @@ class Mugger(Monster):
     """
 
     name = "Mugger"
-    zh = "抢劫犯"
+    zh = "打劫的"
     hp_range = (48, 52)
     hp_range_high = (50, 54)
 
@@ -1966,7 +1966,7 @@ class Mugger(Monster):
     ESCAPE = MoveDef("Escape", "逃跑", "unknown", intent_text="逃离战斗")
 
     def __init__(self, idx: int, hp: int, max_hp: int):
-        super().__init__(idx, hp, max_hp, "抢劫犯(Mugger)")
+        super().__init__(idx, hp, max_hp, "打劫的(Mugger)")
 
     @classmethod
     def create(cls, bc: BattleContext, idx: int) -> "Mugger":
@@ -2075,7 +2075,7 @@ class SphericGuardian(Monster):
     """
 
     name = "Spheric Guardian"
-    zh = "球形守卫"
+    zh = "圆球守护者"
     hp_range = (20, 20)
     hp_range_high = (20, 20)
 
@@ -2085,7 +2085,7 @@ class SphericGuardian(Monster):
     SLAM = MoveDef("Slam", "猛击", "attack", base_damage=10)  # ×2 段
 
     def __init__(self, idx: int, hp: int, max_hp: int):
-        super().__init__(idx, hp, max_hp, "球形守卫(Spheric Guardian)")
+        super().__init__(idx, hp, max_hp, "圆球守护者(Spheric Guardian)")
         # 对齐 C++ preBattleAction：ARTIFACT 3 + BARRICADE + 40 格挡
         self.statuses.add(MonsterStatus.ARTIFACT, 3)
         self.block += 40
@@ -2149,7 +2149,7 @@ class Chosen(Monster):
     """
 
     name = "Chosen"
-    zh = "被选者"
+    zh = "被拣选者"
     hp_range = (95, 99)
     hp_range_high = (98, 103)
 
@@ -2160,7 +2160,7 @@ class Chosen(Monster):
     POKE = MoveDef("Poke", "戳刺", "attack", base_damage=5)  # ×2 段
 
     def __init__(self, idx: int, hp: int, max_hp: int):
-        super().__init__(idx, hp, max_hp, "被选者(Chosen)")
+        super().__init__(idx, hp, max_hp, "被拣选者(Chosen)")
 
     @classmethod
     def create(cls, bc: BattleContext, idx: int) -> "Chosen":
@@ -2227,7 +2227,7 @@ class ShelledParasite(Monster):
     """
 
     name = "Shelled Parasite"
-    zh = "甲壳寄生虫"
+    zh = "带壳寄生怪"
     hp_range = (68, 72)
     hp_range_high = (70, 75)
 
@@ -2237,7 +2237,7 @@ class ShelledParasite(Monster):
     STUNNED_MOVE = MoveDef("Stunned", "眩晕", "unknown", intent_text="（无动作）")
 
     def __init__(self, idx: int, hp: int, max_hp: int):
-        super().__init__(idx, hp, max_hp, "甲壳寄生虫(Shelled Parasite)")
+        super().__init__(idx, hp, max_hp, "带壳寄生怪(Shelled Parasite)")
         # 对齐 C++ preBattleAction：PLATED_ARMOR 14 + 14 格挡
         self.statuses.add(MonsterStatus.PLATED_ARMOR_M, 14)
         self.block += 14
@@ -2323,7 +2323,7 @@ class Byrd(Monster):
     """
 
     name = "Byrd"
-    zh = "伯德鸟"
+    zh = "异鸟"
     hp_range = (25, 31)
     hp_range_high = (26, 33)
 
@@ -2335,7 +2335,7 @@ class Byrd(Monster):
     STUNNED_MOVE = MoveDef("Stunned", "眩晕", "unknown", intent_text="（无动作）")
 
     def __init__(self, idx: int, hp: int, max_hp: int):
-        super().__init__(idx, hp, max_hp, "伯德鸟(Byrd)")
+        super().__init__(idx, hp, max_hp, "异鸟(Byrd)")
         # 对齐 C++ preBattleAction：FLIGHT 3（A17 起 4，由 create 覆盖）
         self.statuses.add(MonsterStatus.FLIGHT, 3)
 
@@ -2431,15 +2431,15 @@ class SnakePlant(Monster):
     """
 
     name = "Snake Plant"
-    zh = "蛇藤"
+    zh = "蛇花"
     hp_range = (75, 79)
     hp_range_high = (78, 82)
 
     CHOMP = MoveDef("Chomp", "咬啃", "attack", base_damage=7)  # ×3 段
-    ENFEEBLING_SPORES = MoveDef("Enfeebling Spores", "衰弱孢子", "debuff", intent_text="施加 2 层脆弱与 2 层虚弱")
+    ENFEEBLING_SPORES = MoveDef("Enfeebling Spores", "虚弱孢子", "debuff", intent_text="施加 2 层脆弱与 2 层虚弱")
 
     def __init__(self, idx: int, hp: int, max_hp: int):
-        super().__init__(idx, hp, max_hp, "蛇藤(Snake Plant)")
+        super().__init__(idx, hp, max_hp, "蛇花(Snake Plant)")
         self.statuses.add(MonsterStatus.MALLEABLE, 3)
 
     @classmethod
@@ -2469,7 +2469,7 @@ class SnakePlant(Monster):
                 for _ in range(3):
                     bc.add_to_bot(Actions.attack_player(self.idx, dmg))
             case "Enfeebling Spores":
-                bc.log.append(f"{self.display_name} 使用 衰弱孢子(Enfeebling Spores)。")
+                bc.log.append(f"{self.display_name} 使用 虚弱孢子(Enfeebling Spores)。")
                 bc.add_to_bot(Actions.debuff_player(PlayerStatus.FRAIL, 2, True))
                 bc.add_to_bot(Actions.debuff_player(PlayerStatus.WEAK, 2, True))
             case _:
@@ -2489,16 +2489,16 @@ class Snecko(Monster):
     """
 
     name = "Snecko"
-    zh = "蛇颈龙"
+    zh = "异蛇"
     hp_range = (114, 120)
     hp_range_high = (120, 125)
 
-    PERPLEXING_GLARE = MoveDef("Perplexing Glare", "迷惑视线", "debuff", intent_text="施加 1 层混乱")
-    BITE = MoveDef("Bite", "撕咬", "attack", base_damage=15)
-    TAIL_WHIP = MoveDef("Tail Whip", "尾鞭", "attack", base_damage=8)  # 另施加 2 层易伤
+    PERPLEXING_GLARE = MoveDef("Perplexing Glare", "困惑瞪视", "debuff", intent_text="施加 1 层混乱")
+    BITE = MoveDef("Bite", "噬咬", "attack", base_damage=15)
+    TAIL_WHIP = MoveDef("Tail Whip", "扫尾", "attack", base_damage=8)  # 另施加 2 层易伤
 
     def __init__(self, idx: int, hp: int, max_hp: int):
-        super().__init__(idx, hp, max_hp, "蛇颈龙(Snecko)")
+        super().__init__(idx, hp, max_hp, "异蛇(Snecko)")
 
     @classmethod
     def create(cls, bc: BattleContext, idx: int) -> "Snecko":
@@ -2516,15 +2516,15 @@ class Snecko(Monster):
         move = self.move_history[0]
         match move.name:
             case "Perplexing Glare":
-                bc.log.append(f"{self.display_name} 使用 迷惑视线(Perplexing Glare)，你被混乱了！")
+                bc.log.append(f"{self.display_name} 使用 困惑瞪视(Perplexing Glare)，你被混乱了！")
                 bc.add_to_bot(Actions.debuff_player(PlayerStatus.CONFUSED, 1, True))
             case "Bite":
                 dmg = bc.calculate_monster_damage(self, 18 if bc.ascension >= 2 else 15)
-                bc.log.append(f"{self.display_name} 使用 撕咬(Bite)。")
+                bc.log.append(f"{self.display_name} 使用 噬咬(Bite)。")
                 bc.add_to_bot(Actions.attack_player(self.idx, dmg))
             case "Tail Whip":
                 dmg = bc.calculate_monster_damage(self, 10 if bc.ascension >= 2 else 8)
-                bc.log.append(f"{self.display_name} 使用 尾鞭(Tail Whip)。")
+                bc.log.append(f"{self.display_name} 使用 扫尾(Tail Whip)。")
                 bc.add_to_bot(Actions.attack_player(self.idx, dmg))
                 bc.add_to_bot(Actions.debuff_player(PlayerStatus.VULNERABLE, 2, True))
                 if bc.ascension >= 17:
@@ -2614,7 +2614,7 @@ class Mystic(Monster):
     """
 
     name = "Mystic"
-    zh = "秘术师"
+    zh = "神秘术士"
     hp_range = (48, 56)
     hp_range_high = (50, 58)
 
@@ -2623,7 +2623,7 @@ class Mystic(Monster):
     HEAL = MoveDef("Heal", "治疗", "buff", intent_text="治疗自身与百夫长 16 点 HP")
 
     def __init__(self, idx: int, hp: int, max_hp: int):
-        super().__init__(idx, hp, max_hp, "秘术师(Mystic)")
+        super().__init__(idx, hp, max_hp, "神秘术士(Mystic)")
 
     @classmethod
     def create(cls, bc: BattleContext, idx: int) -> "Mystic":
@@ -2724,17 +2724,17 @@ class GremlinLeader(Monster):
     """
 
     name = "Gremlin Leader"
-    zh = "小鬼头目"
+    zh = "地精首领"
     hp_range = (140, 148)
     hp_range_high = (145, 155)
     hp_high_asc = 8
 
     ENCOURAGE = MoveDef("Encourage", "鼓动", "buff", intent_text="小鬼们力量 +3、格挡 +6，自身力量 +3")
-    RALLY = MoveDef("Rally", "集结", "unknown", intent_text="召唤 2 只随机小鬼")
+    RALLY = MoveDef("Rally", "集合！", "unknown", intent_text="召唤 2 只随机小鬼")
     STAB = MoveDef("Stab", "刺击", "attack", base_damage=6)  # ×3 段
 
     def __init__(self, idx: int, hp: int, max_hp: int):
-        super().__init__(idx, hp, max_hp, "小鬼头目(Gremlin Leader)")
+        super().__init__(idx, hp, max_hp, "地精首领(Gremlin Leader)")
         # 对齐 C++ preBattleAction：MINION_LEADER
         self.statuses.add(MonsterStatus.MINION_LEADER, 1)
 
@@ -2783,7 +2783,7 @@ class GremlinLeader(Monster):
                         minion.block += block_gain  # C++ addBlock 立即结算
                 self.statuses.add(MonsterStatus.STRENGTH, str_gain)
             case "Rally":
-                bc.log.append(f"{self.display_name} 使用 集结(Rally)！")
+                bc.log.append(f"{self.display_name} 使用 集合！(Rally)！")
                 bc.add_to_bot(_summon_gremlins_action())
             case "Stab":
                 dmg = bc.calculate_monster_damage(self, 6)
@@ -2814,7 +2814,7 @@ class BookOfStabbing(Monster):
     """
 
     name = "Book of Stabbing"
-    zh = "刺击之书"
+    zh = "扎人的书"
     hp_range = (160, 164)
     hp_range_high = (168, 172)
     hp_high_asc = 8
@@ -2823,7 +2823,7 @@ class BookOfStabbing(Monster):
     SINGLE_STAB = MoveDef("Single Stab", "单刺", "attack", base_damage=21)
 
     def __init__(self, idx: int, hp: int, max_hp: int):
-        super().__init__(idx, hp, max_hp, "刺击之书(Book of Stabbing)")
+        super().__init__(idx, hp, max_hp, "扎人的书(Book of Stabbing)")
         # 对齐 C++ preBattleAction：PAINFUL_STABS + 计数起点 1
         self.statuses.add(MonsterStatus.PAINFUL_STABS, 1)
         self.misc_info = 1
@@ -2901,19 +2901,19 @@ class BronzeAutomaton(Monster):
     """
 
     name = "Bronze Automaton"
-    zh = "青铜自律机"
+    zh = "铜制机械人偶"
     hp_range = (300, 300)
     hp_range_high = (320, 320)
     hp_high_asc = 9
 
     FLAIL = MoveDef("Flail", "连枷", "attack", base_damage=7)  # ×2 段
     BOOST = MoveDef("Boost", "充能", "buff", intent_text="力量 +3，格挡 +9")
-    HYPER_BEAM = MoveDef("Hyper Beam", "超光束", "attack", base_damage=45)
+    HYPER_BEAM = MoveDef("Hyper Beam", "超能光束", "attack", base_damage=45)
     SPAWN_ORBS = MoveDef("Spawn Orbs", "召球", "unknown", intent_text="召唤 2 只青铜球")
     STUNNED = MoveDef("Stunned", "眩晕", "unknown", intent_text="（无动作）")
 
     def __init__(self, idx: int, hp: int, max_hp: int):
-        super().__init__(idx, hp, max_hp, "青铜自律机(Bronze Automaton)")
+        super().__init__(idx, hp, max_hp, "铜制机械人偶(Bronze Automaton)")
         # 对齐 C++ preBattleAction：MINION_LEADER + ARTIFACT 3
         self.statuses.add(MonsterStatus.MINION_LEADER, 1)
         self.statuses.add(MonsterStatus.ARTIFACT, 3)
@@ -2949,7 +2949,7 @@ class BronzeAutomaton(Monster):
                     self.misc_info = 1
             case "Hyper Beam":
                 dmg = bc.calculate_monster_damage(self, 50 if bc.ascension >= 4 else 45)
-                bc.log.append(f"{self.display_name} 使用 超光束(Hyper Beam)！")
+                bc.log.append(f"{self.display_name} 使用 超能光束(Hyper Beam)！")
                 bc.add_to_bot(Actions.attack_player(self.idx, dmg))
                 self.set_move(self.BOOST if bc.ascension >= 19 else self.STUNNED)
             case "Spawn Orbs":
@@ -2999,7 +2999,7 @@ class BronzeOrb(Monster):
     """
 
     name = "Bronze Orb"
-    zh = "青铜球"
+    zh = "铜球"
     hp_range = (52, 58)
     hp_range_high = (54, 60)
     hp_high_asc = 9
@@ -3009,7 +3009,7 @@ class BronzeOrb(Monster):
     SUPPORT_BEAM = MoveDef("Support Beam", "支援光束", "defend", intent_text="为青铜自律机提供 12 点格挡")
 
     def __init__(self, idx: int, hp: int, max_hp: int):
-        super().__init__(idx, hp, max_hp, "青铜球(Bronze Orb)")
+        super().__init__(idx, hp, max_hp, "铜球(Bronze Orb)")
         self.stasis_cards: list = []  # 偷到的卡（引擎 die() 归还弃牌堆）
 
     @classmethod
@@ -3164,7 +3164,7 @@ class TorchHead(Monster):
     """
 
     name = "Torch Head"
-    zh = "火把头"
+    zh = "火炬头"
     hp_range = (38, 40)
     hp_range_high = (40, 45)
     hp_high_asc = 9
@@ -3172,7 +3172,7 @@ class TorchHead(Monster):
     TACKLE = MoveDef("Tackle", "冲撞", "attack", base_damage=7)
 
     def __init__(self, idx: int, hp: int, max_hp: int):
-        super().__init__(idx, hp, max_hp, "火把头(Torch Head)")
+        super().__init__(idx, hp, max_hp, "火炬头(Torch Head)")
         self.statuses.add(MonsterStatus.MINION, 1)
 
     @classmethod
@@ -3215,21 +3215,21 @@ class TheChamp(Monster):
     """
 
     name = "The Champ"
-    zh = "勇士"
+    zh = "第一勇士"
     hp_range = (420, 420)
     hp_range_high = (440, 440)
     hp_high_asc = 9
 
     HEAVY_SLASH = MoveDef("Heavy Slash", "重斩", "attack", base_damage=16)
-    DEFENSIVE_STANCE = MoveDef("Defensive Stance", "防御姿态", "defend", intent_text="获得 15 点格挡与 5 层金属化")
+    DEFENSIVE_STANCE = MoveDef("Defensive Stance", "防御态势", "defend", intent_text="获得 15 点格挡与 5 层金属化")
     EXECUTE = MoveDef("Execute", "处决", "attack", base_damage=10)  # ×2 段
-    FACE_SLAP = MoveDef("Face Slap", "掌掴", "attack", base_damage=12)  # 另施加 2 层脆弱与 2 层易伤
+    FACE_SLAP = MoveDef("Face Slap", "打脸", "attack", base_damage=12)  # 另施加 2 层脆弱与 2 层易伤
     GLOAT = MoveDef("Gloat", "得意", "buff", intent_text="力量 +3")
     TAUNT = MoveDef("Taunt", "嘲讽", "debuff", intent_text="施加 2 层虚弱与 2 层易伤")
     ANGER = MoveDef("Anger", "愤怒", "buff", intent_text="移除自身削弱，力量 +6")
 
     def __init__(self, idx: int, hp: int, max_hp: int):
-        super().__init__(idx, hp, max_hp, "勇士(The Champ)")
+        super().__init__(idx, hp, max_hp, "第一勇士(The Champ)")
 
     @classmethod
     def create(cls, bc: BattleContext, idx: int) -> "TheChamp":
@@ -3272,7 +3272,7 @@ class TheChamp(Monster):
                 metal = 7 if bc.ascension >= 19 else 6 if bc.ascension >= 9 else 5
                 self.block += block_amt  # C++ addBlock 立即结算
                 self.statuses.add(MonsterStatus.METALLICIZE, metal)
-                bc.log.append(f"{self.display_name} 使用 防御姿态(Defensive Stance)，格挡 +{block_amt}、金属化 +{metal}。")
+                bc.log.append(f"{self.display_name} 使用 防御态势(Defensive Stance)，格挡 +{block_amt}、金属化 +{metal}。")
             case "Execute":
                 dmg = bc.calculate_monster_damage(self, 10)
                 bc.log.append(f"{self.display_name} 使用 处决(Execute)，{dmg} 点伤害 ×2！")
@@ -3280,7 +3280,7 @@ class TheChamp(Monster):
                     bc.add_to_bot(Actions.attack_player(self.idx, dmg))
             case "Face Slap":
                 dmg = bc.calculate_monster_damage(self, 14 if bc.ascension >= 4 else 12)
-                bc.log.append(f"{self.display_name} 使用 掌掴(Face Slap)。")
+                bc.log.append(f"{self.display_name} 使用 打脸(Face Slap)。")
                 bc.add_to_bot(Actions.attack_player(self.idx, dmg))
                 bc.add_to_bot(Actions.debuff_player(PlayerStatus.FRAIL, 2, True))
                 bc.add_to_bot(Actions.debuff_player(PlayerStatus.VULNERABLE, 2, True))
@@ -3406,7 +3406,7 @@ class Darkling(Monster):
     """
 
     name = "Darkling"
-    zh = "暗裔幼体"
+    zh = "小黑"
     hp_range = (48, 56)
     hp_range_high = (50, 59)
 
@@ -3417,7 +3417,7 @@ class Darkling(Monster):
     REINCARNATE = MoveDef("Reincarnate", "转生", "buff", intent_text="以 50% 最大生命复活")
 
     def __init__(self, idx: int, hp: int, max_hp: int, nip_dmg: int):
-        super().__init__(idx, hp, max_hp, "暗裔幼体(Darkling)")
+        super().__init__(idx, hp, max_hp, "小黑(Darkling)")
         self.misc_info = nip_dmg  # 对齐 C++ construct：Nip 伤害挂 miscInfo
         self.NIP = MoveDef("Nip", "啃咬", "attack", base_damage=nip_dmg)
 
@@ -3526,7 +3526,7 @@ class OrbWalker(Monster):
     """
 
     name = "Orb Walker"
-    zh = "奥术行走者"
+    zh = "圆球行者"
     hp_range = (90, 96)
     hp_range_high = (92, 102)
     hp_high_asc = 7
@@ -3535,7 +3535,7 @@ class OrbWalker(Monster):
     CLAW = MoveDef("Claw", "爪击", "attack", base_damage=15)
 
     def __init__(self, idx: int, hp: int, max_hp: int):
-        super().__init__(idx, hp, max_hp, "奥术行走者(Orb Walker)")
+        super().__init__(idx, hp, max_hp, "圆球行者(Orb Walker)")
 
     @classmethod
     def create(cls, bc: BattleContext, idx: int) -> "OrbWalker":
@@ -3579,7 +3579,7 @@ class Repulsor(Monster):
     """
 
     name = "Repulsor"
-    zh = "排斥者"
+    zh = "反冲机"
     hp_range = (29, 35)
     hp_range_high = (31, 38)
 
@@ -3587,7 +3587,7 @@ class Repulsor(Monster):
     REPULSE = MoveDef("Repulse", "排斥", "debuff", intent_text="洗 2 张眩晕进抽牌堆")
 
     def __init__(self, idx: int, hp: int, max_hp: int):
-        super().__init__(idx, hp, max_hp, "排斥者(Repulsor)")
+        super().__init__(idx, hp, max_hp, "反冲机(Repulsor)")
 
     @classmethod
     def create(cls, bc: BattleContext, idx: int) -> "Repulsor":
@@ -3627,7 +3627,7 @@ class Exploder(Monster):
     """
 
     name = "Exploder"
-    zh = "爆爆虫"
+    zh = "爆炸机"
     hp_range = (30, 30)
     hp_range_high = (30, 35)
     hp_high_asc = 7
@@ -3636,7 +3636,7 @@ class Exploder(Monster):
     EXPLODE = MoveDef("Explode", "自爆", "attack", base_damage=30)  # 非攻击 HP 损失
 
     def __init__(self, idx: int, hp: int, max_hp: int):
-        super().__init__(idx, hp, max_hp, "爆爆虫(Exploder)")
+        super().__init__(idx, hp, max_hp, "爆炸机(Exploder)")
 
     @classmethod
     def create(cls, bc: BattleContext, idx: int) -> "Exploder":
@@ -3678,7 +3678,7 @@ class Spiker(Monster):
     """
 
     name = "Spiker"
-    zh = "尖刺体"
+    zh = "钉刺机"
     hp_range = (42, 56)
     hp_range_high = (44, 60)
 
@@ -3686,7 +3686,7 @@ class Spiker(Monster):
     SPIKE = MoveDef("Spike", "尖刺", "buff", intent_text="荆棘 +2")
 
     def __init__(self, idx: int, hp: int, max_hp: int):
-        super().__init__(idx, hp, max_hp, "尖刺体(Spiker)")
+        super().__init__(idx, hp, max_hp, "钉刺机(Spiker)")
 
     @classmethod
     def create(cls, bc: BattleContext, idx: int) -> "Spiker":
@@ -3744,7 +3744,7 @@ class SpireGrowth(Monster):
     """
 
     name = "Spire Growth"
-    zh = "尖塔生长体"
+    zh = "塔内增生组织"
     hp_range = (170, 170)
     hp_range_high = (190, 190)
 
@@ -3753,7 +3753,7 @@ class SpireGrowth(Monster):
     CONSTRICT = MoveDef("Constrict", "紧勒", "debuff", intent_text="施加 10 层紧勒（回合末掉血）")
 
     def __init__(self, idx: int, hp: int, max_hp: int):
-        super().__init__(idx, hp, max_hp, "尖塔生长体(Spire Growth)")
+        super().__init__(idx, hp, max_hp, "塔内增生组织(Spire Growth)")
 
     @classmethod
     def create(cls, bc: BattleContext, idx: int) -> "SpireGrowth":
@@ -3815,13 +3815,13 @@ class Transient(Monster):
     """
 
     name = "Transient"
-    zh = "瞬变体"
+    zh = "倏忽魔"
     hp_range = (999, 999)
 
     ATTACK = MoveDef("Attack", "攻击", "attack", base_damage=30)
 
     def __init__(self, idx: int, hp: int, max_hp: int):
-        super().__init__(idx, hp, max_hp, "瞬变体(Transient)")
+        super().__init__(idx, hp, max_hp, "倏忽魔(Transient)")
 
     @classmethod
     def create(cls, bc: BattleContext, idx: int) -> "Transient":
@@ -3936,7 +3936,7 @@ class WrithingMass(Monster):
     """
 
     name = "Writhing Mass"
-    zh = "扭结团块"
+    zh = "扭曲团块"
     hp_range = (160, 160)
     hp_range_high = (175, 175)
 
@@ -3947,7 +3947,7 @@ class WrithingMass(Monster):
     WITHER = MoveDef("Wither", "枯萎", "attack", base_damage=10)  # 另施加 2 虚弱与 2 易伤
 
     def __init__(self, idx: int, hp: int, max_hp: int):
-        super().__init__(idx, hp, max_hp, "扭结团块(Writhing Mass)")
+        super().__init__(idx, hp, max_hp, "扭曲团块(Writhing Mass)")
 
     @classmethod
     def create(cls, bc: BattleContext, idx: int) -> "WrithingMass":
@@ -4083,7 +4083,7 @@ class GiantHead(Monster):
     """
 
     name = "Giant Head"
-    zh = "巨人头"
+    zh = "大脑袋"
     hp_range = (500, 500)
     hp_range_high = (520, 520)
     hp_high_asc = 8
@@ -4093,7 +4093,7 @@ class GiantHead(Monster):
     IT_IS_TIME = MoveDef("It Is Time", "时机已到", "attack", base_damage=30)
 
     def __init__(self, idx: int, hp: int, max_hp: int):
-        super().__init__(idx, hp, max_hp, "巨人头(Giant Head)")
+        super().__init__(idx, hp, max_hp, "大脑袋(Giant Head)")
         # SLOW 0 层起点：_ZeroBasedStatuses 使 has() 恒真（计数/清零照常）
         self.statuses = _ZeroBasedStatuses((MonsterStatus.SLOW,))
 
@@ -4162,7 +4162,7 @@ class Nemesis(Monster):
     """
 
     name = "Nemesis"
-    zh = "复仇者"
+    zh = "天罚"
     hp_range = (185, 185)
     hp_range_high = (200, 200)
     hp_high_asc = 8
@@ -4172,7 +4172,7 @@ class Nemesis(Monster):
     SECOND_STRIKE = MoveDef("Second Strike", "第二击", "debuff", intent_text="塞 3 张灼伤进弃牌堆")
 
     def __init__(self, idx: int, hp: int, max_hp: int):
-        super().__init__(idx, hp, max_hp, "复仇者(Nemesis)")
+        super().__init__(idx, hp, max_hp, "天罚(Nemesis)")
 
     @classmethod
     def create(cls, bc: BattleContext, idx: int) -> "Nemesis":
@@ -4272,7 +4272,7 @@ class Reptomancer(Monster):
     """
 
     name = "Reptomancer"
-    zh = "爬行者法师"
+    zh = "拜蛇术士"
     hp_range = (180, 190)
     hp_range_high = (190, 200)
     hp_high_asc = 8
@@ -4282,7 +4282,7 @@ class Reptomancer(Monster):
     SUMMON = MoveDef("Summon", "召唤", "unknown", intent_text="召唤匕首")
 
     def __init__(self, idx: int, hp: int, max_hp: int):
-        super().__init__(idx, hp, max_hp, "爬行者法师(Reptomancer)")
+        super().__init__(idx, hp, max_hp, "拜蛇术士(Reptomancer)")
         self.statuses.add(MonsterStatus.MINION_LEADER, 1)
 
     @classmethod
@@ -4419,9 +4419,9 @@ class AwakenedOne(Monster):
     hp_high_asc = 9
 
     SLASH = MoveDef("Slash", "挥砍", "attack", base_damage=20)
-    SOUL_STRIKE = MoveDef("Soul Strike", "灵魂斩击", "attack", base_damage=6)  # ×4 段
+    SOUL_STRIKE = MoveDef("Soul Strike", "灵魂攻击", "attack", base_damage=6)  # ×4 段
     REBIRTH = MoveDef("Rebirth", "重生", "buff", intent_text="满血复活，进入第二形态")
-    DARK_ECHO = MoveDef("Dark Echo", "黑暗回响", "attack", base_damage=40)
+    DARK_ECHO = MoveDef("Dark Echo", "黑暗回音", "attack", base_damage=40)
     SLUDGE = MoveDef("Sludge", "污泥", "attack", base_damage=18)  # 另洗 1 张虚空
     TACKLE = MoveDef("Tackle", "冲撞", "attack", base_damage=10)  # ×3 段
 
@@ -4479,7 +4479,7 @@ class AwakenedOne(Monster):
                 bc.add_to_bot(Actions.roll_move(self.idx))
             case "Soul Strike":
                 dmg = bc.calculate_monster_damage(self, 6)
-                bc.log.append(f"{self.display_name} 使用 灵魂斩击(Soul Strike)，{dmg} 点伤害 ×4！")
+                bc.log.append(f"{self.display_name} 使用 灵魂攻击(Soul Strike)，{dmg} 点伤害 ×4！")
                 for _ in range(4):
                     bc.add_to_bot(Actions.attack_player(self.idx, dmg))
                 bc.add_to_bot(Actions.roll_move(self.idx))
@@ -4499,7 +4499,7 @@ class AwakenedOne(Monster):
                 bc.add_to_bot(Actions.no_op_roll_move())
             case "Dark Echo":
                 dmg = bc.calculate_monster_damage(self, 40)
-                bc.log.append(f"{self.display_name} 使用 黑暗回响(Dark Echo)。")
+                bc.log.append(f"{self.display_name} 使用 黑暗回音(Dark Echo)。")
                 bc.add_to_bot(Actions.attack_player(self.idx, dmg))
                 bc.add_to_bot(Actions.roll_move(self.idx))
             case "Sludge":
@@ -4629,7 +4629,7 @@ class Deca(Monster):
     """
 
     name = "Deca"
-    zh = "德卡"
+    zh = "八体"
     hp_range = (250, 250)
     hp_range_high = (265, 265)
     hp_high_asc = 9
@@ -4639,7 +4639,7 @@ class Deca(Monster):
                                    intent_text="德卡与多努各获得 16 点格挡")
 
     def __init__(self, idx: int, hp: int, max_hp: int):
-        super().__init__(idx, hp, max_hp, "德卡(Deca)")
+        super().__init__(idx, hp, max_hp, "八体(Deca)")
 
     @classmethod
     def create(cls, bc: BattleContext, idx: int) -> "Deca":
@@ -4690,17 +4690,17 @@ class Donu(Monster):
     """
 
     name = "Donu"
-    zh = "多努"
+    zh = "甜圈"
     hp_range = (250, 250)
     hp_range_high = (265, 265)
     hp_high_asc = 9
 
     BEAM = MoveDef("Beam", "光束", "attack", base_damage=10)  # ×2 段
-    CIRCLE_OF_POWER = MoveDef("Circle of Power", "力量圆环", "buff",
+    CIRCLE_OF_POWER = MoveDef("Circle of Power", "力量之环", "buff",
                               intent_text="德卡与多努各力量 +3")
 
     def __init__(self, idx: int, hp: int, max_hp: int):
-        super().__init__(idx, hp, max_hp, "多努(Donu)")
+        super().__init__(idx, hp, max_hp, "甜圈(Donu)")
 
     @classmethod
     def create(cls, bc: BattleContext, idx: int) -> "Donu":
@@ -4723,7 +4723,7 @@ class Donu(Monster):
                     bc.add_to_bot(Actions.attack_player(self.idx, dmg))
                 self.set_move(self.CIRCLE_OF_POWER)
             case "Circle of Power":
-                bc.log.append(f"{self.display_name} 使用 力量圆环(Circle of Power)，德卡与多努各力量 +3。")
+                bc.log.append(f"{self.display_name} 使用 力量之环(Circle of Power)，德卡与多努各力量 +3。")
                 deca = bc.monsters.monsters[0]  # C++ 硬编码 arr[0]（死亡亦加，无害）
                 deca.statuses.add(MonsterStatus.STRENGTH, 3)
                 self.statuses.add(MonsterStatus.STRENGTH, 3)
@@ -4752,7 +4752,7 @@ class SpireShield(Monster):
     """
 
     name = "Spire Shield"
-    zh = "尖塔之盾"
+    zh = "高塔之盾"
     hp_range = (110, 110)
     hp_range_high = (125, 125)
     hp_high_asc = 8
@@ -4762,7 +4762,7 @@ class SpireShield(Monster):
     SMASH = MoveDef("Smash", "粉碎", "attack", base_damage=34)  # 另获得等同伤害的格挡
 
     def __init__(self, idx: int, hp: int, max_hp: int):
-        super().__init__(idx, hp, max_hp, "尖塔之盾(Spire Shield)")
+        super().__init__(idx, hp, max_hp, "高塔之盾(Spire Shield)")
 
     @classmethod
     def create(cls, bc: BattleContext, idx: int) -> "SpireShield":
@@ -4825,7 +4825,7 @@ class SpireSpear(Monster):
     """
 
     name = "Spire Spear"
-    zh = "尖塔之矛"
+    zh = "高塔之矛"
     hp_range = (160, 160)
     hp_range_high = (180, 180)
     hp_high_asc = 8
@@ -4835,7 +4835,7 @@ class SpireSpear(Monster):
     SKEWER = MoveDef("Skewer", "串刺", "attack", base_damage=10)  # ×3 段（A3 起 ×4）
 
     def __init__(self, idx: int, hp: int, max_hp: int):
-        super().__init__(idx, hp, max_hp, "尖塔之矛(Spire Spear)")
+        super().__init__(idx, hp, max_hp, "高塔之矛(Spire Spear)")
 
     @classmethod
     def create(cls, bc: BattleContext, idx: int) -> "SpireSpear":
@@ -5015,13 +5015,13 @@ class Pointy(Monster):
     """
 
     name = "Pointy"
-    zh = "尖刺"
+    zh = "尖尖"
     hp_range = (30, 30)
 
     ATTACK = MoveDef("Attack", "戳刺", "attack", base_damage=5)  # ×2 段
 
     def __init__(self, idx: int, hp: int, max_hp: int):
-        super().__init__(idx, hp, max_hp, "尖刺(Pointy)")
+        super().__init__(idx, hp, max_hp, "尖尖(Pointy)")
         if hp > 30:  # A7+ 段伤害提升
             self.ATTACK = MoveDef("Attack", "戳刺", "attack", base_damage=6)
 
@@ -5102,7 +5102,7 @@ class Bear(Monster):
     """
 
     name = "Bear"
-    zh = "大熊"
+    zh = "熊"
     # wiki：38-42（lightspeed 表 {{38,52}} 系其笔误——wiki/官方数据 38-42，wiki 比照修正）
     hp_range = (38, 42)
 
@@ -5111,7 +5111,7 @@ class Bear(Monster):
     MAUL = MoveDef("Maul", "撕裂", "attack", base_damage=18)
 
     def __init__(self, idx: int, hp: int, max_hp: int):
-        super().__init__(idx, hp, max_hp, "大熊(Bear)")
+        super().__init__(idx, hp, max_hp, "熊(Bear)")
 
     @classmethod
     def create(cls, bc: BattleContext, idx: int) -> "Bear":
@@ -5163,14 +5163,14 @@ class ApologySlime(Monster):
     """
 
     name = "Apology Slime"
-    zh = "道歉史莱姆"
+    zh = "抱歉史莱姆"
     hp_range = (8, 12)
 
     TACKLE = MoveDef("Tackle", "冲撞", "attack", base_damage=3)
     DEBUFF = MoveDef("Debuff", "道歉虚弱", "debuff", intent_text="施加 1 层虚弱")
 
     def __init__(self, idx: int, hp: int, max_hp: int):
-        super().__init__(idx, hp, max_hp, "道歉史莱姆(Apology Slime)")
+        super().__init__(idx, hp, max_hp, "抱歉史莱姆(Apology Slime)")
 
     @classmethod
     def create(cls, bc: BattleContext, idx: int) -> "ApologySlime":

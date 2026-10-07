@@ -126,20 +126,19 @@ def _decay_effect(bc: "BattleContext", item: "CardQueueItem") -> None:
 
 
 REGRET = CardDef("Regret", "悔恨", 0, "Curse",
-                 "不可打出。回合结束时，每有一张手牌便失去 1 点 HP（含自身）。",
+                 "不能被打出。\n在你的回合结束时，失去相当于手牌数量的生命。",
                  False, False, _unplayable_noop,
                  unplayable=True, no_trigger_effect=_regret_effect)
-INJURY = CardDef("Injury", "创伤", 0, "Curse",
-                 "不可打出。", False, False, _unplayable_noop, unplayable=True)
-SHAME = CardDef("Shame", "羞愧", 0, "Curse",
-                "不可打出。回合结束时获得 1 层脆弱。",
+INJURY = CardDef("Injury", "受伤", 0, "Curse",
+                 "不能被打出。", False, False, _unplayable_noop, unplayable=True)
+SHAME = CardDef("Shame", "羞耻", 0, "Curse",
+                "不能被打出。\n在你的回合结束时，获得 1 层脆弱。",
                 False, False, _unplayable_noop,
                 unplayable=True, no_trigger_effect=_shame_effect)
 PARASITE = CardDef("Parasite", "寄生", 0, "Curse",
-                   "不可打出。", False, False, _unplayable_noop, unplayable=True)
-NORMALITY = CardDef("Normality", "平庸", 0, "Curse",
-                    "不可打出。（在手牌中时，本回合最多只能打出 3 张牌——"
-                    "打出限制未实现）",
+                   "不能被打出。\n如果这张牌在你的牌组中被转化或移除，你失去 3 点最大生命。", False, False, _unplayable_noop, unplayable=True)
+NORMALITY = CardDef("Normality", "凡庸", 0, "Curse",
+                    "不能被打出。\n在手牌中时，你在此回合无法打出 3 张以上牌。",
                     False, False, _unplayable_noop, unplayable=True)
 # Normality 的打出限制未实现（2026-10-07 wiki 复核修正文本）：wiki 规则是
 # "While in hand, you cannot play more than 3 cards this turn."（该诅咒
@@ -149,25 +148,25 @@ NORMALITY = CardDef("Normality", "平庸", 0, "Curse",
 # 对不上"系误读。真正的阻塞在引擎层：出牌校验需在 battle.py play_card
 # 前置（内容层无对应钩子），故本文件仅落地 unplayable 位 + 文本。
 DOUBT = CardDef("Doubt", "疑虑", 0, "Curse",
-                "不可打出。回合结束时获得 1 层虚弱。",
+                "不能被打出。\n在你的回合结束时，获得 1 层虚弱。",
                 False, False, _unplayable_noop,
                 unplayable=True, no_trigger_effect=_doubt_effect)
-WRITHE = CardDef("Writhe", "煎熬", 0, "Curse",
-                "不可打出。固有。", False, False, _unplayable_noop,
+WRITHE = CardDef("Writhe", "苦恼", 0, "Curse",
+                "不能被打出。\n固有。", False, False, _unplayable_noop,
                 unplayable=True, innate=True)
-PAIN = CardDef("Pain", "痛苦", 0, "Curse",
-               "不可打出。在手牌中时，每打出一张其他牌便失去 1 点 HP。",
+PAIN = CardDef("Pain", "疼痛", 0, "Curse",
+               "不能被打出。\n当在手牌中时，每打出一张其他牌，失去 1 生命。",
                False, False, _unplayable_noop,
                unplayable=True, on_play_other_lose_hp=1)
 # Pain：引擎 use_card 已按手中剩余 Pain 计数结算（battle.py L339-341，
 # Actions.player_lose_hp 不吃格挡，对齐 C++ triggerOnOtherCardPlayed 的
 # PlayerLoseHp(1)×painCount——不含被打开的那张 Pain 自身）。
-DECAY = CardDef("Decay", "衰朽", 0, "Curse",
-                "不可打出。回合结束时受到 2 点伤害（吃格挡）。",
+DECAY = CardDef("Decay", "腐朽", 0, "Curse",
+                "不能被打出。\n在你的回合结束时，受到 2 点伤害。",
                 False, False, _unplayable_noop,
                 unplayable=True, no_trigger_effect=_decay_effect)
 CLUMSY = CardDef("Clumsy", "笨拙", 0, "Curse",
-                 "不可打出。虚无。", False, False, _unplayable_noop,
+                 "不能被打出。\n虚无。", False, False, _unplayable_noop,
                  unplayable=True, ethereal=True)
 
 
@@ -186,7 +185,7 @@ def _pride_effect(bc: "BattleContext", item: "CardQueueItem") -> None:
 
 
 PRIDE = CardDef("Pride", "傲慢", 1, "Curse",
-                "固有。回合结束时，将一张此卡的副本置于抽牌堆顶。消耗。",
+                "固有。消耗。\n你的回合结束时，在抽牌堆顶部加入一张这张牌的复制品。",
                 False, True, _unplayable_noop,
                 innate=True, no_trigger_effect=_pride_effect)
 # Pride 是唯一可用能量打出的诅咒（本体 cost 1 + exhaust + isInnate，
@@ -196,8 +195,8 @@ PRIDE = CardDef("Pride", "傲慢", 1, "Curse",
 # 消耗的词条，回合末原牌走弃牌，见迁移报告。
 
 
-ASCENDERS_BANE = CardDef("Ascender's Bane", "登塔者之灾", 0, "Curse",
-                         "不可打出。虚无。无法从牌组中移除。",
+ASCENDERS_BANE = CardDef("Ascender's Bane", "进阶之灾", 0, "Curse",
+                         "不能被打出。\n虚无。\n不能从牌组中移除。",
                          False, False, _unplayable_noop,
                          unplayable=True, ethereal=True)
 # "无法移除"是局外层概念（C++ Card.cpp L84 transformable 排除三位），
@@ -210,8 +209,8 @@ ASCENDERS_BANE = CardDef("Ascender's Bane", "登塔者之灾", 0, "Curse",
 # 此前按"结算路径以 C++ 为准"误继承，已删除。
 
 
-CURSE_OF_THE_BELL = CardDef("Curse of the Bell", "丧钟之咒", 0, "Curse",
-                            "不可打出。无法从牌组中移除。",
+CURSE_OF_THE_BELL = CardDef("Curse of the Bell", "铃铛的诅咒", 0, "Curse",
+                            "不能被打出。\n不能从牌组中移除。",
                             False, False, _unplayable_noop,
                             unplayable=True)
 
@@ -227,7 +226,7 @@ def _necronomicurse_on_exhaust(bc: "BattleContext", inst: "CardInstance") -> Non
     bc.add_to_bot(Actions.make_temp_card_in_hand(NECRONOMICURSE))
 
 
-NECRONOMICURSE = CardDef("Necronomicurse", "死灵之咒", 0, "Curse",
-                         "不可打出。无法从牌组中移除。（被消耗时复制一张入手）",
+NECRONOMICURSE = CardDef("Necronomicurse", "死灵诅咒", 0, "Curse",
+                         "不能被打出。\n这个诅咒无法逃脱。",
                          False, False, _unplayable_noop,
                          unplayable=True, on_exhaust_effect=_necronomicurse_on_exhaust)

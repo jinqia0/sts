@@ -276,6 +276,29 @@ class Actions:
     def empty_deck_shuffle() -> Action:
         return Action(lambda bc: bc.on_shuffle())
 
+    @staticmethod
+    def on_after_card_used() -> Action:
+        """出牌收尾（对齐 Actions::OnAfterCardUsed，本体 UseCardAction）：
+        由 use_card 压入队尾、晚于卡牌效果动作执行——收尾执行前打出的牌
+        不属于任何堆，效果动作读到的牌堆不含这张牌（自抽 bug 的修复点）。
+        clear_on_victory=False 对齐 C++ 该动作第二参 false（胜利不清除）。"""
+        return Action(lambda bc: bc.on_after_use_card(), clear_on_victory=False)
+
+    @staticmethod
+    def discard_no_trigger_card() -> Action:
+        """诅咒/状态自动结算的落堆（对齐 Actions::DiscardNoTriggerCard，
+        Actions.cpp:272-278；本项目额外支持 no_trigger_exhausts 走消耗堆）。
+        入队晚于效果动作，效果执行时该卡不在弃牌堆。"""
+        def run(bc: BattleContext) -> None:
+            inst = bc.cur_card_queue_item.card
+            if inst.card.no_trigger_exhausts:
+                bc.cards.move_to_exhaust_pile(inst)
+                bc.on_card_exhausted(inst)
+            else:
+                bc.cards.move_to_discard_pile(inst)
+
+        return Action(run, clear_on_victory=False)
+
     # ---- Defect 充能球 ----
     @staticmethod
     def channel_orb(orb: Orb) -> Action:

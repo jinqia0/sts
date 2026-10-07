@@ -495,24 +495,6 @@ class BattleContext:
         for m in self.monsters.monsters:
             if m.is_targetable() and m.statuses.has(MonsterStatus.CHOKED):
                 self.add_to_bot(Actions.damage_enemy(m.idx, m.statuses.get(MonsterStatus.CHOKED)))
-        # 逐怪"出牌响应"状态（对齐 onAfterUseCard 的 arr[0] 段，BattleContext.cpp:1941-1959；
-        # C++ 只查 arr[0]——Time Eater/SLOW/BEAT_OF_DEATH 均为单怪遭遇，沿用）
-        if not item.autoplay:
-            m0 = self.monsters.monsters[0] if self.monsters.monsters else None
-            if m0 is not None and not m0.is_dead_or_escaped():
-                if m0.statuses.has(MonsterStatus.TIME_WARP):
-                    tw = m0.statuses.get(MonsterStatus.TIME_WARP)
-                    if tw >= 11:
-                        # 满 12（11+1）：重置、+2 力量、提前结束回合
-                        m0.statuses.set(MonsterStatus.TIME_WARP, 0)
-                        m0.statuses.add(MonsterStatus.STRENGTH, 2)
-                        self._call_end_turn_early()
-                    else:
-                        m0.statuses.set(MonsterStatus.TIME_WARP, tw + 1)
-                if m0.statuses.has(MonsterStatus.SLOW):
-                    m0.statuses.add(MonsterStatus.SLOW, 1)
-                if m0.statuses.has(MonsterStatus.BEAT_OF_DEATH):
-                    self.add_to_bot(Actions.damage_player(m0.statuses.get(MonsterStatus.BEAT_OF_DEATH)))
         # 类型钩子（对齐 onUseXxxCard：通用攻击/技能/能力触发 + 遗物 + 怪物触发器）
         match inst.card.ctype:
             case "Attack":
@@ -523,17 +505,26 @@ class BattleContext:
                 self.on_use_power_card()
             case _:
                 self.on_use_status_or_curse_card(inst)
-        self.on_after_use_card()
-        # 诅咒 Pain：打出其他牌时失去 HP（按手中剩余 Pain 计）
+        # 诅咒 Pain：打出其他牌时失去 HP（按手中剩余 Pain 计）。本体
+        # Pain.triggerOnOtherCardPlayed → addToTop(LoseHPAction)（在
+        # AbstractPlayer.useCard 的效果入队之后、插队头）——掉血先于该牌
+        # 的效果动作结算；lightspeed triggerOnOtherCardPlayed 同为 addToTop。
+        # 多张 Pain 逐张 addToTop 与合并数值分布级等价
         pain = sum(c.card.on_play_other_lose_hp for c in self.cards.hand)
         if pain > 0:
-            self.add_to_bot(Actions.player_lose_hp(pain))
+            self.add_to_top(Actions.player_lose_hp(pain))
+        # 出牌收尾入队（对齐 useCard 的 addToBot(OnAfterCardUsed)，本体
+        # UseCardAction）：排在卡牌效果动作之后执行，执行前打出的牌不属
+        # 于任何堆（limbo）——效果动作读到的牌堆不含刚打出的这张，也就
+        # 不会出现"抽一牌把自己抽回来"
+        self.add_to_bot(Actions.on_after_card_used())
 
     def use_no_trigger_card(self) -> None:
         """诅咒/状态卡的自动结算（Burn/Regret/Decay/Doubt/Shame/Pride 等）。
 
-        结算前先移出手牌（效果读到的手牌数不含自身），效果执行后按
-        no_trigger_exhausts 走消耗堆或弃牌堆。
+        结算前先移出手牌（效果读到的手牌数不含自身），效果入队；落堆
+        （no_trigger_exhausts 走消耗堆、否则弃牌堆）为入队动作，晚于
+        效果执行（对齐 useNoTriggerCard 的 addToBot(DiscardNoTriggerCard)）。
         """
         item = self.cur_card_queue_item
         assert item is not None and item.card is not None
@@ -544,11 +535,7 @@ class BattleContext:
             pass  # 不在手牌（防御性：如重复入队）
         if inst.card.no_trigger_effect is not None:
             inst.card.no_trigger_effect(self, item)
-        if inst.card.no_trigger_exhausts:
-            self.cards.move_to_exhaust_pile(inst)
-            self.on_card_exhausted(inst)
-        else:
-            self.cards.move_to_discard_pile(inst)
+        self.add_to_bot(Actions.discard_no_trigger_card())
 
     def on_use_attack_card(self) -> None:
         p = self.player
@@ -635,11 +622,32 @@ class BattleContext:
         self.relics.on_use_status_or_curse_card(self, inst)
 
     def on_after_use_card(self) -> None:
-        """出牌收尾：进弃牌堆或消耗堆（对齐 onAfterUseCard；STRANGE_SPOON
-        50% 不消耗），手牌打空触发 UNCEASING_TOP。"""
+        """出牌收尾（对齐 onAfterUseCard，本体 UseCardAction；经
+        Actions.on_after_card_used 入队、晚于卡牌效果动作执行）：逐怪出牌
+        响应状态 → 进弃牌堆/消耗堆/洗回抽牌堆（STRANGE_SPOON 50% 不消耗），
+        手牌打空触发 UNCEASING_TOP。"""
         item = self.cur_card_queue_item
         assert item is not None and item.card is not None
         inst = item.card
+        # 逐怪"出牌响应"状态（对齐 onAfterUseCard 的 arr[0] 段，
+        # BattleContext.cpp:1941-1959；C++ 只查 arr[0]——Time Eater/
+        # SLOW/BEAT_OF_DEATH 均为单怪遭遇，沿用）
+        if not item.autoplay:
+            m0 = self.monsters.monsters[0] if self.monsters.monsters else None
+            if m0 is not None and not m0.is_dead_or_escaped():
+                if m0.statuses.has(MonsterStatus.TIME_WARP):
+                    tw = m0.statuses.get(MonsterStatus.TIME_WARP)
+                    if tw >= 11:
+                        # 满 12（11+1）：重置、+2 力量、提前结束回合
+                        m0.statuses.set(MonsterStatus.TIME_WARP, 0)
+                        m0.statuses.add(MonsterStatus.STRENGTH, 2)
+                        self._call_end_turn_early()
+                    else:
+                        m0.statuses.set(MonsterStatus.TIME_WARP, tw + 1)
+                if m0.statuses.has(MonsterStatus.SLOW):
+                    m0.statuses.add(MonsterStatus.SLOW, 1)
+                if m0.statuses.has(MonsterStatus.BEAT_OF_DEATH):
+                    self.add_to_bot(Actions.damage_player(m0.statuses.get(MonsterStatus.BEAT_OF_DEATH)))
         if item.purge_on_use:
             return  # 卡直接消失（复制重放体等）
         if inst.card.ctype == "Power":
@@ -654,13 +662,23 @@ class BattleContext:
                 self.cards.move_to_discard_pile(inst)
         elif self.player.statuses.has(PlayerStatus.REBOUND):
             # REBOUND（Defect，BattleContext.cpp:1975-1985/1998-2000）：==1 时
-            # 本回合下一张打出的牌置于抽牌堆顶并移除状态；>1 减到 1
-            if self.player.statuses.get(PlayerStatus.REBOUND) == 1:
+            # 本回合下一张打出的牌置于抽牌堆顶并移除状态；>1 减到 1。
+            # 刚由 Rebound 自身施加的状态不回弹这张（对齐本体 ReboundPower
+            # 的 justEvoked 首次消费）——施加动作先于本收尾执行，故在此消费
+            if self.player.special.pop("rebound_just_applied", False):
+                self.cards.move_to_discard_pile(inst)
+            elif self.player.statuses.get(PlayerStatus.REBOUND) == 1:
                 self.player.statuses.remove(PlayerStatus.REBOUND)
                 self.cards.append_to_draw_top(inst)
             else:
                 self.player.statuses.set(PlayerStatus.REBOUND, 1)
                 self.cards.move_to_discard_pile(inst)
+        elif inst.card.shuffle_back_into_draw_pile:
+            # Tantrum（本体 AbstractCard.shuffleBackIntoDrawPile：UseCardAction
+            # 收尾洗回抽牌堆随机位，C++ onAfterUseCard 的 TANTRUM 分支）
+            pos = (self.rngs.misc.int_inclusive(0, len(self.cards.draw_pile))
+                   if self.cards.draw_pile else 0)
+            self.cards.draw_pile.insert(pos, inst)
         else:
             self.cards.move_to_discard_pile(inst)
         if not self.cards.hand:
