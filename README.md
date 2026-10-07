@@ -12,6 +12,10 @@
 # 人机 CLI 试玩（可固定种子复现）
 uv run python -m sts.cli [--seed N]
 
+# 战斗网页调试器：浏览器自定义角色/卡组/遗物/药水/怪物后手动打一场，
+# 校验结算（伤害管线、触发顺序、卡牌交互）——stdlib 实现，零新依赖
+uv run python -m sts.webapp [--port 8765]
+
 # 测试（伤害管线数值、Cultist 行为、牌堆流转、胜负判定、种子确定性）
 uv run pytest
 ```

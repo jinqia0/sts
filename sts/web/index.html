@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>STS 战斗调试器</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+<!-- ============ 配置界面 ============ -->
+<div id="setup-view">
+  <header class="topbar">
+    <h1>杀戮尖塔 · 战斗调试器</h1>
+    <p class="sub">自定义角色 / 卡组 / 遗物 / 药水 / 怪物 → 手动打一场，校验结算</p>
+  </header>
+
+  <section class="panel">
+    <h2>角色</h2>
+    <div id="char-choice" class="char-row"></div>
+    <p class="hint">切换角色会载入该职业初始牌组（可继续编辑）；最大生命：铁甲 80 / 静默 70 / 故障 75 / 观者 72。</p>
+  </section>
+
+  <section class="panel">
+    <h2>卡组 <span id="deck-count" class="badge"></span></h2>
+    <div class="search-box">
+      <input id="card-search" placeholder="搜卡：中文名 / 英文名 / 类型（攻击 技能 能力…）" autocomplete="off">
+      <div id="card-search-results" class="dropdown hidden"></div>
+    </div>
+    <table class="deck-table" id="deck-table">
+      <thead><tr><th>卡牌</th><th>费</th><th>类型</th><th>数量</th><th>其中升级</th><th></th></tr></thead>
+      <tbody id="deck-tbody"></tbody>
+    </table>
+    <p class="hint">抽到的牌费用变动、虚无 / 固有等关键字都会在战斗界面如实显示。</p>
+  </section>
+
+  <section class="panel">
+    <h2>遗物 <span id="relic-count" class="badge"></span></h2>
+    <div class="search-box">
+      <input id="relic-search" placeholder="搜遗物（中文名 / 英文名）" autocomplete="off">
+      <div id="relic-search-results" class="dropdown hidden"></div>
+    </div>
+    <div id="relic-chips" class="chips"></div>
+  </section>
+
+  <section class="panel">
+    <h2>药水</h2>
+    <div id="potion-slots" class="potion-row"></div>
+  </section>
+
+  <section class="panel">
+    <h2>怪物</h2>
+    <div class="mode-row">
+      <label><input type="radio" name="monster-mode" value="encounter" checked> 注册遭遇</label>
+      <label><input type="radio" name="monster-mode" value="custom"> 自定义组怪</label>
+    </div>
+    <div id="encounter-box">
+      <select id="encounter-select"></select>
+    </div>
+    <div id="custom-monster-box" class="hidden">
+      <div class="search-box">
+        <input id="monster-search" placeholder="搜怪物（中文名 / 英文名）" autocomplete="off">
+        <div id="monster-search-results" class="dropdown hidden"></div>
+      </div>
+      <div id="custom-monster-list" class="chips"></div>
+      <p class="hint">最多 5 只（按行动顺序排列）。特殊机制怪（暗裔幼体假死复活等）以通用组队路径生成，个别行为可能与原版遭遇略有出入。</p>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>其他</h2>
+    <div class="inline-controls">
+      <label>种子 <input id="seed-input" type="number" placeholder="留空 = 随机" min="0"></label>
+      <label>进阶 <input id="ascension-input" type="number" value="0" min="0" max="20"></label>
+    </div>
+  </section>
+
+  <div class="start-row">
+    <button id="start-btn" class="primary big">开始战斗</button>
+  </div>
+</div>
+
+<!-- ============ 战斗界面 ============ -->
+<div id="battle-view" class="hidden">
+  <header class="topbar battle-top">
+    <h1>战斗中</h1>
+    <div class="battle-meta" id="battle-meta"></div>
+    <div class="battle-actions">
+      <button id="restart-same">同种子重开</button>
+      <button id="restart-new">换种子重开</button>
+      <button id="back-to-setup">调整配置</button>
+    </div>
+  </header>
+
+  <div id="targeting-banner" class="banner hidden">
+    选择目标：点击上方敌人 <button id="cancel-targeting">取消</button>
+  </div>
+  <div id="error-banner" class="banner error hidden"></div>
+
+  <main class="battle-main">
+    <div class="battle-col">
+      <section id="enemy-area" class="enemy-area"></section>
+
+      <section class="player-area" id="player-area"></section>
+
+      <section class="hand-area">
+        <h3>手牌</h3>
+        <div id="hand" class="hand"></div>
+        <div class="hand-controls">
+          <button id="end-turn-btn" class="primary big">结束回合</button>
+        </div>
+      </section>
+
+      <section class="piles">
+        <details id="pile-draw"><summary>抽牌堆（<span data-count></span>）</summary><div class="pile-list"></div></details>
+        <details id="pile-discard"><summary>弃牌堆（<span data-count></span>）</summary><div class="pile-list"></div></details>
+        <details id="pile-exhaust"><summary>消耗堆（<span data-count></span>）</summary><div class="pile-list"></div></details>
+        <details id="pile-limbo"><summary>保留区（<span data-count></span>）</summary><div class="pile-list"></div></details>
+      </section>
+    </div>
+
+    <aside class="log-area">
+      <h3>战斗日志</h3>
+      <div id="log" class="log"></div>
+    </aside>
+  </main>
+
+  <!-- 选卡 / Scry 弹层 -->
+  <div id="modal-overlay" class="modal-overlay hidden">
+    <div class="modal">
+      <h3 id="modal-title"></h3>
+      <p id="modal-hint" class="hint"></p>
+      <div id="modal-cards" class="modal-cards"></div>
+      <div class="modal-controls">
+        <button id="modal-cancel" class="hidden">跳过</button>
+        <button id="modal-confirm" class="primary">确认</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 终局弹层 -->
+  <div id="result-overlay" class="modal-overlay hidden">
+    <div class="modal">
+      <h3 id="result-title"></h3>
+      <p id="result-detail" class="hint"></p>
+      <div class="modal-controls">
+        <button id="result-close">查看战场</button>
+        <button id="result-restart" class="primary">再来一场（同配置）</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/app.js"></script>
+</body>
+</html>
