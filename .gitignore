@@ -13,3 +13,6 @@ sts_lightspeed/
 # 游戏本体解包数据（个人参考用，不进 git）
 sts-*.zip
 sts_game_data/
+
+# 训练产物（模型 checkpoint 与训练日志，可重新训练，不入库）
+models/
