@@ -18,6 +18,7 @@ class Outcome(IntEnum):
     UNDECIDED = 0
     PLAYER_VICTORY = 1
     PLAYER_LOSS = 2
+    ESCAPED = 3  # 玩家逃跑（烟雾弹）：战斗结束、不计胜负
 
 
 class InputState(Enum):
@@ -161,6 +162,10 @@ class PlayerStatus(IntEnum):
     BUFFER = 63  # 缓冲：下次 HP 损失被完全抵挡并消耗一层（Defect Buffer）
     # ---- 遗物审计批次（2026-10-06，wiki 核对补）----
     LOSE_DEXTERITY = 64  # 临时敏捷（Duality 遗物：打出攻击 +1 敏捷；回合末 -1×层并移除，LOSE_STRENGTH 的敏捷版）
+    # ---- 药水批次（2026-10-07，对照本体反编译源码）----
+    DUPLICATION = 65  # 复制（复制药水）：本回合下一张牌打出后额外结算一次（DuplicationPower，回合末解除）
+    REGEN_P = 66  # 玩家侧再生（再生药水）：回合末回复层数 HP、层数 -1（RegenPower.atEndOfRound）
+    RITUAL_P = 67  # 玩家侧仪式（邪教徒药水）：玩家回合末 +层 力量（RitualPower.atEndOfTurn(isPlayer)，无 skipFirst）
 
 
 class MonsterStatus(IntEnum):

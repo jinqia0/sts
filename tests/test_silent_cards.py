@@ -178,7 +178,7 @@ def test_silent_card_count_and_types():
     import sts.content.cards.silent as sc
 
     cards = [g for g in vars(sc).values() if isinstance(g, CardDef)]
-    assert len(cards) == 75
+    assert len(cards) == 76
     assert SHIV.cost == 0 and SHIV.exhausts and SHIV.ctype == "Attack"
 
 

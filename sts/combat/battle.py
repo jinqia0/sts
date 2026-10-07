@@ -40,7 +40,7 @@ from sts.combat.actions import Actions
 from sts.combat.card_manager import CardManager
 from sts.combat.entities import Monster, MonsterGroup, Player
 from sts.combat.queue import ActionQueue, CardQueue, CardQueueItem, CardSelectInfo
-from sts.combat.relics import RelicContainer
+from sts.combat.relics import BOSS_ENCOUNTERS, RelicContainer
 from sts.combat.types import InputState, MonsterStatus, Orb, Outcome, PlayerStatus, Stance
 from sts.rng import RngStreams
 
@@ -57,6 +57,9 @@ class BattleContext:
         ascension: int = 0,
         deck: list | None = None,
         relics: list | None = None,
+        bottled_cards: list[str] | None = None,
+        relic_counters: dict | None = None,
+        potions: list | None = None,
     ):
         # ---- 状态字段（对齐 lightspeed BattleContext.h）----
         self.rngs = RngStreams(seed)
@@ -64,7 +67,13 @@ class BattleContext:
         self.encounter = encounter
         self.ascension = ascension  # 进阶等级（A0 基准，怪物定义读此字段）
         self._deck_override = deck  # 测试/场景用：覆盖遭遇默认牌组
+        self.bottled_cards = list(bottled_cards or [])  # 瓶装遗物选定的卡名（拾取时局外选卡，场景层表达）
         self.relics = RelicContainer(relics)
+        # 遗物计数器预置（场景层局外状态：如 ANCIENT_TEA_SET counter=-2 表
+        # "休息过，下场战斗首回合 +2 能量"）——须在首回合回能前生效
+        if relic_counters:
+            for rid, v in relic_counters.items():
+                self.relics.set_counter(rid, v)
         self.outcome = Outcome.UNDECIDED
         self.input_state = InputState.EXECUTING_ACTIONS
         self.card_select_info: CardSelectInfo | None = None
@@ -82,6 +91,14 @@ class BattleContext:
         self.player = Player(80)
         self.monsters = MonsterGroup()
         self.cards = CardManager()
+
+        # 药水初始携带（场景配置；单场模拟不模拟局外药水获取）
+        self.player.potion_slots = 3 + self.relics.potion_slot_bonus(self)
+        self.player.potions = [None] * self.player.potion_slots
+        for i, pd in enumerate(potions or []):
+            if i >= self.player.potion_slots:
+                break
+            self.player.potions[i] = pd
         self._loop_count = 0
 
         self._init_content()
@@ -105,6 +122,10 @@ class BattleContext:
         # 抽牌堆洗匀（shuffle 流）→ 固有牌置顶（Innate）
         self.rngs.shuffle.shuffle(self.cards.draw_pile)
         self.cards.move_innate_to_top()
+        # 瓶装牌（Bottled Flame/Lightning/Tornado）置堆顶（在固有之上，
+        # 对齐 CardGroup.initializeDeck 的 placeOnTop 顺序）
+        if self.bottled_cards:
+            self.cards.move_bottled_to_top(self.bottled_cards)
         # 战斗开始即生成第 1 回合意图（玩家开局可见，DESIGN.md §4.2）
         for m in self.monsters.monsters:
             m.roll_move(self)
@@ -133,6 +154,7 @@ class BattleContext:
         """回合开始回能：基础 3 + Berserk/能量遗物加成 + ICE_CREAM 结转 +
         Flying Knee/Outmaneuver 的下回合能量槽（Silent 卡，special 一次性）。"""
         base = ENERGY_PER_TURN + self.player.energy_per_turn_bonus + self.relics.extra_energy_per_turn(self)
+        base += self.relics.first_turn_energy_bonus(self)  # ANCIENT_TEA_SET：休息后首回合（counter=-2 一次性）
         base += self.player.special.pop("next_turn_energy", 0)
         leftover = self.player.energy if self.relics.keeps_leftover_energy(self) else 0
         self.player.energy = base + leftover
@@ -205,7 +227,7 @@ class BattleContext:
         if not (0 <= hand_idx < len(self.cards.hand)):
             raise ValueError(f"手牌编号无效：{hand_idx}")
         inst = self.cards.hand[hand_idx]
-        if inst.card.unplayable:
+        if inst.card.unplayable and not self.relics.makes_unplayable_playable(inst):
             raise ValueError(f"{inst.card.zh}({inst.card.name}) 不可打出")
         if inst.card.play_condition is not None and not inst.card.play_condition(self, inst):
             raise ValueError(f"{inst.card.zh}({inst.card.name}) 当前不满足打出条件")
@@ -256,6 +278,63 @@ class BattleContext:
         self.end_turn_queued = True
         self.set_state(InputState.EXECUTING_ACTIONS)
         self.execute_actions()
+
+    # ---- 药水（2026-10-07 批次，对照本体反编译源码）----
+    def use_potion(self, slot: int, target: int | None = None, choice: str | None = None) -> None:
+        """使用一格药水（AbstractPotion.use 的引擎入口）。
+
+        - 仅 PLAYER_NORMAL（本体 canUse 的 turnHasEnded 拒绝在此收敛为
+          出牌阶段可用；CARD_SELECT/SCRY 挂起期间不可用）
+        - targeting 药水（恐惧/虚弱/剧毒/火焰）需指定存活敌人（单敌人
+          自动指向，与 play_card 口径一致）
+        - STANCE_POTION 需 choice ∈ ("wrath", "calm")
+        - potency 经 SACRED_BARK ×2（AbstractPotion.getPotency L45-49）
+        - TOY_ORNITHOPTER 使用后回复 5 HP
+        """
+        if self.input_state != InputState.PLAYER_NORMAL:
+            raise ValueError("当前不在玩家出牌阶段，无法使用药水")
+        if not (0 <= slot < len(self.player.potions)):
+            raise ValueError(f"药水槽无效：{slot}")
+        pd = self.player.potions[slot]
+        if pd is None:
+            raise ValueError(f"药水槽 {slot} 为空")
+        if pd.escape_only and self.encounter in BOSS_ENCOUNTERS:
+            raise ValueError("烟雾弹不能在 Boss 战中使用")
+        if pd.auto_only:
+            raise ValueError(f"{pd.zh} 不能手动使用")
+        if pd.choices and choice not in pd.choices:
+            raise ValueError(f"{pd.zh} 需要选择：{list(pd.choices)}")
+        if pd.targeting:
+            if target is None:
+                if self.monsters.monster_count == 1 and self.monsters.monsters[0].is_targetable():
+                    target = 0
+                else:
+                    raise ValueError("该药水需要选择目标")
+            if not self.monsters.monsters[target].is_targetable():
+                raise ValueError("目标不可选")
+        self.player.potions[slot] = None
+        potency = pd.potency * (2 if self.relics.sacred_bark_doubles_potions(self) else 1)
+        self.log.append(f"你使用了 {pd.zh}({pd.name})。")
+        # 先置执行态再入队（与 play_card 同构）：use 内部 open_card_select
+        # 可将状态挂起为 CARD_SELECT，随后的 execute_actions 会正确停在挂起态
+        self.set_state(InputState.EXECUTING_ACTIONS)
+        pd.use(self, target, potency, choice)
+        self.relics.on_use_potion(self)
+        self.execute_actions()
+
+    def obtain_potion(self, pd) -> bool:
+        """获得一瓶药水（空槽放置；SOZU 拦截——"You can no longer
+        obtain potions"）。战斗内来源：Venomology 卡 / 熵变酿制药水。"""
+        from sts.combat.relics import RelicId
+
+        if self.relics.has(RelicId.SOZU):
+            self.log.append("苏珠：无法获得药水。")
+            return False
+        for i, cur in enumerate(self.player.potions):
+            if cur is None:
+                self.player.potions[i] = pd
+                return True
+        return False  # 槽满：丢弃（ObtainPotionAction 的弃置路径）
 
     def _gen_shiv(self) -> None:
         """生成 1 张 Shiv（AFTER_IMAGE/INFINITE_BLADES 状态结算；SHIV 定义
@@ -379,6 +458,15 @@ class BattleContext:
         self.log.append(f"你打出 {inst.card.zh}({inst.card.name})。")
         # 卡牌效果：内容层 play 把原子动作入队（对齐 useXxxCard 的 switch）
         inst.card.play(self, item)
+        # DUPLICATION（复制药水）：本回合下一张牌打出后额外结算一次
+        # （DuplicationPower.onUseCard → queueExtraCard，任意类型；触发即消耗）
+        if self.player.statuses.has(PlayerStatus.DUPLICATION) and not item.autoplay:
+            self.player.statuses.decrement(PlayerStatus.DUPLICATION)
+            replay = CardQueueItem(
+                card=item.card, target=item.target, purge_on_use=True,
+                autoplay=True, energy_on_use=item.energy_on_use,
+            )
+            self.add_to_bot_card(replay)
         # PANACHE：每打出 5 张牌全体伤害（C++ 四处 onUseXxxCard 的 --panacheCounter；
         # C++ 归零后不重置系 bug，按 wiki"每打出 5 张"重置计数）
         if self.player.statuses.has(PlayerStatus.PANACHE):
@@ -434,7 +522,7 @@ class BattleContext:
             case "Power":
                 self.on_use_power_card()
             case _:
-                self.on_use_status_or_curse_card()
+                self.on_use_status_or_curse_card(inst)
         self.on_after_use_card()
         # 诅咒 Pain：打出其他牌时失去 HP（按手中剩余 Pain 计）
         pain = sum(c.card.on_play_other_lose_hp for c in self.cards.hand)
@@ -543,8 +631,8 @@ class BattleContext:
                 self.add_to_bot(
                     Actions.buff_enemy(m.idx, MonsterStatus.STRENGTH, m.statuses.get(MonsterStatus.CURIOSITY)))
 
-    def on_use_status_or_curse_card(self) -> None:
-        self.relics.on_use_status_or_curse_card(self)
+    def on_use_status_or_curse_card(self, inst) -> None:
+        self.relics.on_use_status_or_curse_card(self, inst)
 
     def on_after_use_card(self) -> None:
         """出牌收尾：进弃牌堆或消耗堆（对齐 onAfterUseCard；STRANGE_SPOON
@@ -831,7 +919,7 @@ class BattleContext:
                 c.retain = False
         keep = self.relics.keeps_hand_at_end_of_turn(self) or self.player.statuses.has(PlayerStatus.EQUILIBRIUM)
         for inst in list(self.cards.hand):
-            if inst.card.ethereal:
+            if inst.is_ethereal:
                 self.cards.hand.remove(inst)
                 self.cards.move_to_exhaust_pile(inst)
                 self.log.append(f"{inst.card.zh}({inst.card.name}) 虚无消散。")
@@ -954,7 +1042,12 @@ class BattleContext:
                     self.player.heal(3 * n)
             self.action_queue.clear_post_combat()
             self.card_queue.clear()
-            self.log.append("战斗胜利！" if self.outcome == Outcome.PLAYER_VICTORY else "你被击败了……")
+            if self.outcome == Outcome.PLAYER_VICTORY:
+                self.log.append("战斗胜利！")
+            elif self.outcome == Outcome.ESCAPED:
+                self.log.append("你逃离了战斗。")
+            else:
+                self.log.append("你被击败了……")
 
     # ---- 观测辅助（CLI / 环境用；不引入新信息）----
     @property

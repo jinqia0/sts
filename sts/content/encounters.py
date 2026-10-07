@@ -84,6 +84,7 @@ from sts.content.cards import starting_deck
 from sts.content.monsters import (
     _HalfDeadMonsterGroup,
     _HORDE_PLACEHOLDER,
+    ApologySlime,
     AcidSlimeL,
     AcidSlimeM,
     AcidSlimeS,
@@ -550,10 +551,15 @@ def _setup_mushrooms_event(bc: BattleContext) -> None:
 
 
 def _setup_dead_adventurer(bc: BattleContext) -> None:
-    """Dead Adventurer 事件：三选一精英战（拉格维林/小鬼巨汉/三哨卫）。"""
+    """Dead Adventurer 事件：三选一精英战（拉格维林/小鬼巨汉/三哨卫）。
+
+    拉格维林为事件变体（本体 getMonster() 返回 "Lagavulin Event" →
+    new Lagavulin(false)）：不沉睡、无金属化，开局直接汲取灵魂。
+    """
     roll = bc.rngs.misc.int_inclusive(0, 2)
     if roll == 0:
-        _spawn(bc, Lagavulin)
+        bc.monsters.add(Lagavulin.create_event(bc, 0))
+        _add_starting_deck(bc)
     elif roll == 1:
         _spawn(bc, GremlinNob)
     else:
@@ -578,6 +584,11 @@ def _setup_mysterious_sphere(bc: BattleContext) -> None:
 def _setup_masked_bandits(bc: BattleContext) -> None:
     """Masked Bandits 事件：红面具帮（尖刺+罗密欧+大熊）。"""
     _spawn(bc, Pointy, Romeo, Bear)
+
+def _setup_apology_slime(bc: BattleContext) -> None:
+    """兜底怪遭遇（本体 MonsterHelper default 分支）：正常遭遇表不引用，
+    仅供覆盖测试/调试。"""
+    _spawn(bc, ApologySlime)
 
 
 def _setup_mindbloom_boss(bc: BattleContext) -> None:
@@ -657,6 +668,7 @@ ENCOUNTERS = {
     "colosseum_nobs": _setup_colosseum_nobs,
     "mysterious_sphere": _setup_mysterious_sphere,
     "masked_bandits": _setup_masked_bandits,
+    "apology_slime": _setup_apology_slime,
     "mindbloom_boss": _setup_mindbloom_boss,
 
 }

@@ -1,4 +1,5 @@
-"""无色卡 34 张（Hand of Greed 定义在 ironclad.py，本批次核对不改动）。
+"""无色卡 39 张（随机池 35 张 + 2026-10-07 补齐的事件 SPECIAL 卡 4 张：灵体/噬咬/J.A.X./仪式匕首——
+事件获取，不入随机无色池）。
 
 数值与结算顺序以 lightspeed C++ 为准（BattleContext.cpp useAttackCard L958 起 /
 useSkillCard L1203 起 / usePowerCard L1515 起 + Actions.cpp 复合动作 + Cards.h
@@ -39,8 +40,7 @@ from sts.combat.card_manager import MAX_HAND_SIZE
 from sts.combat.queue import Action
 from sts.combat.types import MonsterStatus, PlayerStatus
 
-from sts.content.cards._base import CardDef
-from sts.content.cards.ironclad import _exhaust_from_hand, _upgrade_in_place
+from sts.content.cards._base import CardDef, _exhaust_from_hand, _upgrade_in_place
 
 if TYPE_CHECKING:
     from sts.combat.battle import BattleContext
@@ -48,7 +48,9 @@ if TYPE_CHECKING:
     from sts.combat.queue import CardQueueItem
 
 
-# ---- 公共设施 ----
+# ============================================================
+# 公共设施
+# ============================================================
 
 
 def _sample_without_replacement(bc: BattleContext, items: list, n: int) -> list:
@@ -89,7 +91,9 @@ def _random_colorless_card(bc: BattleContext) -> CardDef:
     return pool[bc.rngs.misc.int_inclusive(0, len(pool) - 1)]
 
 
-# ---- 非普通（uncommon）20 张 ----
+# ============================================================
+# 非普通（uncommon）20 张
+# ============================================================
 
 
 def _bandage_up_play(bc: BattleContext, item: CardQueueItem) -> None:
@@ -329,7 +333,9 @@ def _trip_play(bc: BattleContext, item: CardQueueItem) -> None:
         bc.add_to_bot(Actions.debuff_enemy(item.target, MonsterStatus.VULNERABLE, 2, False))
 
 
-# ---- 稀有（rare）14 张（Hand of Greed 在 ironclad.py，共 15）----
+# ============================================================
+# 稀有（rare）15 张（含 Hand of Greed，2026-10-07 自 ironclad.py 迁入）
+# ============================================================
 
 
 def _apotheosis_play(bc: BattleContext, item: CardQueueItem) -> None:
@@ -525,7 +531,10 @@ def _violence_play(bc: BattleContext, item: CardQueueItem) -> None:
     bc.add_to_bot(Action(run))
 
 
-# ---- 卡牌定义（费用/消耗位全部对齐 Cards.h getEnergyCost / doesCardExhaust）----
+# ============================================================
+# 卡牌定义（费用/消耗位全部对齐 Cards.h getEnergyCost / doesCardExhaust）
+# ============================================================
+
 
 BANDAGE_UP = CardDef("Bandage Up", "包扎", 0, "Skill", "回复 4 点 HP。消耗。（升级回复 6）",
                      False, True, _bandage_up_play, colorless=True)
@@ -596,6 +605,95 @@ TRANSMUTATION = CardDef("Transmutation", "转化", -1, "Skill", "X 费：X 张�
 VIOLENCE = CardDef("Violence", "暴力", 0, "Skill", "抽牌堆 3 张随机攻击牌入手。消耗。（升级 4 张）",
                     False, True, _violence_play, colorless=True)
 
+def _hand_of_greed_play(bc: BattleContext, item: CardQueueItem) -> None:
+    up = item.card.upgraded
+    dmg = bc.calculate_card_damage(item, item.target, 25 if up else 20)
+
+    def run(bc: BattleContext) -> None:
+        # 对齐 HandOfGreedAction：注意 C++ 用 m.damage（非攻击 HP 损失）
+        # 而非 attacked——不吃 CURL_UP/ANGRY/THE_BOOT 等受击触发
+        #（lightspeed 特有口径，wiki 为普通攻击；伤害数值仍按攻击管线在
+        # 出牌时算好）。击杀 → +20/25 金币。
+        m = bc.monsters.monsters[item.target]
+        if m.is_dead_or_escaped():
+            return
+        m.damage(bc, dmg)
+        bc.check_combat()
+        if not m.alive:
+            bc.player.gold += 25 if up else 20
+
+    bc.add_to_bot(Action(run))
+
+
+HAND_OF_GREED = CardDef("Hand of Greed", "贪婪之手", 2, "Attack", "造成 20 点伤害。若击杀敌人，获得 20 金币。（升级 25 伤 25 金币）",
+                        True, False, _hand_of_greed_play, colorless=True)
+
+
+# ============================================================
+# 2026-10-07 补齐批次：事件获取的 SPECIAL 无色卡 4 张（Apparition.java /
+# Bite.java / JAX.java / RitualDagger.java）。均为事件奖励/事件替换卡，
+# 不入 CombatColorlessCardPool（随机无色池仍 35 张）。
+# ============================================================
+
+
+def _apparition_play(bc: BattleContext, item: CardQueueItem) -> None:
+    # Apparition.java：ApplyPowerAction(IntangiblePlayerPower, 1)，无升级数值差
+    bc.add_to_bot(Actions.buff_player(PlayerStatus.INTANGIBLE, 1))
+
+
+APPARITION = CardDef("Apparition", "灵体", 1, "Skill",
+                     "获得 1 层无实体。消耗。虚无。（升级后不再虚无）",
+                     False, True, _apparition_play,
+                     ethereal=True, loses_ethereal_on_upgrade=True)
+
+
+def _bite_play(bc: BattleContext, item: CardQueueItem) -> None:
+    # Bite.java：7/8 伤 + HealAction 2/3（Vampires 事件把打击替换为噬咬）
+    up = item.card.upgraded
+    dmg = bc.calculate_card_damage(item, item.target, 8 if up else 7)
+    bc.add_to_bot(Actions.attack_enemy(item.target, dmg))
+    bc.add_to_bot(Actions.heal_player(3 if up else 2))
+
+
+BITE = CardDef("Bite", "噬咬", 1, "Attack",
+               "造成 7 点伤害。回复 2 点 HP。（升级 8 伤 / 回复 3）",
+               True, False, _bite_play)
+
+
+def _jax_play(bc: BattleContext, item: CardQueueItem) -> None:
+    # JAX.java：LoseHPAction(3) → StrengthPower 2/3（Hand of Greed 事件）
+    bc.add_to_bot(Actions.player_lose_hp(3, self_inflicted=True))
+    bc.add_to_bot(Actions.buff_player(PlayerStatus.STRENGTH, 3 if item.card.upgraded else 2))
+
+
+JAX = CardDef("J.A.X.", "J.A.X.", 0, "Skill",
+              "失去 3 点 HP。获得 2 点力量。（升级 3 点力量）", False, False, _jax_play)
+
+
+def _ritual_dagger_play(bc: BattleContext, item: CardQueueItem) -> None:
+    # RitualDagger.java：baseDamage = misc（初始 15，斩杀 +3/5 永久）。
+    # "永久"跨场提升属局外存档，单场模拟内以实例 misc_data 计数。
+    magic = 5 if item.card.upgraded else 3
+    inst = item.card
+    dmg = bc.calculate_card_damage(item, item.target, 15 + inst.misc_data)
+    bc.add_to_bot(Actions.attack_enemy(item.target, dmg))
+
+    def run(bc2: BattleContext) -> None:
+        # 对齐 RitualDaggerAction.update 的斩杀判定：目标死亡（isDying/
+        # hp<=0）且非 halfDead 复活路径（REGROW 分支复活后 is_dying=False
+        # 且满血，天然不触发）
+        m = bc2.monsters.monsters[item.target]
+        if m.is_dying or not m.alive:
+            inst.misc_data += magic
+
+    bc.add_to_bot(Action(run))
+
+
+RITUAL_DAGGER = CardDef("Ritual Dagger", "仪式匕首", 1, "Attack",
+                        "造成 15 点伤害。若斩杀，本局游戏内此牌伤害永久 +3。消耗。（升级 +5）",
+                        True, True, _ritual_dagger_play)
+
+
 __all__ = [
     "APOTHEOSIS", "BANDAGE_UP", "BLIND", "CHRYSALIS", "DARK_SHACKLES", "DEEP_BREATH",
     "DISCOVERY", "DRAMATIC_ENTRANCE", "ENLIGHTENMENT", "FINESSE", "FLASH_OF_STEEL",
@@ -603,5 +701,7 @@ __all__ = [
     "MAGNETISM", "MASTER_OF_STRATEGY", "MAYHEM", "METAMORPHOSIS", "MIND_BLAST",
     "PANACEA", "PANACHE", "PANIC_BUTTON", "PURITY", "SADISTIC_NATURE",
     "SECRET_TECHNIQUE", "SECRET_WEAPON", "SWIFT_STRIKE", "THE_BOMB",
-    "THINKING_AHEAD", "TRANSMUTATION", "TRIP", "VIOLENCE",
+    "HAND_OF_GREED", "THINKING_AHEAD", "TRANSMUTATION", "TRIP", "VIOLENCE",
+    # 2026-10-07 补齐（事件 SPECIAL 卡，不入随机无色池）,
+    "APPARITION", "BITE", "JAX", "RITUAL_DAGGER",
 ]

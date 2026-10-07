@@ -4615,3 +4615,62 @@ def test_mindbloom_boss_three_options():
         bc = BattleContext(seed=seed, encounter="mindbloom_boss")
         seen.add(bc.monsters.monsters[0].__class__.__name__)
     assert seen == {"TheGuardian", "Hexaghost", "SlimeBoss"}
+
+
+# ---- 批次：兜底怪 + 事件变体拉格维林（2026-10-07 补齐）----
+
+
+def test_apology_slime_hp_and_alternation():
+    for seed in range(6):
+        bc = BattleContext(seed=seed, encounter="apology_slime")
+        m = bc.monsters.monsters[0]
+        assert 8 <= m.hp <= 12
+        # 严格交替：首招后每回合切另一招
+        moves = [m.move_history[0].name]
+        for _ in range(4):
+            bc.end_turn()
+            moves.append(m.move_history[0].name)
+        assert all(moves[i] != moves[i + 1] for i in range(len(moves) - 1))
+        assert set(moves) == {"Tackle", "Debuff"}
+
+
+def test_apology_slime_debuff_is_weak():
+    # 固定种子下先手 Debuff：玩家获 1 层虚弱（怪物施加 → justApplied）
+    found = False
+    for seed in range(20):
+        bc = BattleContext(seed=seed, encounter="apology_slime")
+        if bc.monsters.monsters[0].move_history[0].name == "Debuff":
+            from sts.combat.types import PlayerStatus
+
+            bc.end_turn()
+            assert bc.player.statuses.has(PlayerStatus.WEAK)
+            found = True
+            break
+    assert found
+
+
+def test_apology_slime_tackle_damage():
+    for seed in range(20):
+        bc = BattleContext(seed=seed, encounter="apology_slime")
+        if bc.monsters.monsters[0].move_history[0].name == "Tackle":
+            hp0 = bc.player.hp
+            bc.end_turn()
+            assert hp0 - bc.player.hp == 3  # 无力量/无状态：恰好 3 伤
+            return
+    raise AssertionError("20 个种子未抽到 Tackle 先手")
+
+
+def test_dead_adventurer_lagavulin_event_variant():
+    """事件变体拉格维林：不沉睡、无金属化、开局意图为汲取灵魂。"""
+    for seed in range(60):
+        bc = BattleContext(seed=seed, encounter="dead_adventurer")
+        if bc.monsters.monsters[0].__class__.__name__ == "Lagavulin":
+            m = bc.monsters.monsters[0]
+            from sts.combat.types import MonsterStatus
+
+            assert not m.statuses.has(MonsterStatus.ASLEEP)
+            assert not m.statuses.has(MonsterStatus.METALLICIZE)
+            assert m.block == 0
+            assert m.move_history[0].name == "Siphon Soul"
+            return
+    raise AssertionError("60 个种子未抽到拉格维林")

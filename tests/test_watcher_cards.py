@@ -108,6 +108,7 @@ from sts.content.cards.watcher import (
     VAULT,
     VIGILANCE,
     WISH,
+    UNRAVELING,
     WALLOP,
     WAVE_OF_THE_HAND,
     WEAVE,
@@ -186,7 +187,7 @@ def test_watcher_card_count():
     import sts.content.cards.watcher as w
 
     cards = [g for g in vars(w).values() if isinstance(g, CardDef)]
-    assert len(cards) == 83
+    assert len(cards) == 84
 
 
 def test_watcher_flags_per_cards_h():
@@ -2044,3 +2045,27 @@ def test_flurry_not_recalled_on_same_stance_change():
     bc.player.energy = 2
     bc.play_card(0)  # Calm → Calm：no-op
     assert "Flurry of Blows" not in pile_names(bc, bc.cards.hand)
+
+
+# ---- 2026-10-07 补齐：Unraveling（彻悟）----
+
+
+def test_unraveling_plays_all_hand_cards_free():
+    bc = BattleContext(seed=11, encounter="cultist")
+    setup_hand(bc, STRIKE_W, VIGILANCE, UNRAVELING)
+    bc.player.energy = 3
+    # 彻悟在手牌最右：打出它，手牌其余两张（打击/警惕）免费依次结算
+    bc.play_card(2)
+    assert bc.player.energy == 1  # 只花彻悟 2 费
+    # 打击已入弃牌堆、警惕（Power）离场
+    assert any(c.card is STRIKE_W for c in bc.cards.discard_pile)
+    assert bc.monsters.monsters[0].hp == bc.monsters.monsters[0].max_hp - 6
+
+
+def test_unraveling_exhausts_and_upgraded_cost():
+    bc = BattleContext(seed=11, encounter="cultist")
+    setup_hand_upgraded(bc, UNRAVELING)
+    bc.player.energy = 1
+    bc.play_card(0)
+    assert any(c.card is UNRAVELING for c in bc.cards.exhaust_pile)
+    assert bc.player.energy == 0

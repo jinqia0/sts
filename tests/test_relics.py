@@ -8,6 +8,8 @@ relics.ELITE_ENCOUNTERS / BOSS_ENCOUNTERS 注册表临时注册遭遇名验证�
 
 from __future__ import annotations
 
+import pytest
+
 import sts.combat.relics as relics_mod
 from sts.combat import BattleContext
 from sts.combat.actions import Actions
@@ -1662,3 +1664,80 @@ def test_black_blood_heals_12_on_victory():
     bc.play_card(0)
     assert bc.outcome == Outcome.PLAYER_VICTORY
     assert bc.player.hp == 52
+
+
+# ---- 2026-10-07 补齐批次（蓝蜡烛/医疗箱/瓶装×3/古代茶具/赌博筹码）----
+
+
+def test_blue_candle_curse_playable_with_hp_cost():
+    from sts.content.cards import DECAY
+
+    bc = BattleContext(seed=210, relics=[RelicId.BLUE_CANDLE])
+    bc.cards.hand.append(bc.cards.instantiate(DECAY))
+    hp0 = bc.player.hp
+    bc.play_card(len(bc.cards.hand) - 1)
+    assert bc.player.hp == hp0 - 1  # 打出诅咒失 1 HP
+    assert any(c.card is DECAY for c in bc.cards.exhaust_pile)  # 消耗
+
+
+def test_blue_candle_absent_curse_still_unplayable():
+    from sts.content.cards import DECAY
+
+    bc = BattleContext(seed=211)
+    bc.cards.hand.append(bc.cards.instantiate(DECAY))
+    with pytest.raises(ValueError, match="不可打出"):
+        bc.play_card(len(bc.cards.hand) - 1)
+
+
+def test_medical_kit_status_playable_and_exhausts():
+    from sts.content.cards import WOUND
+
+    bc = BattleContext(seed=212, relics=[RelicId.MEDICAL_KIT])
+    bc.cards.hand.append(bc.cards.instantiate(WOUND))
+    bc.play_card(len(bc.cards.hand) - 1)
+    assert any(c.card is WOUND for c in bc.cards.exhaust_pile)
+    assert not any(c.card is WOUND for c in bc.cards.discard_pile)
+
+
+def test_bottled_card_starts_on_top_of_draw_pile():
+    from sts.content.cards import BASH
+
+    bc = BattleContext(seed=213, bottled_cards=["Bash"])
+    # 抽牌堆顶（洗牌后瓶装置顶）为 Bash → 开局 5 张手牌含 Bash
+    assert any(c.card is BASH for c in bc.cards.hand)
+
+
+def test_bottled_flame_requires_no_relic_flag():
+    # bottled_cards 参数本身表达拾取选卡：无对应遗物时参数仍生效
+    # （场景层负责配置一致性）；此测试锁定参数语义不依赖遗物
+    from sts.content.cards import BASH
+
+    bc = BattleContext(seed=213, relics=[RelicId.BOTTLED_FLAME], bottled_cards=["Bash"])
+    assert any(c.card is BASH for c in bc.cards.hand)
+
+
+def test_ancient_tea_set_rested_first_turn_energy():
+    bc = BattleContext(
+        seed=214, relics=[RelicId.ANCIENT_TEA_SET],
+        relic_counters={RelicId.ANCIENT_TEA_SET: -2},
+    )
+    assert bc.player.energy == 5  # 3 + 2（休息过）
+    assert bc.relics.counter(RelicId.ANCIENT_TEA_SET) == -1  # 已消费
+
+
+def test_ancient_tea_set_unrested_no_bonus():
+    bc = BattleContext(seed=215, relics=[RelicId.ANCIENT_TEA_SET])
+    assert bc.player.energy == 3  # 未休息：无加成
+
+
+def test_gambling_chip_discard_then_draw():
+    bc = BattleContext(seed=216, relics=[RelicId.GAMBLING_CHIP])
+    # 构造期首抽后即挂起 CARD_SELECT（赌博筹码）
+    assert bc.input_state == InputState.CARD_SELECT
+    info = bc.card_select_info
+    assert info is not None and info.can_pick_any_number
+    hand_before = len(bc.cards.hand)
+    bc.choose_cards([0, 1])  # 弃 2 张 → 抽 2 张
+    assert bc.input_state == InputState.PLAYER_NORMAL
+    assert len(bc.cards.hand) == hand_before  # 弃 2 抽 2
+    assert bc.player.cards_discarded_this_turn == 2

@@ -1268,6 +1268,15 @@ class Lagavulin(Monster):
         m.block += 8
         return m
 
+    @classmethod
+    def create_event(cls, bc: BattleContext, idx: int) -> "Lagavulin":
+        """事件变体（Dead Adventurer 的 "Lagavulin Event"，MonsterHelper:440
+        → new Lagavulin(false)）：不沉睡、无金属化与开局格挡，
+        preBattleAction 直接 setMove(STRONG_DEBUFF)——get_move_for_roll
+        读到无 ASLEEP 自然返回 SIPHON_SOUL，与本体一致。"""
+        hp = _roll_hp(bc, cls)
+        return cls(idx, hp, hp)
+
     def get_move_for_roll(self, bc: BattleContext, roll: int) -> MoveDef:
         # C++ 仅首回合 roll 一次；此后 take_turn 全 set_move（无 roll）
         return self.SLEEP if self.statuses.has(MonsterStatus.ASLEEP) else self.SIPHON_SOUL
@@ -5137,4 +5146,53 @@ class Bear(Monster):
             case _:
                 raise AssertionError(f"未知招式 {move}")
         bc.add_to_bot(Actions.no_op_roll_move())
+        self.turns_taken += 1
+
+
+class ApologySlime(Monster):
+    """道歉史莱姆：本体的遭遇加载失败兜底怪（MonsterHelper.getEncounter
+    default 分支；开场台词 "Aw, something went wrong... please let the
+    devs know!" 即其身份注释）。
+
+    ApologySlime.java：HP 8-12（无进阶分支），Tackle 3 伤（无 A2 加伤），
+    Lick 无——debuff 招为 1 层虚弱（WeakPower(1, true)）。getMove 用
+    aiRng.randomBoolean() 50/50 定首招，roll 参数不用；此后 take_turn
+    setMove 严格交替（TACKLE→DEBUFF→TACKLE，无 RollMoveAction）。
+    为覆盖完整性移植；正常遭遇表不引用（模拟器对未知遭遇直接抛
+    ValueError，对应本体"不该走到这里"的语义）。
+    """
+
+    name = "Apology Slime"
+    zh = "道歉史莱姆"
+    hp_range = (8, 12)
+
+    TACKLE = MoveDef("Tackle", "冲撞", "attack", base_damage=3)
+    DEBUFF = MoveDef("Debuff", "道歉虚弱", "debuff", intent_text="施加 1 层虚弱")
+
+    def __init__(self, idx: int, hp: int, max_hp: int):
+        super().__init__(idx, hp, max_hp, "道歉史莱姆(Apology Slime)")
+
+    @classmethod
+    def create(cls, bc: BattleContext, idx: int) -> "ApologySlime":
+        hp = _roll_hp(bc, cls)
+        return cls(idx, hp, hp)
+
+    def get_move_for_roll(self, bc: BattleContext, roll: int) -> MoveDef:
+        # 50/50 抽首招（对齐 getMove 的 randomBoolean；roll 参数不参与）
+        return self.TACKLE if _ai_boolean(bc, 0.5) else self.DEBUFF
+
+    def take_turn(self, bc: BattleContext) -> None:
+        move = self.move_history[0]
+        match move.name:
+            case "Tackle":
+                dmg = bc.calculate_monster_damage(self, 3)
+                bc.log.append(f"{self.display_name} 使用 冲撞(Tackle)。")
+                bc.add_to_bot(Actions.attack_player(self.idx, dmg))
+                self.set_move(self.DEBUFF)
+            case "Debuff":
+                bc.log.append(f"{self.display_name} 使用 道歉虚弱(Debuff)。")
+                bc.add_to_bot(Actions.debuff_player(PlayerStatus.WEAK, 1, True))
+                self.set_move(self.TACKLE)
+            case _:
+                raise AssertionError(f"未知招式 {move}")
         self.turns_taken += 1

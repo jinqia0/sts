@@ -54,6 +54,9 @@ class Player(Combatant):
         self.orb_slots = 3  # 槽位上限（Capacitor ±/Runic Capacitor +2）
         self.dark_stacks = 0  # 暗球存层（passive 每回合 +6）
         self.special: dict[str, int] = {}  # 特殊计数槽（对齐 lightspeed bomb/combust 等）
+        # ---- 药水（2026-10-07 批次，对照本体反编译源码）----
+        self.potion_slots = 3  # 基础 3 槽（POTION_BELT +2，构造期由 BattleContext 按遗物修正）
+        self.potions: list = []  # 槽位列表（PotionDef | None），战斗内由 obtain/use 增删
         # 上回合失去过 HP（Emotion Chip 遗物：回合开始查询；任意 HP 损失置位，
         # 回合开始结算后清零——含敌方阶段承伤，对齐原版 lostHPLastTurn 语义）
         self.hp_lost_last_turn = False
@@ -285,6 +288,18 @@ class Player(Combatant):
         bc.relics.on_player_hp_was_lost(bc, amount, was_bloodied)
         bc.cards.on_player_damaged()  # Blood for Blood 类受击改费（Player.cpp:317 onTookDamage）
         if self.hp <= 0 and bc.outcome == Outcome.UNDECIDED:
+            # 瓶中精灵（AbstractPlayer.java:1467-1475：MARK_OF_THE_BLOOM 之外的
+            # 免死链第一位，先于 LIZARD_TAIL）：免死并回复到 30%×potency/100
+            # 最大生命（本体 currentHealth=0 后 heal(maxHp×30%) = "回复到 30%"）
+            if not bc.relics.has_mark_of_the_bloom(bc):
+                fairy = next((pd for pd in self.potions
+                              if pd is not None and getattr(pd, "on_player_death", False)), None)
+                if fairy is not None:
+                    self.potions[self.potions.index(fairy)] = None
+                    pct = fairy.potency * (2 if bc.relics.sacred_bark_doubles_potions(bc) else 1)
+                    self.hp = min(self.max_hp, self.max_hp * pct // 100)
+                    bc.log.append(f"瓶中精灵救了你！回复至 {self.hp} HP。")
+                    return
             # LIZARD_TAIL（wiki：When you would die, heal to 50% of your Max HP
             # instead. Works once.）——原版每局一次，单场模拟映射为每场一次；
             # 查询落在 RelicContainer.on_would_die（计数器消费）
@@ -336,6 +351,13 @@ class Player(Combatant):
             bc.add_to_bot(Actions.debuff_player(PlayerStatus.DEXTERITY, -n, False))
         if s.has(PlayerStatus.ENTANGLED):
             bc.add_to_bot(Actions.remove_player_status(PlayerStatus.ENTANGLED))
+        if s.has(PlayerStatus.DUPLICATION):
+            # 复制药水："本回合"限定（DuplicationPower isTurnBased）
+            bc.add_to_bot(Actions.remove_player_status(PlayerStatus.DUPLICATION))
+        if s.has(PlayerStatus.RITUAL_P):
+            # 邪教徒药水（RitualPower.atEndOfTurn(isPlayer=true)）：
+            # 玩家回合末 +层 力量（玩家版无 skipFirst，施加当回合末即结算）
+            bc.add_to_bot(Actions.buff_player(PlayerStatus.STRENGTH, s.get(PlayerStatus.RITUAL_P)))
         if s.has(PlayerStatus.DOUBLE_TAP):
             bc.add_to_bot(Actions.remove_player_status(PlayerStatus.DOUBLE_TAP))
         if s.has(PlayerStatus.RAGE):
@@ -366,6 +388,10 @@ class Player(Combatant):
             # 均衡衰减在弃牌之后的回合末统一段（Player.cpp:472-474），
             # 玩家自施无 justApplied
             self.statuses.decrement(PlayerStatus.EQUILIBRIUM)
+        if self.statuses.has(PlayerStatus.REGEN_P):
+            # 再生药水（RegenPower.atEndOfRound）：回复层数 HP、层数 -1
+            self.heal(self.statuses.get(PlayerStatus.REGEN_P), bc)
+            self.statuses.decrement(PlayerStatus.REGEN_P)
         if self.statuses.has(PlayerStatus.REBOUND):
             self.statuses.remove(PlayerStatus.REBOUND)  # Player.cpp:416-417 回合末移除
         if self.statuses.has(PlayerStatus.DOUBLE_DAMAGE):

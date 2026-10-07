@@ -16,6 +16,7 @@ from sts.content.cards import (
     BARRICADE,
     BATTLE_TRANCE,
     BERSERK,
+    RAGE,
     BLUDGEON,
     BLOOD_FOR_BLOOD,
     BLOODLETTING,
@@ -1995,3 +1996,27 @@ def test_burning_pact_triggers_feel_no_pain():
     assert bc.player.block == 3
     assert any(c.card.name == "Strike" for c in bc.cards.exhaust_pile)
     assert len(bc.cards.hand) == 2  # 抽 2
+
+
+# ---- 2026-10-07 补齐：Rage（狂怒）----
+
+
+def test_rage_gain_block_per_attack():
+    bc = BattleContext(seed=21, encounter="cultist")
+    setup_hand(bc, RAGE, STRIKE, STRIKE)
+    bc.player.energy = 3
+    bc.play_card(0)  # 狂怒：本回合每张攻击牌得 3 格挡
+    assert bc.player.statuses.get(PlayerStatus.RAGE) == 3
+    bc.play_card(0)  # 打击
+    assert bc.player.block == 3
+    bc.play_card(0)  # 打击
+    assert bc.player.block == 6
+
+
+def test_rage_upgraded_5_block_and_turn_end_clears():
+    bc = BattleContext(seed=21, encounter="cultist")
+    setup_hand_upgraded(bc, RAGE)
+    bc.play_card(0)
+    assert bc.player.statuses.get(PlayerStatus.RAGE) == 5
+    bc.end_turn()
+    assert not bc.player.statuses.has(PlayerStatus.RAGE)  # 仅本回合

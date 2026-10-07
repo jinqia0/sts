@@ -9,3 +9,7 @@ sts_lightspeed/
 # 工具
 .pytest_cache/
 .DS_Store
+
+# 游戏本体解包数据（个人参考用，不进 git）
+sts-*.zip
+sts_game_data/

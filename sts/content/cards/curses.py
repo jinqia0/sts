@@ -42,7 +42,9 @@ if TYPE_CHECKING:
     from sts.combat.queue import CardQueueItem
 
 
-# ---- 回合末 no-trigger 结算的公共设施 ----
+# ============================================================
+# 回合末 no-trigger 结算的公共设施
+# ============================================================
 
 
 def mark_no_trigger_processed(bc: "BattleContext", inst: "CardInstance | None") -> None:
@@ -84,7 +86,9 @@ def _unplayable_noop(bc: "BattleContext", item: "CardQueueItem") -> None:
     pass
 
 
-# ---- 诅咒池 10 张（CardPools.h L63 顺序）----
+# ============================================================
+# 诅咒池 10 张（CardPools.h L63 顺序）
+# ============================================================
 
 
 def _regret_effect(bc: "BattleContext", item: "CardQueueItem") -> None:
@@ -167,7 +171,9 @@ CLUMSY = CardDef("Clumsy", "笨拙", 0, "Curse",
                  unplayable=True, ethereal=True)
 
 
-# ---- 特殊诅咒（不在 curseCardPool，仅特定来源进牌组）----
+# ============================================================
+# 特殊诅咒（不在 curseCardPool，仅特定来源进牌组）
+# ============================================================
 
 
 def _pride_effect(bc: "BattleContext", item: "CardQueueItem") -> None:

@@ -1,5 +1,5 @@
 """Defect（故障）职业全卡移植：wiki 口径 75 张（4 基础 + 18 普通 + 36 非普通
-+ 17 稀有），无生成卡（Void 状态卡已在 ironclad.py，Burn 亦然）。
++ 17 稀有），无生成卡（Void 状态卡已在 status.py，Burn 亦然）。
 
 权威源（lightspeed 的 C++ switch 未实现任何 Defect 卡效果——BattleContext.cpp
 全卡 switch 无一个 Defect case，仅 GENETIC_ALGORITHM 有被注释的残留）：
@@ -68,8 +68,8 @@ from sts.combat.card_manager import MAX_HAND_SIZE
 from sts.combat.queue import Action
 from sts.combat.types import MonsterStatus, Orb, Outcome, PlayerStatus
 
-from sts.content.cards._base import CardDef
-from sts.content.cards.ironclad import BURN, VOID, _defend_play, _strike_play
+from sts.content.cards._base import CardDef, _defend_play, _strike_play
+from sts.content.cards.status import BURN, VOID
 
 if TYPE_CHECKING:
     from sts.combat.battle import BattleContext

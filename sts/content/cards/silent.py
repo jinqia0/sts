@@ -59,8 +59,7 @@ from sts.combat.card_manager import MAX_HAND_SIZE
 from sts.combat.queue import Action
 from sts.combat.types import MonsterStatus, Outcome, PlayerStatus
 
-from sts.content.cards._base import CardDef
-from sts.content.cards.ironclad import _strike_play
+from sts.content.cards._base import CardDef, _strike_play
 
 if TYPE_CHECKING:
     from sts.combat.battle import BattleContext
@@ -68,7 +67,9 @@ if TYPE_CHECKING:
     from sts.combat.queue import CardQueueItem
 
 
-# ---- 公共设施 ----
+# ============================================================
+# 公共设施
+# ============================================================
 
 
 def _unplayable_noop(bc: BattleContext, item: CardQueueItem) -> None:
@@ -118,7 +119,9 @@ def _random_alive(bc: BattleContext) -> int:
     return alive[bc.rngs.misc.int_inclusive(0, len(alive) - 1)].idx
 
 
-# ---- 基础 4 张 + SHIV ----
+# ============================================================
+# 基础 4 张 + SHIV
+# ============================================================
 
 
 def _neutralize_play(bc: BattleContext, item: CardQueueItem) -> None:
@@ -156,7 +159,9 @@ SURVIVOR = CardDef("Survivor", "幸存者", 1, "Skill", "获得 8 点格挡。�
 SHIV = CardDef("Shiv", "袖剑", 0, "Attack", "造成 4 点伤害。消耗。（升级 6 点）", True, True, _shiv_play)
 
 
-# ---- 普通 19 张 ----
+# ============================================================
+# 普通 19 张
+# ============================================================
 
 
 def _acrobatics_play(bc: BattleContext, item: CardQueueItem) -> None:
@@ -357,7 +362,9 @@ SUCKER_PUNCH = CardDef("Sucker Punch", "偷拳", 1, "Attack", "造成 7 点伤�
                        True, False, _sucker_punch_play)
 
 
-# ---- 非普通 33 张 ----
+# ============================================================
+# 非普通 33 张
+# ============================================================
 
 
 def _accuracy_play(bc: BattleContext, item: CardQueueItem) -> None:
@@ -762,7 +769,9 @@ WELL_LAID_PLANS = CardDef("Well-Laid Plans", "周密计划", 1, "Power", "回合
                           False, False, _well_laid_plans_play)
 
 
-# ---- 稀有 19 张（Alchemize 跳过）----
+# ============================================================
+# 稀有 19 张（Alchemize 跳过）
+# ============================================================
 
 
 def _thousand_cuts_play(bc: BattleContext, item: CardQueueItem) -> None:
@@ -971,6 +980,23 @@ UNLOAD = CardDef("Unload", "倾泻", 1, "Attack", "造成 14 点伤害。弃掉�
 WRAITH_FORM = CardDef("Wraith Form", "巫妖形态", 3, "Power", "获得 2 层无实体。回合结束时失去 1 点敏捷。（升级 3 层）",
                      False, False, _wraith_form_play)
 
+
+def _venomology_play(bc: BattleContext, item: CardQueueItem) -> None:
+    # 2026-10-07 补齐（Alchemize.java，ID=Venomology，Silent 稀有）：
+    # ObtainPotionAction(returnRandomPotion(true))——全池 42 均匀抽，空槽放置
+    def run(bc2: BattleContext) -> None:
+        from sts.content.potions import random_potion
+
+        bc2.obtain_potion(random_potion(bc2))
+
+    bc.add_to_bot(Action(run))
+
+
+VENOLOGY = CardDef("Alchemize", "炼制药水", 1, "Skill",
+                   "获得一瓶随机药水。消耗。（升级费用 0）",
+                   False, True, _venomology_play, upgraded_cost=0)
+
+
 __all__ = [
     # 基础
     "DEFEND_S", "NEUTRALIZE", "SHIV", "STRIKE_S", "SURVIVOR",
@@ -993,5 +1019,5 @@ __all__ = [
     "CORPSE_EXPLOSION", "DIE_DIE_DIE", "DOPPELGANGER", "ENVENOM",
     "GLASS_KNIFE", "GRAND_FINALE", "MALAISE", "NIGHTMARE",
     "PHANTASMAL_KILLER", "STORM_OF_STEEL", "TOOLS_OF_THE_TRADE", "UNLOAD",
-    "WRAITH_FORM",
+    "VENOLOGY", "WRAITH_FORM",
 ]

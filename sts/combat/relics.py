@@ -276,6 +276,17 @@ class RelicId(IntEnum):
     GOLDEN_EYE = 116  # 每次 Scry 额外 Scry 2 张（观者稀有，wiki）
     MARK_OF_THE_BLOOM = 117  # 战斗中无法回复 HP（事件，wiki）
     BLACK_BLOOD = 118  # Burning Blood 升级版：胜利回复 12 HP（铁甲 Boss，wiki）
+    # ---- 2026-10-07 补齐批次（对照本体反编译源码）----
+    BLUE_CANDLE = 119  # 不可打出诅咒可打出，打出诅咒失 1 HP 并消耗（非普通，BlueCandle.java）
+    MEDICAL_KIT = 120  # 不可打出状态卡可打出，打出状态卡即消耗（商店，MedicalKit.java）
+    BOTTLED_FLAME = 121  # 战斗开始选定的攻击牌在手（CardGroup.initializeDeck L921：置抽牌堆顶）
+    BOTTLED_LIGHTNING = 122  # 同上（技能牌）
+    BOTTLED_TORNADO = 123  # 同上（能力牌）
+    ANCIENT_TEA_SET = 124  # 休息后的下场战斗首回合 +2 能量（counter=-2 表已休息，AncientTeaSet.java）
+    GAMBLING_CHIP = 125  # 战斗开始（首抽后）弃任意张手牌再抽等量（GamblingChip.java）
+    SACRED_BARK = 126  # 药水效力翻倍（potency ×2，AbstractPotion.getPotency L45-49）
+    TOY_ORNITHOPTER = 127  # 每次使用药水回复 5 HP（ToyOrnithopter.onUsePotion）
+    POTION_BELT = 128  # 药水槽 +2（构造期修正 player.potion_slots）
 
 
 class RelicContainer:
@@ -595,6 +606,21 @@ class RelicContainer:
         # 小时glass → tongs）。
         if self.has(RelicId.WARPED_TONGS):
             self._queue_warped_tongs(bc)
+        # GAMBLING_CHIP（GamblingChip.java：atBattleStartPreDraw 复位 +
+        # atTurnStartPostDraw 首回合触发 → GamblingChipAction：选任意张
+        # 手牌弃置（manual discard 语义），然后抽等量）
+        if self.has(RelicId.GAMBLING_CHIP) and bc.cards.hand:
+            cands = list(bc.cards.hand)
+
+            def _on_choose(bc2: BattleContext, chosen: list) -> None:
+                for inst in chosen:
+                    bc2.manual_discard(inst)
+                if chosen:
+                    bc2.add_to_bot(Actions.draw_cards(len(chosen)))
+
+            bc.open_card_select(cands, _on_choose, pick_count=len(cands),
+                                can_pick_zero=True, can_pick_any_number=True,
+                                prompt="赌博筹码：弃置任意张手牌，然后抽等量")
 
     # ============================================================
     # 回合开始（Player.cpp applyStartOfTurnRelics L490-563，固定序）
@@ -752,6 +778,14 @@ class RelicContainer:
                 extra += 1
         return extra
 
+    def first_turn_energy_bonus(self, bc: BattleContext) -> int:
+        """首回合一次性能量（AncientTeaSet.java atTurnStart：counter==-2
+        表"休息过"，首回合 +2 后复位为 -1；之后各回合恒 0）。"""
+        if self.has(RelicId.ANCIENT_TEA_SET) and self.counter(RelicId.ANCIENT_TEA_SET) == -2:
+            self.set_counter(RelicId.ANCIENT_TEA_SET, -1)
+            return 2
+        return 0
+
     def keeps_leftover_energy(self, bc: BattleContext) -> bool:
         # Player.cpp:715-720 rechargeEnergy
         return self.has(RelicId.ICE_CREAM)
@@ -885,14 +919,44 @@ class RelicContainer:
             self._pellet_power_played = True
             self._check_orange_pellets(bc)
 
-    def on_use_status_or_curse_card(self, bc: BattleContext) -> None:
+    def on_use_status_or_curse_card(self, bc: BattleContext, inst: CardInstance) -> None:
         # INK_BOTTLE：L1927-1933（第四处计数点；本项目状态/诅咒卡多为
         # 自动结算路径不经过此钩子，可打出时（BLUE_CANDLE/MEDICAL_KIT）对齐）
         if self.has(RelicId.INK_BOTTLE):
             if self.bump(RelicId.INK_BOTTLE) == 10:
                 self.set_counter(RelicId.INK_BOTTLE, 0)
                 bc.add_to_bot(Actions.draw_cards(1))
-        # TODO 批次 2+：BLUE_CANDLE/MEDICAL_KIT（依赖卡池迁移）
+        # BLUE_CANDLE（BlueCandle.java onUseCard）：打出诅咒 → 失 1 HP + 消耗
+        if self.has(RelicId.BLUE_CANDLE) and inst.card.ctype == "Curse":
+            bc.add_to_bot(Actions.player_lose_hp(1))
+            bc.cur_card_queue_item.exhaust_on_use = True
+        # MEDICAL_KIT（MedicalKit.java onUseCard）：打出状态卡 → 消耗
+        if self.has(RelicId.MEDICAL_KIT) and inst.card.ctype == "Status":
+            bc.cur_card_queue_item.exhaust_on_use = True
+
+    def has_mark_of_the_bloom(self, bc: BattleContext) -> bool:
+        return self.has(RelicId.MARK_OF_THE_BLOOM)
+
+    def sacred_bark_doubles_potions(self, bc: BattleContext) -> bool:
+        return self.has(RelicId.SACRED_BARK)
+
+    def potion_slot_bonus(self, bc: BattleContext) -> int:
+        """POTION_BELT：药水槽 +2（本体 onEquip 时加槽，场景级等价于开战即持）。"""
+        return 2 if self.has(RelicId.POTION_BELT) else 0
+
+    def on_use_potion(self, bc: BattleContext) -> None:
+        """使用药水后的遗物触发（对齐 AbstractPotion.use → onUsePotion 链）。"""
+        if self.has(RelicId.TOY_ORNITHOPTER):
+            bc.add_to_bot(Actions.heal_player(5))
+
+    def makes_unplayable_playable(self, inst: CardInstance) -> bool:
+        """不可打出的诅咒/状态卡的解锁（AbstractCard.canUse：STATUS/CURSE
+        的 costForTurn < -1 需要 Medical Kit / Blue Candle）。"""
+        if self.has(RelicId.BLUE_CANDLE) and inst.card.ctype == "Curse":
+            return True
+        if self.has(RelicId.MEDICAL_KIT) and inst.card.ctype == "Status":
+            return True
+        return False
 
     def on_would_exhaust(self, bc: BattleContext, inst: CardInstance) -> bool:
         """onAfterUseCard 的消耗路由（L1985-1990）：返回 False 表示改走弃牌堆

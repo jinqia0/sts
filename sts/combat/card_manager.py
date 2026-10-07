@@ -38,6 +38,16 @@ class CardInstance:
         return self.retain
 
     @property
+    def is_ethereal(self) -> bool:
+        """虚无判定：模板 ethereal 位；升级后不再虚无（Apparition+，
+        isEthereal=false 于 upgrade()）。"""
+        if self.card is None:
+            return False
+        return self.card.ethereal and not (
+            self.upgraded and getattr(self.card, "loses_ethereal_on_upgrade", False)
+        )
+
+    @property
     def cost(self) -> int:
         # 临时改费（如 Madness/Corruption）→ 永久改费（Blood for Blood）→
         # 升级改费（如 Body Slam+）→ 模板费用
@@ -161,6 +171,21 @@ class CardManager:
             return
         rest = [c for c in self.draw_pile if not _is_innate(c)]
         self.draw_pile[:] = rest + innate  # 堆顶 = 尾部，多张固有按原顺序被抽到
+
+    def move_bottled_to_top(self, names: list[str]) -> None:
+        """瓶装遗物（Bottled Flame/Lightning/Tornado）选定的卡置抽牌堆顶
+        （CardGroup.initializeDeck L921-935：inBottle* 与 innate 同走
+        placeOnTop——瓶装牌在固有牌之上被最后抽到…实际 add 序：placeOnTop
+        逐张 addToTop（append），故后 add 者更顶；固定序为 innate 先、
+        bottle 后，即瓶装牌位于堆最顶）。
+
+        names 为卡名列表（场景/测试表达拾取时的选卡，多张同名全置顶）。
+        """
+        bottled = [c for c in self.draw_pile if c.card.name in names]
+        if not bottled:
+            return
+        rest = [c for c in self.draw_pile if c.card.name not in names]
+        self.draw_pile[:] = rest + bottled
 
     def reset_attributes_at_end_of_turn(self) -> None:
         """回合结束时清空卡牌的临时属性（本回合费用等）。

@@ -59,6 +59,10 @@ from sts.content.cards import (
     VIOLENCE,
     WHIRLWIND,
     BURN,
+    APPARITION,
+    BITE,
+    JAX,
+    RITUAL_DAGGER,
 )
 from sts.content.monsters import Cultist
 
@@ -966,3 +970,92 @@ def test_colorless_combat_pool_excludes_bandage_up():
     assert "Bandage Up" not in names
     assert "Hand of Greed" in names  # 定义在 cards.py 的无色卡同样入池
     assert len(names) >= 30
+
+
+# ---- 2026-10-07 补齐：事件 SPECIAL 无色卡 4 张 ----
+
+
+def test_apparition_gain_intangible_and_ethereal():
+    bc = BattleContext(seed=1, encounter="cultist")
+    setup_hand(bc, APPARITION)
+    bc.player.energy = 3
+    bc.play_card(0)
+    assert bc.player.statuses.has(PlayerStatus.INTANGIBLE)
+    assert bc.cards.exhaust_pile[-1].card is APPARITION  # 消耗
+
+
+def test_apparition_ethereal_upgraded_not_ethereal():
+    from sts.content.cards.colorless import RITUAL_DAGGER  # noqa: F401
+
+    bc = BattleContext(seed=1, encounter="cultist")
+    inst = bc.cards.instantiate(APPARITION)
+    assert inst.is_ethereal
+    inst.upgraded = True
+    assert not inst.is_ethereal  # Apparition+：upgrade() 置 isEthereal=false
+
+
+def test_apparition_ethereal_exhausts_at_end_of_turn():
+    bc = BattleContext(seed=1, encounter="cultist")
+    setup_hand(bc, APPARITION)
+    bc.end_turn()
+    # 未打出：回合末虚无消散（进消耗堆而非弃牌堆）
+    assert any(i.card is APPARITION for i in bc.cards.exhaust_pile)
+    assert not any(i.card is APPARITION for i in bc.cards.discard_pile)
+
+
+def test_bite_damage_and_heal():
+    bc = BattleContext(seed=1, encounter="cultist")
+    m = add_cultist(bc)
+    setup_hand(bc, BITE)
+    bc.player.hp = 30
+    hp0, mhp0 = bc.player.hp, m.hp
+    bc.play_card(0, target=1)
+    assert mhp0 - m.hp == 7
+    assert bc.player.hp == 32  # 回复 2
+    # 升级版：8 伤 / 回复 3
+    bc2 = BattleContext(seed=1, encounter="cultist")
+    m2 = add_cultist(bc2)
+    setup_hand_upgraded(bc2, BITE)
+    bc2.player.hp = 30
+    bc2.play_card(0, target=1)
+    assert m2.hp == m2.max_hp - 8
+    assert bc2.player.hp == 33
+
+
+def test_jax_lose_hp_gain_strength():
+    bc = BattleContext(seed=1, encounter="cultist")
+    setup_hand(bc, JAX)
+    hp0 = bc.player.hp
+    bc.player.energy = 1
+    bc.play_card(0)
+    assert bc.player.hp == hp0 - 3  # 直伤 HP 不吃格挡
+    assert bc.player.statuses.get(PlayerStatus.STRENGTH) == 2
+    bc2 = BattleContext(seed=1, encounter="cultist")
+    setup_hand_upgraded(bc2, JAX)
+    bc2.play_card(0)
+    assert bc2.player.statuses.get(PlayerStatus.STRENGTH) == 3
+
+
+def test_ritual_dagger_damage_and_permanent_increase():
+    bc = BattleContext(seed=1, encounter="cultist")
+    m = Cultist(idx=1, hp=15, max_hp=50)
+    m.set_move(Cultist.INCANTATION)
+    bc.monsters.add(m)
+    setup_hand(bc, RITUAL_DAGGER)
+    bc.player.energy = 1
+    bc.play_card(0, target=1)
+    assert m.is_dying  # 15 伤恰好斩杀
+    # 本体 misc 起始 15；斩杀 +3 → 该实例后续伤害 18
+    assert bc.cards.exhaust_pile[-1].misc_data == 3
+
+
+def test_ritual_dagger_no_increase_on_nonfatal():
+    bc = BattleContext(seed=1, encounter="cultist")
+    m = Cultist(idx=1, hp=50, max_hp=50)
+    m.set_move(Cultist.INCANTATION)
+    bc.monsters.add(m)
+    setup_hand(bc, RITUAL_DAGGER)
+    bc.player.energy = 1
+    bc.play_card(0, target=1)
+    assert not m.is_dying
+    assert bc.cards.exhaust_pile[-1].misc_data == 0

@@ -67,8 +67,7 @@ from sts.combat.card_manager import MAX_HAND_SIZE
 from sts.combat.queue import Action, CardQueueItem
 from sts.combat.types import MonsterStatus, Outcome, PlayerStatus, Stance
 
-from sts.content.cards._base import CardDef
-from sts.content.cards.ironclad import _strike_play
+from sts.content.cards._base import CardDef, _strike_play
 
 if TYPE_CHECKING:
     from sts.combat.battle import BattleContext
@@ -145,7 +144,9 @@ def _gain_mantra(n: int) -> Action:
 
 
 
-# ---- "上一张打出的牌"类型（Crush Joints / Follow-Up / Sash Whip / Sanctity）----
+# ============================================================
+# "上一张打出的牌"类型（Crush Joints / Follow-Up / Sash Whip / Sanctity）
+# ============================================================
 
 
 def _played_card_names(bc: BattleContext) -> list[str]:
@@ -195,7 +196,9 @@ def _prev_played_ctype(bc: BattleContext) -> str | None:
     return _ctype_by_name().get(names[-2])
 
 
-# ---- 回合结束 / 牌堆操作 ----
+# ============================================================
+# 回合结束 / 牌堆操作
+# ============================================================
 
 
 def _end_turn_from_play(bc: BattleContext) -> None:
@@ -1286,6 +1289,27 @@ WISH = CardDef("Wish", "祈愿", 3, "Skill",
                False, True, _wish_play)
 
 
+def _unraveling_play(bc: BattleContext, item: CardQueueItem) -> None:
+    # 2026-10-07 补齐：Unraveling.java（purple rare）→ UnravelingAction：
+    # 执行时快照手牌，逐张压入卡牌队列（freeToPlayOnce → 免费播放，
+    # needs_target 的随机目标）。autoplay 项不收能量（对齐 Havoc 的
+    # 免费播放口径）；手牌移除在入队时统一完成（play_card 的弹手牌在
+    # 此路径不存在，on_after_use_card 的 move_to_* 不做手牌移除）。
+    def run(bc2: BattleContext) -> None:
+        for inst in list(bc2.cards.hand):
+            bc2.cards.hand.remove(inst)
+            bc2.add_to_bot_card(
+                CardQueueItem(card=inst, random_target=True, autoplay=True)
+            )
+
+    bc.add_to_bot(Action(run))
+
+
+UNRAVELING = CardDef("Unraveling", "彻悟", 2, "Skill",
+                     "从左至右打出你手牌中的所有牌，需要目标的牌随机选择目标。消耗。（升级费用 1）",
+                     False, True, _unraveling_play, upgraded_cost=1)
+
+
 __all__ = [
     # 基础
     "DEFEND_W", "ERUPTION", "STRIKE_W", "VIGILANCE",
@@ -1309,5 +1333,5 @@ __all__ = [
     "ALPHA", "BLASPHEMY", "BRILLIANCE", "CONJURE_BLADE", "DEUS_EX_MACHINA",
     "DEVA_FORM", "DEVOTION", "ESTABLISHMENT", "JUDGMENT", "LESSON_LEARNED",
     "MASTER_REALITY", "OMNISCIENCE", "RAGNAROK", "SCRAWL", "SPIRIT_SHIELD",
-    "VAULT", "WISH",
+    "UNRAVELING", "VAULT", "WISH",
 ]
