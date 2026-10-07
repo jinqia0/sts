@@ -1,0 +1,1676 @@
+{
+ "meta": {
+  "source": "https://slaythespire.wiki.gg/",
+  "fetched": "2026-10-07",
+  "conventions": {
+   "category": "Normal=Act Event（普通事件，仅限单一 Act）; Shrine=神龛（每 Act 可再遇）; One-Time=一次性事件（每局一次）; Unmarked=特殊（Neow，局首）",
+   "ascension": "文本中 'A<N>: X' 表示 wiki 原文的 {{Asc|N|X}} 模板（进阶 N 档）",
+   "options": "result 为 wiki Options 区清理后的原文；asc_notes 为含进阶数值的句子摘录",
+   "zh_source": "zh 字段来源：'project'=本项目内容层，非 wiki"
+  },
+  "coverage": "Act 1-3 全部普通事件 31 个 + 神龛 6 个（Golden Shrine/Match and Keep/Purifier/Transmogrifier/Upgrade Shrine/Wheel of Change）+ 一次性事件 14 个 + Neow（局首，Unmarked），共 52 条。事件类型/Act 归属按 wiki Events 总表与各事件页原文。act=all 表示 wiki 原文 'all Acts / encountered in any Act'；数组表示多个 Act。combat 字段为按 wiki 页面原文整理的战斗事件信息（非逐字引用）。options 的 result 为 wiki Options 区清理后的原文；[[...]] 链接与 {{TS|...}}} 样式模板已转为纯文本，{{Asc|N|X}} 渲染为 'X (A N)' 或 '(A N: X)'。"
+ },
+ "events": [
+  {
+   "name": "A Note For Yourself",
+   "zh": null,
+   "zh_source": null,
+   "act": "all",
+   "category": "One-Time",
+   "options": [
+    {
+     "label": "Take and Give",
+     "result": "Receive and Store a Card\n* Receive a card that you had stored previously, and store a card in your deck in return.\n** The first time the player encounters this event in their save file, it will have Iron Wave stored.",
+     "asc_notes": null,
+     "monsters": null
+    },
+    {
+     "label": "Ignore",
+     "result": "Nothing happens.\nYou are then given the option to [Leave].",
+     "asc_notes": null,
+     "monsters": null
+    }
+   ],
+   "text": null,
+   "combat": null,
+   "intro": "A Note For Yourself is an Event encountered in all Acts.",
+   "options_preamble": null,
+   "notes": null,
+   "source_page": "A_Note_For_Yourself"
+  },
+  {
+   "name": "Ancient Writing",
+   "zh": null,
+   "zh_source": null,
+   "act": 2,
+   "category": "Normal",
+   "options": [
+    {
+     "label": "Elegance",
+     "result": "Remove a card from your deck.",
+     "asc_notes": null,
+     "monsters": null
+    },
+    {
+     "label": "Simplicity",
+     "result": "Upgrade all Strikes and Defends.\n* Only includes Basic cards.",
+     "asc_notes": null,
+     "monsters": null
+    }
+   ],
+   "text": "Scaling the city, you notice a wall covered in the writing of Ancients. As you try to wrap your head around what the puzzling symbols and glyphs could mean, the writing begins to glow. \nSuddenly, the message becomes clear...",
+   "combat": null,
+   "intro": "Ancient Writing is an Event found exclusively in Act 2.",
+   "options_preamble": null,
+   "notes": null,
+   "source_page": "Ancient_Writing"
+  },
+  {
+   "name": "Augmenter",
+   "zh": null,
+   "zh_source": null,
+   "act": 2,
+   "category": "Normal",
+   "options": [
+    {
+     "label": "Test J.A.X.",
+     "result": "Get JAXXED.\n* Adds J.A.X. to the player's deck.",
+     "asc_notes": null,
+     "monsters": null
+    },
+    {
+     "label": "Become Test Subject",
+     "result": "Transform 2 cards.\n* Read more on Transform rules here.",
+     "asc_notes": null,
+     "monsters": null
+    },
+    {
+     "label": "Ingest Mutagens",
+     "result": "Obtain a special relic. \n* Rewards the player with Mutagenic Strength.",
+     "asc_notes": null,
+     "monsters": null
+    }
+   ],
+   "text": "A man with an eyepatch and a devilish grin strides up to you.\n\"Hey there, stranger. Interested in advancing science? I can make you stronger than any training or blessing. You're gonna need it if you're one of those heroes with a death wish.\"\n\"Whad'ya say?\"",
+   "combat": null,
+   "intro": "Augmenter is an Event found exclusively in Act 2. This Event is the only way to obtain J.A.X. and Mutagenic Strength.",
+   "options_preamble": null,
+   "notes": null,
+   "source_page": "Augmenter"
+  },
+  {
+   "name": "Big Fish",
+   "zh": null,
+   "zh_source": null,
+   "act": 1,
+   "category": "Normal",
+   "options": [
+    {
+     "label": "Banana",
+     "result": "Heal 1/3 of your max HP.\n* If the player's HP is not divisble by 3, the HP gain is rounded down.",
+     "asc_notes": null,
+     "monsters": null
+    },
+    {
+     "label": "Donut",
+     "result": "Max HP +5.\n* Like all HP gain, the extra hit points are healed when you get them.",
+     "asc_notes": null,
+     "monsters": null
+    },
+    {
+     "label": "Box",
+     "result": "Obtain a Relic. Become Cursed - Regret.\n* The Relic is a randomly selected Common, Uncommon, or Rare Relic.\nYou are then given the option to [Leave].",
+     "asc_notes": null,
+     "monsters": null
+    }
+   ],
+   "text": "As you make your way down a long corridor you see a banana, a donut, and a box floating about. No... upon closer inspection they are tied to strings coming from holes in the ceiling. There is a quiet cackling from above as you approach the objects.\nWhat do you do?",
+   "combat": null,
+   "intro": "Big Fish is an event found exclusively in Act 1.",
+   "options_preamble": null,
+   "notes": null,
+   "source_page": "Big_Fish"
+  },
+  {
+   "name": "Bonfire Spirits",
+   "zh": null,
+   "zh_source": null,
+   "act": "all",
+   "category": "One-Time",
+   "options": [
+    {
+     "label": "Offer",
+     "result": "Receive a reward based on the offer.\n* Offer a card in your deck to remove. The reward you receive depends on the rarity of the card you give.",
+     "asc_notes": null,
+     "monsters": null
+    }
+   ],
+   "text": null,
+   "combat": null,
+   "intro": "Bonfire Spirits is a shrine Event found in all Acts.\nShrine events appear less frequently than other events.",
+   "options_preamble": null,
+   "notes": "* This event treats Basic cards as a lower rarity than Common.\n* Obtaining Spirit Poop adds the Poopy Score bonus which lowers your total score by one.",
+   "source_page": "Bonfire_Spirits"
+  },
+  {
+   "name": "Council of Ghosts",
+   "zh": null,
+   "zh_source": null,
+   "act": 2,
+   "category": "Normal",
+   "options": [
+    {
+     "label": "Accept",
+     "result": "Receive 5 (3) (A15) Apparitions. Lose X Max HP.\n* X is equal to 50% of the player's Max HP, rounded up.",
+     "asc_notes": "Receive 5 (3) (A15) Apparitions. Lose X Max HP.",
+     "monsters": null
+    },
+    {
+     "label": "Refuse",
+     "result": "Nothing happens.\nYou are then given the option to [Leave].",
+     "asc_notes": null,
+     "monsters": null
+    }
+   ],
+   "text": "As you continue your ascent, thick black smoke begins to billow out of the ground and walls around you, coalescing into three masked forms that start to speak.\n\"Another puppet of Neow I think.\" \n\"AGREED! SHE ALWAYS MAKES THE FUNNEST TOYS!\"\nYou notice an over-sized grin as the third addresses you.\n\"Ignore the others... Would you like a taste of our power?\"",
+   "combat": null,
+   "intro": "Council of Ghosts is an event found exclusively in Act 2. It is one of the events affected by Ascension A15.",
+   "options_preamble": null,
+   "notes": null,
+   "source_page": "Council_of_Ghosts"
+  },
+  {
+   "name": "Cursed Tome",
+   "zh": null,
+   "zh_source": null,
+   "act": 2,
+   "category": "Normal",
+   "options": [
+    {
+     "label": "Read",
+     "result": null,
+     "asc_notes": null,
+     "monsters": null
+    },
+    {
+     "label": "Continue",
+     "result": "Lose 1 HP.",
+     "asc_notes": null,
+     "monsters": null
+    },
+    {
+     "label": "Continue",
+     "result": "Lose 2 HP.",
+     "asc_notes": null,
+     "monsters": null
+    },
+    {
+     "label": "Continue",
+     "result": "Lose 3 HP.",
+     "asc_notes": null,
+     "monsters": null
+    },
+    {
+     "label": "Take",
+     "result": "Obtain the book. Lose 10 (15) HP.\n* The book may be Enchiridion, Nilry's Codex, or Necronomicon. The player does not know which book they will get until after they choose [Take] and lose their HP.",
+     "asc_notes": null,
+     "monsters": null
+    },
+    {
+     "label": "Stop",
+     "result": "Lose 3 HP.",
+     "asc_notes": null,
+     "monsters": null
+    },
+    {
+     "label": "Leave",
+     "result": "Nothing happens.\nPractical Options\nBecause the player can choose to leave the event immediately and lose 0 HP instead of selecting [Continue] 3 times and then backing out with [Stop] while losing a total of 9 HP, there are really only 2 practical ways to navigate the event. The player can either commit to all the HP loss and obtain the book, or leave immediately to do nothing.\nFor simplicity, the event's options can be thought of in this way instead:\n* [Read], then all 3 [Continue], and finally [Take] Obtain the book. Lose 16 (21) HP. \n* [Leave] Nothing happens.",
+     "asc_notes": null,
+     "monsters": null
+    }
+   ],
+   "text": "In an abandoned temple, you find a giant book, open, riddled with cryptic writings. \nAs you try to interpret the elaborate script, it begins to shift and morph into writing you are familiar with.",
+   "combat": null,
+   "intro": "Cursed Tome is an Event found exclusively in Act 2.",
+   "options_preamble": null,
+   "notes": "* Tungsten Rod will reduce the HP lost for each instance of damage from the event's options. If the player selects [Continue] 3 times and then [Take], Tungsten Rod reduces the total HP lost by 4 for a total of 12 (17) (A15) HP lost instead of 16 (21) (A15).\n** If the player selects [Stop] instead of [Take], Tungsten Rod reduces the total HP lost to 5 instead of 9.",
+   "source_page": "Cursed_Tome"
+  },
+  {
+   "name": "Dead Adventurer",
+   "zh": null,
+   "zh_source": null,
+   "act": 1,
+   "category": "Normal",
+   "options": [
+    {
+     "label": "Search",
+     "result": "Find Loot. 25% (35%) (A15): monster returns.\n* Each [Search] attempt will either cause an Act 1 Elite to return and fight the player, or yield one of the following rewards:\n** 30 Gold\n** A random Relic\n** Nothing\n* Each reward only occurs once - if the player's first search found nothing and the second search found the Relic, the third search will either reward 30 Gold or start a battle.\n* Each reward that is acquired before fighting the Elite will be removed from its combat rewards if the player eventually does fight the Elite and defeats it.\n** For example, if the player's first [Search] is a Relic, the Elite will not drop a Relic when it is defeated.\n** This is also the reason why this specific Elite fight can drop 30 extra Gold compared to a normal Elite; because the 30 Gold [Search] reward is added to the normal Gold reward of defeating an Elite.\n* Each subsequent [Search] increases the chance to encounter an Elite by 25%.\n* If the player manages to successfully [Search] three times without encountering an Elite, the event will end with a short dialogue detailing the success.\n* For the second and third searches (assuming the player is not ambushed), [Search] will be called [Continue] instead. Its behavior and description are unchanged.",
+     "asc_notes": "Find Loot. 25% (35%) (A15): monster returns.",
+     "monsters": null
+    },
+    {
+     "label": "Leave",
+     "result": "Nothing happens.",
+     "asc_notes": null,
+     "monsters": null
+    }
+   ],
+   "text": "You come across a dead adventurer on the floor. \nHis pants have been stolen! Also, (phrasing depends on the Elite). \nThough his possessions are still intact, you're in no mind to find out what happened here...",
+   "combat": {
+    "monsters": "随机 Act 1 精英：Gremlin Nob / 3× Sentry / Lagavulin（本事件中 Lagavulin 不睡眠且第一回合直接 Siphon Soul，wiki：particular case of different elite behavior）",
+    "post_rewards": "精英常规战利品；此前 [Search] 已获得的奖励会从战利品中扣除（金币/遗物各算一次）"
+   },
+   "intro": "Dead Adventurer is an Event found exclusively in Act 1.",
+   "options_preamble": null,
+   "notes": "* Black Star will not cause the Elite to drop an additional Relic. However, the other \"elite relics\" Preserved Insect, Sling of Courage, and Slaver's Collar will work as expected.\n* It is quite unlikely for the player to be able to [Search] three times without being ambushed since they must succeed on all three searches with increasing chances of failure. See the table below for more information:\nwiki 概率表（Cumulative Chance of Avoiding the Elite，A15 前/A15 起）：1 次搜索（精英出现率 25%/35%）：避开率 75%/65%；2 次（50%/60%）：37.5%/26%；3 次（75%/85%）：9.375%/3.9%。",
+   "source_page": "Dead_Adventurer"
+  },
+  {
+   "name": "Designer In-Spire",
+   "zh": null,
+   "zh_source": null,
+   "act": [
+    2,
+    3
+   ],
+   "category": "One-Time",
+   "options": [
+    {
+     "label": "Adjustments",
+     "result": "Lose 40 (50) Gold. One of the following rewards appears.\n* Upgrade a card.\n* Upgrade two random cards.",
+     "asc_notes": null,
+     "monsters": null
+    },
+    {
+     "label": "Clean Up",
+     "result": "Lose 60 (75) Gold. One of the following rewards appears.\n* Remove a card.\n* Transform two cards.",
+     "asc_notes": null,
+     "monsters": null
+    },
+    {
+     "label": "Full Service",
+     "result": "Lose 90 (110) Gold. Remove a card, then upgrade a random card.",
+     "asc_notes": null,
+     "monsters": null
+    },
+    {
+     "label": "Punch",
+     "result": "Lose 3 (5) HP.",
+     "asc_notes": null,
+     "monsters": null
+    }
+   ],
+   "text": "You discover a colorful shop with the banner \"IN-SPIRE\" and walk in to see what's inside. \n\"No, no way. Nope. Can't let you in!\" \nA man with ridiculous clothing appears at the entrance to bar you.",
+   "combat": null,
+   "intro": "Designer In-Spire is a shrine Event found in Act 2 and Act 3. It will only appear if the player has at least 75 Gold.",
+   "options_preamble": null,
+   "notes": null,
+   "source_page": "Designer_In-Spire"
+  },
+  {
+   "name": "Duplicator",
+   "zh": null,
+   "zh_source": null,
+   "act": "all",
+   "category": "One-Time",
+   "options": [
+    {
+     "label": "Pray",
+     "result": "Duplicate a card in your deck.",
+     "asc_notes": null,
+     "monsters": null
+    },
+    {
+     "label": "Leave",
+     "result": "Nothing happens.",
+     "asc_notes": null,
+     "monsters": null
+    }
+   ],
+   "text": "Before you lies a decorated altar to some ancient entity.",
+   "combat": null,
+   "intro": "Duplicator is a shrine Event found in all Acts.\nShrine events appear less frequently than normal events.",
+   "options_preamble": null,
+   "notes": null,
+   "source_page": "Duplicator"
+  },
+  {
+   "name": "Face Trader",
+   "zh": null,
+   "zh_source": null,
+   "act": [
+    1,
+    2
+   ],
+   "category": "One-Time",
+   "options": [
+    {
+     "label": "Touch",
+     "result": "Lose X HP, gain 75 (50) (A15) Gold.\n* X is equal to 10% of the player's Max HP, rounded down.",
+     "asc_notes": "Lose X HP, gain 75 (50) (A15) Gold.",
+     "monsters": null
+    },
+    {
+     "label": "Trade",
+     "result": "50%: Good Face. 50%: Bad Face.\n* Receive one of the following special Relics:\n** Face of Cleric (good face)\n** Ssserpent Head (good face)\n** Gremlin Visage (bad face)\n** N'loth's Hungry Face (bad face)\n** Cultist Headpiece (neutral face)",
+     "asc_notes": null,
+     "monsters": null
+    },
+    {
+     "label": "Leave",
+     "result": "Nothing happens.",
+     "asc_notes": null,
+     "monsters": null
+    }
+   ],
+   "text": "You walk by an eerie statue holding several masks... \nSomething behind you softly whispers, \n\"Stop.\"",
+   "combat": null,
+   "intro": "Face Trader is a shrine Event found in Act 1 and Act 2. This Event is the only way to obtain Cultist Headpiece, Face of Cleric, Gremlin Visage, N'loth's Hungry Face, and Ssserpent Head. It is one of the events affected by Ascension A15.",
+   "options_preamble": null,
+   "notes": "* The chances stated by the Event are inaccurate. The actual chances are 40% good face, 40% bad face, and 20% neutral face (Cultist Headpiece).\n** All 5 masks have the same probability of being chosen.",
+   "source_page": "Face_Trader"
+  },
+  {
+   "name": "Falling",
+   "zh": null,
+   "zh_source": null,
+   "act": 3,
+   "category": "Normal",
+   "options": [
+    {
+     "label": "Land",
+     "result": "Lose (a random Skill)\n* Cannot be a Skill targeted by Bottled Lightning.",
+     "asc_notes": null,
+     "monsters": null
+    },
+    {
+     "label": "Channel",
+     "result": "Lose (a random Power)\n* Cannot be a Power targeted by Bottled Tornado.",
+     "asc_notes": null,
+     "monsters": null
+    },
+    {
+     "label": "Strike",
+     "result": "Lose (a random Attack)\n* Cannot be an Attack targeted by Bottled Flame.\nIf the player somehow manages to lack even a single eligible card (e.g. they have a very small deck containing only bottled cards), then the only option listed is a special [Land] option that has no description.",
+     "asc_notes": null,
+     "monsters": null
+    }
+   ],
+   "text": null,
+   "combat": null,
+   "intro": "Falling is an Event found exclusively in Act 3.",
+   "options_preamble": "All options will randomly choose a card in the player's deck of a particular type. The option's text will explicitly tell the player which card they would lose. If the player lacks a card of a particular type, then the option relating to that type will be locked (e.g. if the player has no Powers for the [Channel] option, it is replaced with the option [Locked] Requires: Power Card).",
+   "notes": null,
+   "source_page": "Falling"
+  },
+  {
+   "name": "Forgotten Altar",
+   "zh": null,
+   "zh_source": null,
+   "act": 2,
+   "category": "Normal",
+   "options": [
+    {
+     "label": "Offer: Golden Idol",
+     "result": "Obtain a special Relic. Lose Golden Idol.\n* If the player does not have Golden Idol, this option is replaced with [Locked] Requires: Golden Idol.",
+     "asc_notes": null,
+     "monsters": null
+    },
+    {
+     "label": "Sacrifice",
+     "result": "Gain 5 Max HP. Lose X HP.\n* X is equal to 25% (35%) (A15) of the player's Max HP.",
+     "asc_notes": "* X is equal to 25% (35%) (A15) of the player's Max HP.",
+     "monsters": null
+    },
+    {
+     "label": "Desecrate",
+     "result": "Become Cursed -Decay.\n* Decay - Unplayable. At the end of your turn, take 2 damage.",
+     "asc_notes": null,
+     "monsters": null
+    }
+   ],
+   "text": "In front of you sits an altar to a forgotten god.\nAtop the altar sits an ornate female statue with arms outstretched.\nShe calls out to you, demanding sacrifice.",
+   "combat": null,
+   "intro": "Forgotten Altar is an Event found exclusively in Act 2. This Event is the only way to obtain Bloody Idol. It is one of the events affected by Ascension A15.",
+   "options_preamble": null,
+   "notes": "* Golden Idol is only obtained from the Golden Idol Event.\n* If the Golden Idol is turned into the Bloody Idol, The Moai Head Event in Act 3 will no longer accept it as an offering.",
+   "source_page": "Forgotten_Altar"
+  },
+  {
+   "name": "Golden Idol",
+   "zh": null,
+   "zh_source": null,
+   "act": 1,
+   "category": "Normal",
+   "options": [
+    {
+     "label": "Take",
+     "result": "Obtain Golden Idol. Trigger a trap.",
+     "asc_notes": null,
+     "monsters": null
+    },
+    {
+     "label": "Outrun",
+     "result": "Become Cursed - Injury.",
+     "asc_notes": null,
+     "monsters": null
+    },
+    {
+     "label": "Smash",
+     "result": "Take X Damage.\n* X is equal to 25% (35%) (A15) of the player's Max HP.",
+     "asc_notes": "* X is equal to 25% (35%) (A15) of the player's Max HP.",
+     "monsters": null
+    },
+    {
+     "label": "Hide",
+     "result": "Lose X Max HP.\n* X is equal to 8% (10%) (A15) of the player's Max HP.",
+     "asc_notes": "* X is equal to 8% (10%) (A15) of the player's Max HP.",
+     "monsters": null
+    },
+    {
+     "label": "Leave",
+     "result": "Nothing happens.",
+     "asc_notes": null,
+     "monsters": null
+    }
+   ],
+   "text": "You come across an inconspicuous pedestal with a shining gold idol sitting peacefully atop. It looks incredibly valuable. \nYou sure don't see any traps nearby.",
+   "combat": null,
+   "intro": "Golden Idol is an Event found exclusively in Act 1. It is one of the events affected by Ascension A15.",
+   "options_preamble": null,
+   "notes": "* Forgotten Altar will allow Golden Idol to be exchanged for Bloody Idol.\n* The Moai Head will allow Golden Idol to be exchanged for 333 Gold.",
+   "source_page": "Golden_Idol_Event"
+  },
+  {
+   "name": "Golden Shrine",
+   "zh": null,
+   "zh_source": null,
+   "act": "all",
+   "category": "Shrine",
+   "options": [
+    {
+     "label": "Pray",
+     "result": "Gain 100 Gold.",
+     "asc_notes": null,
+     "monsters": null
+    },
+    {
+     "label": "Desecrate",
+     "result": "Gain 275 Gold. Become Cursed - Regret.\n* Regret - Unplayable. At the end of your turn, lose HP equal to the number of cards in your hand.",
+     "asc_notes": null,
+     "monsters": null
+    },
+    {
+     "label": "Leave",
+     "result": "Nothing happens.",
+     "asc_notes": null,
+     "monsters": null
+    }
+   ],
+   "text": "Before you lies an elaborate shrine to an ancient spirit.",
+   "combat": null,
+   "intro": "Golden Shrine is a shrine Event encountered in all Acts.",
+   "options_preamble": null,
+   "notes": null,
+   "source_page": "Golden_Shrine"
+  },
+  {
+   "name": "Hypnotizing Colored Mushrooms",
+   "zh": null,
+   "zh_source": null,
+   "act": 1,
+   "category": "Normal",
+   "options": [
+    {
+     "label": "Stomp",
+     "result": "Anger the Mushrooms. \n* Enter a battle against 3 Fungi Beasts. Winning grants the exclusive Relic Odd Mushroom along with regular combat rewards.",
+     "asc_notes": null,
+     "monsters": [
+      "Fungi Beast"
+     ]
+    },
+    {
+     "label": "Eat",
+     "result": "Heal X HP. Become Cursed - Parasite.\n* X is equal to 25% of the player's max HP.",
+     "asc_notes": null,
+     "monsters": null
+    }
+   ],
+   "text": "You enter a corridor full of hypnotizing colored mushrooms.\nDue to your lack of specialization in mycology you are unable to identify the specimens.\nYou want to escape, but feel oddly compelled to eat a mushroom...",
+   "combat": {
+    "monsters": "3× Fungi Beast",
+    "post_rewards": "Odd Mushroom（专属遗物）+ 常规战斗奖励"
+   },
+   "intro": "Hypnotizing Colored Mushrooms is an Event encountered exclusively in Act 1. It will only appear if the player is on floor 7 or above. This Event is the only way to obtain Odd Mushroom.",
+   "options_preamble": null,
+   "notes": null,
+   "source_page": "Hypnotizing_Colored_Mushrooms"
+  },
+  {
+   "name": "Knowing Skull",
+   "zh": null,
+   "zh_source": null,
+   "act": 2,
+   "category": "One-Time",
+   "options": [
+    {
+     "label": "A Pick Me Up?",
+     "result": "Get a Potion. Lose X HP. \n* A random Potion is immediately added to the player's left-most empty potion slot.\n* The player is able to select this option even if all their potion slots are full or if they possess Sozu. They still lose HP and this option's HP loss is still increased by 1 even though no potion is obtained.",
+     "asc_notes": null,
+     "monsters": null
+    },
+    {
+     "label": "Riches?",
+     "result": "Gain 90 Gold. Lose X HP.",
+     "asc_notes": null,
+     "monsters": null
+    },
+    {
+     "label": "Success?",
+     "result": "Get a Colorless card. Lose X HP.\n* A random Uncommon Colorless card is added to the player's deck.",
+     "asc_notes": null,
+     "monsters": null
+    },
+    {
+     "label": "How do I leave?",
+     "result": "Lose X HP.\n* This event repeats until this option is chosen.",
+     "asc_notes": null,
+     "monsters": null
+    }
+   ],
+   "text": "You find yourself in an old, decorated chamber. In the center of the room, a large skull sits atop an ornate pedestal. As you approach, the skull bursts into flames and turns to face you.",
+   "combat": null,
+   "intro": "Knowing Skull is a shrine Event found exclusively in Act 2. It will only appear if the player has at least 13 HP; guaranteeing they can select at least 1 option and leave the event without dying.",
+   "options_preamble": "The following options are presented to the player until they decide to leave the event. X is equal to 10% of the player's Max HP (minimum of 6 HP) plus the number of times they have chosen that specific option (Lose 6 HP, then Lose 7 HP, then Lose 8 HP, etc.)",
+   "notes": "* Bloody Idol can greatly increase the number of times the player can choose [Riches?] since they will heal 5 HP every time it gives them Gold.\n* Tungsten Rod will reduce the HP lost by 1 every time an option is selected.",
+   "source_page": "Knowing_Skull"
+  },
+  {
+   "name": "Lab",
+   "zh": null,
+   "zh_source": null,
+   "act": "all",
+   "category": "One-Time",
+   "options": [
+    {
+     "label": "Search",
+     "result": "Find some Potions!\n* Opens a rewards menu with three (two (A15)) random Potions. These can be skipped.",
+     "asc_notes": "* Opens a rewards menu with three (two (A15)) random Potions. These can be skipped.",
+     "monsters": null
+    }
+   ],
+   "text": null,
+   "combat": null,
+   "intro": "Lab is a shrine Event found in all Acts.\nShrine events appear less frequently than other events.",
+   "options_preamble": null,
+   "notes": null,
+   "source_page": "Lab"
+  },
+  {
+   "name": "Living Wall",
+   "zh": null,
+   "zh_source": null,
+   "act": 1,
+   "category": "Normal",
+   "options": [
+    {
+     "label": "Forget",
+     "result": "Remove a card from your deck.",
+     "asc_notes": null,
+     "monsters": null
+    },
+    {
+     "label": "Change",
+     "result": "Transform a card in your deck.",
+     "asc_notes": null,
+     "monsters": null
+    },
+    {
+     "label": "Grow",
+     "result": "Upgrade a card in your deck.",
+     "asc_notes": null,
+     "monsters": null
+    }
+   ],
+   "text": null,
+   "combat": null,
+   "intro": "Living Wall is an Event found exclusively in Act 1.",
+   "options_preamble": null,
+   "notes": null,
+   "source_page": "Living_Wall"
+  },
+  {
+   "name": "Masked Bandits",
+   "zh": "红面具帮",
+   "zh_source": "project",
+   "act": 2,
+   "category": "Normal",
+   "options": [
+    {
+     "label": "Pay",
+     "result": "Lose ALL of your Gold.",
+     "asc_notes": null,
+     "monsters": null
+    },
+    {
+     "label": "Fight!",
+     "result": "* Starts a combat against the three bandits (Pointy, Romeo, and Bear). Upon winning, obtain regular card rewards, 25 - 35 Gold, and Red Mask.",
+     "asc_notes": null,
+     "monsters": [
+      "Bear",
+      "Pointy",
+      "Romeo"
+     ]
+    }
+   ],
+   "text": "You encounter a group of bandits wearing large red masks.\n\"Hello, pay up to pass... a reasonable fee of ALL your gold will do! Heh heh!\"",
+   "combat": {
+    "monsters": "Pointy + Romeo + Bear",
+    "post_rewards": "常规卡牌奖励 + 25-35 金币 + Red Mask（不计为精英战：Preserved Insect/Sling of Courage/Black Star/Slaver's Collar 均不触发）"
+   },
+   "intro": "Masked Bandits is an Event found exclusively in Act 2. This Event and Tomb of Lord Red Mask are the only ways to obtain Red Mask.",
+   "options_preamble": null,
+   "notes": "* Although the fight can be quite dangerous and offers a Relic reward, it does not count as an Elite combat for the sake of Preserved Insect, Sling of Courage, Black Star, and Slaver's Collar.\n* If the player has Red Mask, the Act 3 Event Tomb of Lord Red Mask will have an option to gain 222 Gold for free.",
+   "source_page": "Masked_Bandits"
+  },
+  {
+   "name": "Match and Keep",
+   "zh": null,
+   "zh_source": null,
+   "act": "all",
+   "category": "Shrine",
+   "options": [
+    {
+     "label": "Play",
+     "result": "* Play a matching game for cards. Match pairs of cards to add them to your deck. There is always a pair of one Colorless card and one Curse.",
+     "asc_notes": null,
+     "monsters": null
+    }
+   ],
+   "text": "A gremlin is madly shuffling cards on a table. This monster seems to be a harmless one. You approach him out of curiosity.",
+   "combat": null,
+   "intro": "Match and Keep is a shrine Event encountered in all Acts.\nShrine events appear less frequently than other events.",
+   "options_preamble": null,
+   "notes": null,
+   "source_page": "Match_and_Keep"
+  },
+  {
+   "name": "Mind Bloom",
+   "zh": null,
+   "zh_source": null,
+   "act": 3,
+   "category": "Normal",
+   "options": [
+    {
+     "label": "I am War",
+     "result": "Fight a Boss from Act 1. Obtain a Rare Relic.\n* The boss is selected at random. It can be the same boss that the player actually fought in Act 1, or one of the two that they did not encounter.\n* In addition to the Boss dropping a Rare Relic, it also drops normal combat rewards and 50 (25) (A15) Gold.",
+     "asc_notes": "* In addition to the Boss dropping a Rare Relic, it also drops normal combat rewards and 50 (25) (A15) Gold.",
+     "monsters": null
+    },
+    {
+     "label": "I am Awake",
+     "result": "Upgrade all cards. You can no longer heal.\n* Obtain Mark of the Bloom.",
+     "asc_notes": null,
+     "monsters": null
+    },
+    {
+     "label": "I am Rich",
+     "result": "Gain 999 Gold. Cursed - 2 Normality.\n* This option only appears on floors 35 to 40.",
+     "asc_notes": null,
+     "monsters": null
+    },
+    {
+     "label": "I am Healthy",
+     "result": "Heal to full HP. Cursed - Doubt.\n* This option replaces [I am Rich] on floor 41 and above.",
+     "asc_notes": null,
+     "monsters": null
+    }
+   ],
+   "text": "While walking and traversing through the chaos of the Spire, your thoughts suddenly begin to feel very... real... \nImaginings of monsters and riches begin to manifest themselves into reality. \nThe sensation is quickly fleeting. What do you do?",
+   "combat": {
+    "monsters": "[I am War] 随机 Act 1 Boss（可能是本局实际交战过或未遇到的任意一只）",
+    "post_rewards": "Rare 遗物 + 常规战斗奖励 + 50（A15: 25）金币"
+   },
+   "intro": "Mind Bloom is an Event found exclusively in Act 3. It is one of the events affected by Ascension A15.",
+   "options_preamble": null,
+   "notes": "* Because the healing prevention of [I am Awake] is implemented as the Mark of the Bloom relic, it can disqualify the player from the Who Needs Relics? achievement.\n* The boss fight from [I am War] will trigger Pantograph and Slaver's Collar as if it were a normal end-of-Act boss fight.\n* Omamori can prevent one or both Normality curses from [I am Rich] if it has one or both uses remaining. This allows the player to receive 999 Gold with practically no downside, especially considering that Mind Bloom is often one of the last opportunities to encounter Curses in a run.",
+   "source_page": "Mind_Bloom"
+  },
+  {
+   "name": "Mysterious Sphere",
+   "zh": null,
+   "zh_source": null,
+   "act": 3,
+   "category": "Normal",
+   "options": [
+    {
+     "label": "Open Sphere",
+     "result": "Fight. Reward: Rare Relic.\n* The player enters combat with the 2 Orb Walkers. In addition to the Rare Relic, the combat rewards also yield 45-55 Gold, a normal card reward, and potentially a Potion just like a normal combat.",
+     "asc_notes": null,
+     "monsters": [
+      "Orb Walker"
+     ]
+    },
+    {
+     "label": "Leave",
+     "result": "Nothing happens.",
+     "asc_notes": null,
+     "monsters": null
+    }
+   ],
+   "text": "Jutting from the chaotic terrain around you, a bony sphere surrounds a mysterious glowing object within. \nWhile you are curious what lies inside, you notice some sentries keeping an eye on it.",
+   "combat": {
+    "monsters": "2× Orb Walker",
+    "post_rewards": "Rare 遗物 + 45-55 金币 + 常规卡牌奖励 + 可能有药水（不计为精英战）"
+   },
+   "intro": "Mysterious Sphere is an Event found exclusively in Act 3.",
+   "options_preamble": null,
+   "notes": "* Although the fight can be quite dangerous and offers a Relic reward, it does not count as an Elite combat for the sake of Preserved Insect, Sling of Courage, Black Star, and Slaver's Collar.",
+   "source_page": "Mysterious_Sphere"
+  },
+  {
+   "name": "N'loth",
+   "zh": null,
+   "zh_source": null,
+   "act": 2,
+   "category": "One-Time",
+   "options": [
+    {
+     "label": "Offer: Relic A",
+     "result": "Lose this relic. Obtain a special relic.",
+     "asc_notes": null,
+     "monsters": null
+    },
+    {
+     "label": "Offer: Relic B",
+     "result": "Lose this relic. Obtain a special relic.\n* Rewards the player with N'loth's Gift.",
+     "asc_notes": null,
+     "monsters": null
+    },
+    {
+     "label": "Leave",
+     "result": "Nothing happens.",
+     "asc_notes": null,
+     "monsters": null
+    }
+   ],
+   "text": "An odd creature with a hunched back sprouting several tentacles is scrounging through a pile of trash and debris in front of you. As you approach, he shuffles towards you in a non-threatening manner.\n\"N'loth hungry. Feed N'loth.\"",
+   "combat": null,
+   "intro": "N'loth is a shrine Event found exclusively in Act 2. It will only appear if the player has at least 2 Relics. This Event is the only way to obtain N'loth's Gift.",
+   "options_preamble": "Note: \"Relic A\" and \"Relic B\" will be randomly chosen from the player's currently held Relics.",
+   "notes": "* N'loth can pick Relics that activate their effects only upon being picked up, as well as used-up Relics.\n** For example, offering Relics like Mango or Old Coin will not remove the max HP or Gold granted by them, effectively removing the downside of N'loth's Gift.",
+   "source_page": "Nloth"
+  },
+  {
+   "name": "Neow",
+   "zh": null,
+   "zh_source": null,
+   "act": null,
+   "category": "Unmarked",
+   "options": [
+    {
+     "label": "Shortlist（两祝福变体，上局未到 Act 1 Boss）",
+     "result": "固定两项：\n* Max HP +8/6/7/7 (A14: +7/5/6/6)（Ironclad / Silent / Defect / Watcher）\n* Neow's Lament：接下来三场战斗敌人只有 1 HP。",
+     "asc_notes": "Max HP +7/5/6/6 (A14)",
+     "monsters": null
+    },
+    {
+     "label": "First Blessing",
+     "result": "卡牌相关奖励（随机其一）：\n* Remove a card.\n* Transform a card.\n* Upgrade a card.\n* Choose a card to obtain.（角色随机三选一）\n* Choose an Uncommon Colorless Card to obtain.\n* Obtain a random Rare Card.",
+     "asc_notes": null,
+     "monsters": null
+    },
+    {
+     "label": "Second Blessing",
+     "result": "（随机其一）\n* Max HP +8/6/7/7 (A14: +7/5/6/6)（Ironclad / Silent / Defect / Watcher）\n* Neow's Lament：接下来三场战斗敌人只有 1 HP。\n* Obtain a random Common Relic.\n* Receive 100 Gold.\n* Obtain 3 random Potions.",
+     "asc_notes": "Max HP +7/5/6/6 (A14)",
+     "monsters": null
+    },
+    {
+     "label": "Third Blessing",
+     "result": "一个劣势 + 一个更强奖励的组合（随机配对）：\n劣势：Lose Max HP (-8/7/7/7, A14: -7/6/7/6)；Take X damage（X = (当前HP/10, 向下取整)×3，受 A6/A14 影响）；Obtain a Curse；Lose all Gold。\n奖励：Remove 2 cards（不与 Obtain a Curse 配对）；Transform 2 cards；Gain 250 Gold（不与 Lose all Gold 配对）；Choose a Rare Card to obtain；Choose a Rare Colorless Card to obtain；Obtain a random Rare Relic；Gain Max HP (+16/12/14/14, A14: +14/10/12/12)（不与 Lose Max HP 配对）。",
+     "asc_notes": "Max HP 变化受 A14 影响",
+     "monsters": null
+    },
+    {
+     "label": "Fourth Blessing（Boss Swap）",
+     "result": "将起始遗物替换为随机 Boss 遗物（不能换成角色起始遗物的强化版）。",
+     "asc_notes": null,
+     "monsters": null
+    }
+   ],
+   "text": null,
+   "combat": null,
+   "intro": "Neow is a large whale-like creature with light blue skin and 6 bright yellow eyes. Neow lies at the foot of the Spire and welcomes the player at the beginning of every run.\nNeow blesses you based on the success of your previous run, offering Gold, Relics, or Cards, unless you did not reach the Boss of the Exordium, in which case she only offers two options instead of the usual four.",
+   "options_preamble": null,
+   "notes": "Neow 为局首事件（Act 0，非未知层事件）。祝福按上局成绩分两档：未到 Act 1 Boss 只给两项固定祝福；到达过则四祝福按 First/Second/Third/Fourth 依次选择。数值原文含 A6/A14 进阶档。",
+   "source_page": "Neow"
+  },
+  {
+   "name": "Old Beggar",
+   "zh": null,
+   "zh_source": null,
+   "act": 2,
+   "category": "Normal",
+   "options": [
+    {
+     "label": "Offer Gold",
+     "result": "75 Gold: Remove a card from your deck.",
+     "asc_notes": null,
+     "monsters": null
+    },
+    {
+     "label": "Leave",
+     "result": "Nothing happens.",
+     "asc_notes": null,
+     "monsters": null
+    }
+   ],
+   "text": "An old beggar cloaked in fur reaches his hands out towards you as you pass. \"Spare some coin, child?\"",
+   "combat": null,
+   "intro": "Old Beggar is an Event found exclusively in Act 2. It will only appear if the player has at least 75 Gold.",
+   "options_preamble": null,
+   "notes": null,
+   "source_page": "Old_Beggar"
+  },
+  {
+   "name": "Ominous Forge",
+   "zh": null,
+   "zh_source": null,
+   "act": "all",
+   "category": "One-Time",
+   "options": [
+    {
+     "label": "Forge",
+     "result": "Upgrade a card in your deck.",
+     "asc_notes": null,
+     "monsters": null
+    },
+    {
+     "label": "Rummage",
+     "result": "Obtain a special relic. Become Cursed - Pain.\n* Warped Tongs - At the start of your turn, Upgrade a random card in your hand for the rest of combat.\n* Pain - Unplayable. While in hand, lose 1 HP whenever you play another card.",
+     "asc_notes": null,
+     "monsters": null
+    },
+    {
+     "label": "Leave",
+     "result": "Nothing happens.",
+     "asc_notes": null,
+     "monsters": null
+    }
+   ],
+   "text": "You duck inside a small hut. Inside you find what appears to be a forge. The smithing tools are covered with dust, yet a fire roars inside the furnace. You feel on edge...",
+   "combat": null,
+   "intro": "Ominous Forge is a shrine Event encountered in all Acts.",
+   "options_preamble": null,
+   "notes": "* Internally called Accursed_Blacksmith.",
+   "source_page": "Ominous_Forge"
+  },
+  {
+   "name": "Pleading Vagrant",
+   "zh": null,
+   "zh_source": null,
+   "act": 2,
+   "category": "Normal",
+   "options": [
+    {
+     "label": "Offer Gold",
+     "result": "85 Gold: Obtain a Relic.\n* If the player does not have enough Gold, this option will be greyed out.",
+     "asc_notes": null,
+     "monsters": null
+    },
+    {
+     "label": "Rob",
+     "result": "Obtain a Relic. Become Cursed - Shame.",
+     "asc_notes": null,
+     "monsters": null
+    },
+    {
+     "label": "Leave",
+     "result": "Nothing happens.",
+     "asc_notes": null,
+     "monsters": null
+    }
+   ],
+   "text": "While sneaking past a group of shrouded figures, one of them approaches you.\n\"Got anything for me friend? Please... maybe some Coin?\"\n\"I just need somewhere to stay, I have treasures I can trade...\"\nHe seems delusional, but harmless.",
+   "combat": null,
+   "intro": "Pleading Vagrant is an Event found exclusively in Act 2. It will only appear if the player has at least 75 Gold.",
+   "options_preamble": null,
+   "notes": "* Omamori can be used to prevent the Shame from [Rob] if it has any charges remaining.",
+   "source_page": "Pleading_Vagrant"
+  },
+  {
+   "name": "Purifier",
+   "zh": null,
+   "zh_source": null,
+   "act": "all",
+   "category": "Shrine",
+   "options": [
+    {
+     "label": "Pray",
+     "result": "Remove a card from your deck.",
+     "asc_notes": null,
+     "monsters": null
+    },
+    {
+     "label": "Leave",
+     "result": "Nothing happens.",
+     "asc_notes": null,
+     "monsters": null
+    }
+   ],
+   "text": null,
+   "combat": null,
+   "intro": "Purifier is a shrine Event found in all Acts.\nShrine events occur less frequently than other events.",
+   "options_preamble": null,
+   "notes": "* This probably would not work as an air purifier.",
+   "source_page": "Purifier"
+  },
+  {
+   "name": "Scrap Ooze",
+   "zh": null,
+   "zh_source": null,
+   "act": 1,
+   "category": "Normal",
+   "options": [
+    {
+     "label": "Reach Inside",
+     "result": "Lose 3 (5) (A15) HP. 25% chance to find a Relic.\n* If you fail to find a Relic, you can try again until you find one. Each time you fail, the HP loss is increased by 1 and the chance to gain a Relic increases by 10%.",
+     "asc_notes": "Lose 3 (5) (A15) HP. 25% chance to find a Relic.",
+     "monsters": null
+    },
+    {
+     "label": "Leave",
+     "result": "Nothing happens.",
+     "asc_notes": null,
+     "monsters": null
+    }
+   ],
+   "text": "As you walk into the room you hear a gurgling and the grinding of metals. Before you is a slime-like creature that ate too much scrap for its own good. From the center of the creature you see glints of strange light, perhaps something magical? It looks like you can get some treasure if you just reach inside its... opening. However, the acid and sharp objects may hurt.",
+   "combat": null,
+   "intro": "Scrap Ooze is an event found exclusively in Act 1. It is one of the events affected by Ascension A15.",
+   "options_preamble": null,
+   "notes": "",
+   "source_page": "Scrap_Ooze"
+  },
+  {
+   "name": "Secret Portal",
+   "zh": null,
+   "zh_source": null,
+   "act": 3,
+   "category": "One-Time",
+   "options": [
+    {
+     "label": "Enter the Portal",
+     "result": "IMMEDIATELY travel to the boss.\n* The player is put directly into combat with the Act 3 boss at the end of the act.",
+     "asc_notes": null,
+     "monsters": null
+    },
+    {
+     "label": "Leave",
+     "result": "Nothing happens.",
+     "asc_notes": null,
+     "monsters": null
+    }
+   ],
+   "text": "Before you is a sight that seems out of place in the alien landscape around you. Strangely placed into one of the living walls of the Beyond is an enclosed stone entrance filled with a swirling magical portal.\nYou aren't sure where it leads, but maybe it could speed your journey through the Spire.",
+   "combat": {
+    "monsters": "Act 3 Boss（正常 Boss 战）",
+    "post_rewards": "正常 Boss 战结算（A20 仍为双 Boss；胜利后可进 Act 4）"
+   },
+   "intro": "Secret Portal is a shrine Event found in Act 3. It will only appear if 800 seconds (13 minutes and 20 seconds) have passed.",
+   "options_preamble": null,
+   "notes": "* Apart from the unusual method of entering the boss floor and skipping the rest of Act 3, entering the portal is otherwise a completely normal boss fight.\n** Pantograph and Slaver's Collar trigger as expected.\n** There will still be the double boss afterwards on A20 (A20).\n** Defeating the boss (or both bosses) (A20) will still allow the player to enter Act 4 if they have all required Keys. Although, the player should be careful to collect the Ruby Key from a Rest Site prior to the event since they will skip the guaranteed Rest Site before the boss (which is often relied on as the last opportunity to collect the Ruby Key).\n* The player's current floor is only increased by 1, which causes them to fight the Act 3 Boss earlier than the usual floor 50.",
+   "source_page": "Secret_Portal"
+  },
+  {
+   "name": "Sensory Stone",
+   "zh": null,
+   "zh_source": null,
+   "act": 3,
+   "category": "Normal",
+   "options": [
+    {
+     "label": "Recall",
+     "result": "Add 1 Colorless card to your deck.",
+     "asc_notes": null,
+     "monsters": null
+    },
+    {
+     "label": "Recall",
+     "result": "Add 2 Colorless cards to your deck. Lose 5 HP.",
+     "asc_notes": null,
+     "monsters": null
+    },
+    {
+     "label": "Recall",
+     "result": "Add 3 Colorless cards to your deck. Lose 10 HP.",
+     "asc_notes": null,
+     "monsters": null
+    }
+   ],
+   "text": null,
+   "combat": null,
+   "intro": "Sensory Stone is an Event found exclusively in Act 3.",
+   "options_preamble": null,
+   "notes": "* Since the Colorless cards are actually card rewards, they are affected by Relics which modify card rewards in some way.\n** Question Card makes each card reward present the player with 1 additional card.\n** Singing Bowl can allow the player to skip each card reward in order to gain +2 Max HP.\n** Busted Crown makes each card reward present the player with 2 fewer cards.\n** N'loth's Gift increases the likelihood of each card being a Rare Colorless card.",
+   "source_page": "Sensory_Stone"
+  },
+  {
+   "name": "Shining Light",
+   "zh": null,
+   "zh_source": null,
+   "act": 1,
+   "category": "Normal",
+   "options": [
+    {
+     "label": "Enter",
+     "result": "Upgrade 2 random cards. Lose X HP.\n* X is equal to 20% (30%) (A15) of the player's max HP.",
+     "asc_notes": "* X is equal to 20% (30%) (A15) of the player's max HP.",
+     "monsters": null
+    },
+    {
+     "label": "Leave",
+     "result": "Nothing happens.",
+     "asc_notes": null,
+     "monsters": null
+    }
+   ],
+   "text": "You find a shimmering mass of light encompassing the center of the room.\nIts warm glow and enchanting patterns invite you in.",
+   "combat": null,
+   "intro": "Shining Light is an Event encountered exclusively in Act 1. It is one of the events affected by Ascension A15.",
+   "options_preamble": null,
+   "notes": null,
+   "source_page": "Shining_Light"
+  },
+  {
+   "name": "The Cleric",
+   "zh": null,
+   "zh_source": null,
+   "act": 1,
+   "category": "Normal",
+   "options": [
+    {
+     "label": "Heal",
+     "result": "35 Gold: Heal X HP.\n* X is equal to 25% of the player's Max HP, rounded down.",
+     "asc_notes": null,
+     "monsters": null
+    },
+    {
+     "label": "Purify",
+     "result": "50 (75) (A15) Gold: Remove a card from your deck.",
+     "asc_notes": "50 (75) (A15) Gold: Remove a card from your deck.",
+     "monsters": null
+    },
+    {
+     "label": "Leave",
+     "result": "Nothing happens.",
+     "asc_notes": null,
+     "monsters": null
+    }
+   ],
+   "text": null,
+   "combat": null,
+   "intro": "The Cleric is a shrine Event found exclusively in Act 1. It is one of the events affected by Ascension A15. It can only be encountered if the player has at least 35 Gold; enough to afford at least one of the options.",
+   "options_preamble": null,
+   "notes": null,
+   "source_page": "The_Cleric"
+  },
+  {
+   "name": "The Colosseum",
+   "zh": null,
+   "zh_source": null,
+   "act": 2,
+   "category": "Normal",
+   "options": [
+    {
+     "label": "Fight",
+     "result": "* The player enters a fight with a Blue Slaver and Red Slaver. This fight gives no rewards.\nAfter the fight ends, a choice has to be made:",
+     "asc_notes": null,
+     "monsters": [
+      "Blue Slaver",
+      "Red Slaver"
+     ]
+    },
+    {
+     "label": "COWARDICE",
+     "result": "Escape.",
+     "asc_notes": null,
+     "monsters": null
+    },
+    {
+     "label": "VICTORY",
+     "result": "A powerful fight with many rewards.\n* The player enters a fight with Taskmaster and Gremlin Nob.\n* The rewards are 100 Gold, 1 Rare Relic, 1 Uncommon Relic, a card reward, and sometimes a Potion.",
+     "asc_notes": null,
+     "monsters": [
+      "Gremlin Nob",
+      "Taskmaster"
+     ]
+    }
+   ],
+   "text": "Thwack!!! \nYou were knocked unconscious...",
+   "combat": {
+    "monsters": "第一场：Blue Slaver + Red Slaver（无战斗奖励）；第二场（VICTORY）：Taskmaster + Gremlin Nob（按精英战结算）",
+    "post_rewards": "VICTORY 战后：100 金币 + 1 Rare 遗物 + 1 Uncommon 遗物 + 卡牌奖励 + 可能有药水（wiki：This combat will always drop exactly 1 Rare Relic and 1 Uncommon Relic）"
+   },
+   "intro": "The Colosseum is an Event found exclusively in Act 2. It is one of the events affected by Ascension A15. It only appears after the guaranteed Treasure Room on the 6th floor of the City.",
+   "options_preamble": null,
+   "notes": "Some mechanics behave strangely during the two fights in this event due to their atypical nature:\n* [Fight] is treated as a normal combat.\n** Smoke Bomb can be used to escape the fight and the player will still be prompted to choose either [COWARDICE] or [VICTORY] afterwards as normal.\n** The game still rolls to drop a Potion, but never presents the player with it even if a Potion would be dropped. This means it is impossible to know if the potion chance has increased or decreased, and this uncertainty will persist until the potion chance resets at start of the next act.\n** While it has no combat rewards and transitions to the next dialogue of the event very quickly, end-of-combat effects like Burning Blood and Self Repair will still trigger.\n* [VICTORY] is treated as an Elite combat for most effects.\n** Preserved Insect, Sling of Courage, and Slaver's Collar will all trigger their effects as expected.\n** The only exception is Black Star, which has no effect on the Relics dropped as rewards. This combat will always drop exactly 1 Rare Relic and 1 Uncommon Relic.",
+   "source_page": "The_Colosseum"
+  },
+  {
+   "name": "The Divine Fountain",
+   "zh": null,
+   "zh_source": null,
+   "act": "all",
+   "category": "One-Time",
+   "options": [
+    {
+     "label": "Drink",
+     "result": "Remove all Curses from your deck.",
+     "asc_notes": null,
+     "monsters": null
+    },
+    {
+     "label": "Leave",
+     "result": "Nothing happens.",
+     "asc_notes": null,
+     "monsters": null
+    }
+   ],
+   "text": "You come across shimmering water flowing endlessly from a fountain on a nearby wall.",
+   "combat": null,
+   "intro": "The Divine Fountain is a shrine Event found in all Acts. This event can only appear if you have a Curse in your deck.\nShrine events appear less frequently than other events.",
+   "options_preamble": null,
+   "notes": "* Removing all Curses may not be beneficial if you are relying on the Strength from Du-Vu Doll.\n* The Max HP gain from Darkstone Periapt is kept even when the Curses are removed.",
+   "source_page": "The_Divine_Fountain"
+  },
+  {
+   "name": "The Joust",
+   "zh": null,
+   "zh_source": null,
+   "act": 2,
+   "category": "One-Time",
+   "options": [
+    {
+     "label": "Murderer",
+     "result": "Bet 50 Gold - 70%: win 100 Gold.",
+     "asc_notes": null,
+     "monsters": null
+    },
+    {
+     "label": "Owner",
+     "result": "Bet 50 Gold - 30%: win 250 Gold.\nThere is no option to avoid betting.",
+     "asc_notes": null,
+     "monsters": null
+    }
+   ],
+   "text": "As you make your way through the large buildings you come across a long narrow bridge and spot knights on either side, facing one another. \nYou approach... \n\"HALT!\" \nA knight forcefully gestures you to stop with its giant lance.",
+   "combat": null,
+   "intro": "The Joust is a shrine Event found in Act 2. This event can only be encountered with more than 50 Gold.",
+   "options_preamble": null,
+   "notes": "* If the player possesses Ectoplasm, this event is a mandatory loss of 50 Gold. There is no option to leave the event without betting, and any potential winnings cannot be gained.\n* The player may consider using the [https://en.wikipedia.org/wiki/Expected_value expected value] (EV) of each option to determine who they want to bet on.\n** The EV of betting on the Murderer is a net increase of 20 Gold (a 70% chance to receive 100 Gold is an expected 70 Gold, minus the 50 Gold that was bet. 0.7 x 100 - 50 = 20)\n** The EV of betting on the Owner is a net increase of 25 Gold (a 30% chance to receive 250 Gold is an expected 75 Gold, minus the 50 Gold that was bet. 0.3 x 250 - 50 = 25)\n** It may be more beneficial to ignore the EV and instead consider whether the relatively safe 50 extra Gold by betting on the Murderer is more useful to the player's current run compared to risking the bet on the Owner and likely losing their 50 Gold for the more unlikely net gain of 200 Gold.",
+   "source_page": "The_Joust"
+  },
+  {
+   "name": "The Library",
+   "zh": null,
+   "zh_source": null,
+   "act": 2,
+   "category": "Normal",
+   "options": [
+    {
+     "label": "Read",
+     "result": "Choose 1 of 20 cards to add to your deck.",
+     "asc_notes": null,
+     "monsters": null
+    },
+    {
+     "label": "Sleep",
+     "result": "Heal X HP.\n* X is equal to 33% (20%) (A15) of the player's Max HP.",
+     "asc_notes": "* X is equal to 33% (20%) (A15) of the player's Max HP.",
+     "monsters": null
+    }
+   ],
+   "text": "You come across an ornate building which appears abandoned. \nA plaque that has been torn free from a wall is on the floor. It reads, \"THE LIBRARY\". \nInside, you find countless rows of scrolls, manuscripts, and books. \nYou pick one and cozy yourself into a chair for some quiet time.",
+   "combat": null,
+   "intro": "The Library is an Event found exclusively in Act 2. It is one of the events affected by Ascension A15.",
+   "options_preamble": null,
+   "notes": "* [Sleep] is unaffected by Regal Pillow, does not trigger Dream Catcher, and can still be chosen with Coffee Dripper.\n* Mark of the Bloom makes [Sleep] serve only as a way to skip adding a card to your deck as it will no longer heal you.\n* N'loth's Gift increases the likelihood of each card offered by [Read] being Rare.",
+   "source_page": "The_Library"
+  },
+  {
+   "name": "The Mausoleum",
+   "zh": null,
+   "zh_source": null,
+   "act": 2,
+   "category": "Normal",
+   "options": [
+    {
+     "label": "Open Coffin",
+     "result": "Obtain a Relic. 50% (100%) (A15): Become Cursed - Writhe",
+     "asc_notes": "Obtain a Relic. 50% (100%) (A15): Become Cursed - Writhe",
+     "monsters": null
+    },
+    {
+     "label": "Leave",
+     "result": "Nothing happens.",
+     "asc_notes": null,
+     "monsters": null
+    }
+   ],
+   "text": "Venturing through a series of tombs, you are faced with a large sarcophagus studded with gems in the center of a circular room. \nYou cannot make out the writing on the coffin, however, you do notice black fog seeping out from the sides.",
+   "combat": null,
+   "intro": "The Mausoleum is an Event found in Act 2. It is one of the events affected by Ascension A15.",
+   "options_preamble": null,
+   "notes": "* If the player receives Omamori as the Relic reward, it will not prevent the Writhe from being gained.\n* If the player receives Darkstone Periapt as the Relic reward, it will grant the +6 Max HP.",
+   "source_page": "The_Mausoleum"
+  },
+  {
+   "name": "The Moai Head",
+   "zh": null,
+   "zh_source": null,
+   "act": 3,
+   "category": "Normal",
+   "options": [
+    {
+     "label": "Jump Inside",
+     "result": "Heal to full HP. Lose X Max HP.\n* X is equal to 12.5% (18%) (A15) of the player's Max HP.\n[Offer: Golden Idol] Receive 333 Gold. Lose Golden Idol.\n* If the player lacks Golden Idol, this option is replaced with [Locked] Requires: Golden Idol.",
+     "asc_notes": "* X is equal to 12.5% (18%) (A15) of the player's Max HP.",
+     "monsters": null
+    },
+    {
+     "label": "Leave",
+     "result": "Nothing happens.",
+     "asc_notes": null,
+     "monsters": null
+    }
+   ],
+   "text": "You stumble across something that feels * very* out of place. Before you, an enormous stony head emerges from a large wall segment that does not shift and change like the rest of this area. \nThe head's mouth is wide open, and it reveals large intimidating teeth stained red with blood. The surface of the status is riddled with pictographs that seem to indicate people throwing themselves into the mouth of this head and being devoured. Why would anyone do that?",
+   "combat": null,
+   "intro": "The Moai Head is an Event found in Act 3. It is one of the events affected by Ascension A15. It can only be encountered if the player either has Golden Idol, or their HP is at or below 50%.",
+   "options_preamble": null,
+   "notes": "* Golden Idol is acquired from the Act 1 event of the same name; Golden Idol.\n* The Moai Head is the last opportunity to trade the Golden Idol, the other being the Forgotten Altar event in Act 2.\n* The 333 Gold from [Offer: Golden Idol] easily outperforms any remaining Gold the player could gain from combats by keeping the Golden Idol, especially since they likely do not have many combats left in the run by the time they reach this Act 3 event.\n* The healing from [Jump Inside] will be prevented if the player has Mark of the Bloom.",
+   "source_page": "The_Moai_Head"
+  },
+  {
+   "name": "The Nest",
+   "zh": null,
+   "zh_source": null,
+   "act": 2,
+   "category": "Normal",
+   "options": [
+    {
+     "label": "Smash and Grab",
+     "result": "Obtain 99 (50) (A15) Gold.",
+     "asc_notes": "Obtain 99 (50) (A15) Gold.",
+     "monsters": null
+    },
+    {
+     "label": "Stay in Line",
+     "result": "Obtain Ritual Dagger. Lose 6 HP.",
+     "asc_notes": null,
+     "monsters": null
+    }
+   ],
+   "text": "A long line of hooded figures can be seen entering an unassuming cathedral.",
+   "combat": null,
+   "intro": "The Nest is an event found exclusively in Act 2. It is one of the events affected by Ascension A15.",
+   "options_preamble": null,
+   "notes": null,
+   "source_page": "The_Nest"
+  },
+  {
+   "name": "The Ssssserpent",
+   "zh": null,
+   "zh_source": null,
+   "act": 1,
+   "category": "Normal",
+   "options": [
+    {
+     "label": "Agree",
+     "result": "Gain 175 (150) (A15) Gold. Become Cursed - Doubt.",
+     "asc_notes": "Gain 175 (150) (A15) Gold. Become Cursed - Doubt.",
+     "monsters": null
+    },
+    {
+     "label": "Disagree",
+     "result": "Nothing happens.\nYou are then given the option to [Leave].",
+     "asc_notes": null,
+     "monsters": null
+    }
+   ],
+   "text": "You walk into a room to find a large hole in the ground. As you approach the hole, an enormous serpent creature appears from within.\n\"Ho hooo! Hello hello! what have we got here? Hello adventurer, I ask a simple question.\nThe most fulfilling of lives is that in which you can buy anything!\nDo you agree?\"",
+   "combat": null,
+   "intro": "The Ssssserpent is an Event encountered exclusively in Act 1. It is one of the events affected by Ascension A15.",
+   "options_preamble": null,
+   "notes": null,
+   "source_page": "The_Ssssserpent"
+  },
+  {
+   "name": "The Woman in Blue",
+   "zh": null,
+   "zh_source": null,
+   "act": "all",
+   "category": "One-Time",
+   "options": [
+    {
+     "label": "Buy 1 Potion",
+     "result": "20 Gold.",
+     "asc_notes": null,
+     "monsters": null
+    },
+    {
+     "label": "Buy 2 Potions",
+     "result": "30 Gold.",
+     "asc_notes": null,
+     "monsters": null
+    },
+    {
+     "label": "Buy 3 Potions",
+     "result": "40 Gold.",
+     "asc_notes": null,
+     "monsters": null
+    },
+    {
+     "label": "Leave",
+     "result": "Nothing happens.",
+     "asc_notes": null,
+     "monsters": null
+    }
+   ],
+   "text": "From the darkness, an arm pulls you into a small shop. As your eyes adjust, you see a pale woman in sharp clothes gesturing to a wall of potions. \n\"Buy a potion. Now!\" she states.",
+   "combat": null,
+   "intro": "The Woman in Blue is a shrine Event encountered in all Acts.\nShrine events appear less frequently than other events.",
+   "options_preamble": null,
+   "notes": "* Even if you skip grabbing the potions you bought, she will still be satisfied.",
+   "source_page": "The_Woman_in_Blue"
+  },
+  {
+   "name": "Tomb of Lord Red Mask",
+   "zh": null,
+   "zh_source": null,
+   "act": 3,
+   "category": "Normal",
+   "options": [
+    {
+     "label": "Don the Red Mask",
+     "result": "Gain 222 Gold.\n* The player gets to keep Red Mask afterwards. The Gold is purely a reward for owning the relic.",
+     "asc_notes": null,
+     "monsters": null
+    },
+    {
+     "label": "Leave",
+     "result": "Nothing happens. \nIf The Player Does Not Own Red Mask",
+     "asc_notes": null,
+     "monsters": null
+    },
+    {
+     "label": "Locked",
+     "result": "Requires: Red Mask",
+     "asc_notes": null,
+     "monsters": null
+    },
+    {
+     "label": "Offer: X Gold",
+     "result": "Lose all Gold. Obtain a Relic.\n* X is equal to all of the player's Gold.\n* Rewards the player with Red Mask.",
+     "asc_notes": null,
+     "monsters": null
+    },
+    {
+     "label": "Leave",
+     "result": "Nothing happens.",
+     "asc_notes": null,
+     "monsters": null
+    }
+   ],
+   "text": "A highly ornamented tomb can be seen on the other side of a floating path. Upon reaching the tomb, you notice a slot for gold coins with a scratched out inscription above it.",
+   "combat": null,
+   "intro": "Tomb of Lord Red Mask is an Event found in Act 3.",
+   "options_preamble": "If The Player Owns Red Mask",
+   "notes": "* Red Mask is obtained from the Act 2 event Masked Bandits.",
+   "source_page": "Tomb_of_Lord_Red_Mask"
+  },
+  {
+   "name": "Transmogrifier",
+   "zh": null,
+   "zh_source": null,
+   "act": "all",
+   "category": "Shrine",
+   "options": [
+    {
+     "label": "Pray",
+     "result": "Transform a card.\n* Read more on Transform rules here.",
+     "asc_notes": null,
+     "monsters": null
+    },
+    {
+     "label": "Leave",
+     "result": "Nothing happens.",
+     "asc_notes": null,
+     "monsters": null
+    }
+   ],
+   "text": "Before you lies an elaborate shrine to a forgotten spirit.",
+   "combat": null,
+   "intro": "Transmogrifier is a shrine Event encountered in all Acts.\nShrine events appear less frequently than other events.",
+   "options_preamble": null,
+   "notes": null,
+   "source_page": "Transmogrifier"
+  },
+  {
+   "name": "Upgrade Shrine",
+   "zh": null,
+   "zh_source": null,
+   "act": "all",
+   "category": "Shrine",
+   "options": [
+    {
+     "label": "Pray",
+     "result": "Upgrade a card.",
+     "asc_notes": null,
+     "monsters": null
+    },
+    {
+     "label": "Leave",
+     "result": "Nothing happens.",
+     "asc_notes": null,
+     "monsters": null
+    }
+   ],
+   "text": "Before you lies an elaborate shrine to a forgotten spirit.",
+   "combat": null,
+   "intro": "Upgrade Shrine is a shrine Event found in all Acts.\nShrine events appear less frequently than other events.",
+   "options_preamble": null,
+   "notes": null,
+   "source_page": "Upgrade_Shrine"
+  },
+  {
+   "name": "Vampires",
+   "zh": null,
+   "zh_source": null,
+   "act": 2,
+   "category": "Normal",
+   "options": [
+    {
+     "label": "Offer: Blood Vial",
+     "result": "Lose Blood Vial. Remove all Strikes. Receive 5 Bites.\n* Only present if the player has Blood Vial.",
+     "asc_notes": null,
+     "monsters": null
+    },
+    {
+     "label": "Accept",
+     "result": "Remove all Strikes. Receive 5 Bites. Lose X Max HP.\n* X is equal to 30% of the player's max HP.",
+     "asc_notes": null,
+     "monsters": null
+    },
+    {
+     "label": "Refuse",
+     "result": "Nothing happens.\nYou are then given the option to [Leave].",
+     "asc_notes": null,
+     "monsters": null
+    }
+   ],
+   "text": null,
+   "combat": null,
+   "intro": "Vampires is an Event found exclusively in Act 2.",
+   "options_preamble": null,
+   "notes": null,
+   "source_page": "Vampires"
+  },
+  {
+   "name": "We Meet Again!",
+   "zh": null,
+   "zh_source": null,
+   "act": "all",
+   "category": "One-Time",
+   "options": [
+    {
+     "label": "Give Potion",
+     "result": "Lose a chosen potion. Obtain a Relic.\n* The event will randomly choose a potion upon entry and tell you which one was selected. You will be unable to drink or discard that potion until you leave the event's floor.",
+     "asc_notes": null,
+     "monsters": null
+    },
+    {
+     "label": "Give Gold",
+     "result": "Lose Gold. Obtain a Relic.\n* The amount of Gold lost is between 50 and 150 (or your current amount of Gold).",
+     "asc_notes": null,
+     "monsters": null
+    },
+    {
+     "label": "Give Card",
+     "result": "Lose a chosen card. Obtain a Relic.\n* The chosen card will not be Basic or a Curse.",
+     "asc_notes": null,
+     "monsters": null
+    },
+    {
+     "label": "Attack",
+     "result": "Nothing happens.",
+     "asc_notes": null,
+     "monsters": null
+    }
+   ],
+   "text": "\"We meet again!\" \nA cheery disheveled fellow approaches you gleefully. You do not know this man. \n\"It's me! Ranwid! Have any goods for me today? The usual? A fella like me can't make it alone, you know?\" \nYou eye him suspiciously and consider your options.",
+   "combat": null,
+   "intro": "We Meet Again! is a shrine Event found in all Acts.\nShrine events appear less frequently than other events.",
+   "options_preamble": null,
+   "notes": "* \"mask wearing hoodlums\" likely refers to the group of bandits in the Act 2 event Masked Bandits.",
+   "source_page": "We_Meet_Again"
+  },
+  {
+   "name": "Wheel of Change",
+   "zh": null,
+   "zh_source": null,
+   "act": "all",
+   "category": "Shrine",
+   "options": [
+    {
+     "label": "Play",
+     "result": "* Spin a wheel containing the following \"prizes\" (clockwise starting at 12 o'clock in the image):\n** Take 10% (15% (A15)) of your Max HP as damage.\n** Gain Gold\n** Gain a random Relic\n** Heal to full HP\n** Become Cursed - Decay\n** Remove a card from your deck.",
+     "asc_notes": "** Take 10% (15% (A15)) of your Max HP as damage.",
+     "monsters": null
+    }
+   ],
+   "text": "You come upon a dapper looking, cheery gremlin. \n\"It's time to spin the wheel! Are you R E A D Y ? Of course you are!\"",
+   "combat": null,
+   "intro": "Wheel of Change is a shrine Event found in all Acts.\nShrine events appear less frequently than other acts.",
+   "options_preamble": null,
+   "notes": null,
+   "source_page": "Wheel_of_Change"
+  },
+  {
+   "name": "Winding Halls",
+   "zh": null,
+   "zh_source": null,
+   "act": 3,
+   "category": "Normal",
+   "options": [
+    {
+     "label": "Embrace Madness",
+     "result": "Receive 2 Madness. Lose X HP.\n* X is equal to 12.5% (18%) (A15) of the player's Max HP.",
+     "asc_notes": "* X is equal to 12.5% (18%) (A15) of the player's Max HP.",
+     "monsters": null
+    },
+    {
+     "label": "Focus",
+     "result": "Become Cursed - Writhe. Heal X HP.\n* X is equal to 25% (20%) (A15) of the player's Max HP.",
+     "asc_notes": "* X is equal to 25% (20%) (A15) of the player's Max HP.",
+     "monsters": null
+    },
+    {
+     "label": "Retrace Your Steps",
+     "result": "Lose X Max HP.\n* X is equal to 5% of the player's Max HP.",
+     "asc_notes": null,
+     "monsters": null
+    }
+   ],
+   "text": "As you slowly make your way up the twisting pathways, you constantly find yourself losing your way as the walls and ground seem to inexplicably shift before your eyes \nThe constant whispering voices in the back of your head aren't helping things either.",
+   "combat": null,
+   "intro": "Winding Halls is an Event found exclusively in Act 3. It is one of the events affected by Ascension A15.",
+   "options_preamble": null,
+   "notes": "* Omamori can be used to prevent the Writhe from [Focus] if it has any charges remaining. This is likely one of the last opportunities for the player to be able to benefit from Omamori.",
+   "source_page": "Winding_Halls"
+  },
+  {
+   "name": "Wing Statue",
+   "zh": null,
+   "zh_source": null,
+   "act": 1,
+   "category": "Normal",
+   "options": [
+    {
+     "label": "Pray",
+     "result": "Remove a card from your deck. Lose 7 HP.",
+     "asc_notes": null,
+     "monsters": null
+    },
+    {
+     "label": "Destroy",
+     "result": "Receive 50 - 80 Gold.\n* Requires an Attack card in the player's deck that deals 10 or more damage in a single hit (e.g. Twin Strike does not count).\n* If the player's deck does satisfy the condition, this option is replaced with [Locked] Requires: Card with 10 or more damage.\n* See the Notes section for more details on which cards satisfy this requirement.",
+     "asc_notes": null,
+     "monsters": null
+    },
+    {
+     "label": "Leave",
+     "result": "Nothing happens.",
+     "asc_notes": null,
+     "monsters": null
+    }
+   ],
+   "text": null,
+   "combat": null,
+   "intro": "Wing Statue is an Event found in Act 1.",
+   "options_preamble": null,
+   "notes": "The event specifically only checks Attack cards in the player's deck, despite only stating \"Cards\" in general. It also only checks whether the card's base damage is 10 or more. This means that any card that can only achieve 10 or more damage through the use of multi-hits (such as Twin Strike and Riddle with Holes) or that have damage which is dynamically calculated from certain conditions in combat (such as Perfected Strike and Mind Blast) do not meet the requirement.\nCards With 10 or More Damage\nThe following is a list of cards that satisfy the condition of \"Requires: Card with 10 or more damage.\" for the [Destroy] option:\n* Clash\n* Clothesline\n* Heavy Blade\n* Wild Strike\n* Blood for Blood\n* Carnage\n* Hemokinesis\n* Searing Blow\n* Sever Soul\n* Uppercut\n* Bludgeon\n* Feed\n* Immolate\n* Bane\n* Flying Knee\n* Sneaky Strike\n* All-Out Attack\n* Backstab\n* Choke\n* Dash\n* Masterful Stab\n* Predator\n* Die Die Die\n* Grand Finale\n* Unload\n* Streamline\n* Doom and Gloom\n* Melter\n* Sunder\n* All for One\n* Core Surge\n* Hyperbeam\n* Meteor Strike\n* Conclude\n* Reach Heaven\n* Sands of Time\n* Signature Move\n* Wheel Kick\n* Brilliance\n* Lesson Learned\n* Hand of Greed\n* Ritual Dagger\nCards With 10 or More Damage After Being Upgraded\nThe following is a list of cards that satisfy the condition of \"Requires: Card with 10 or more damage.\" for the [Destroy] option only after they have been Upgraded to increase their base damage:\n* Bash\n* Cleave\n* Headbutt\n* Pommel Strike\n* Reckless Charge\n* Fiend Fire\n* Dagger Throw\n* Quick Slash\n* Skewer\n* Glass Knife\n* Ball Lightning\n* Compile Driver\n* Rebound\n* Bullseye\n* Scrape\n* Bowling Bash\n* Crush Joints\n* Empty Fist\n* Follow-Up\n* Sash Whip\n* Carve Reality\n* Fear No Evil\n* Wallop\n* Windmill Strike\n* Dramatic Entrance\n* Swift Strike",
+   "source_page": "Wing_Statue"
+  },
+  {
+   "name": "World of Goop",
+   "zh": null,
+   "zh_source": null,
+   "act": 1,
+   "category": "Normal",
+   "options": [
+    {
+     "label": "Gather Gold",
+     "result": "Gain 75 Gold. Lose 11 HP.",
+     "asc_notes": null,
+     "monsters": null
+    },
+    {
+     "label": "Leave It",
+     "result": "Lose X Gold.\n* X is a random number between 20 and 50 (35 and 75) (A15) Gold. X cannot be more Gold than the player currently has.",
+     "asc_notes": "* X is a random number between 20 and 50 (35 and 75) (A15) Gold. X cannot be more Gold than the player currently has.",
+     "monsters": null
+    }
+   ],
+   "text": "You fall into a puddle.\nIT'S MADE OF SLIME GOOP!!\nFrantically, you claw yourself out over several minutes as you feel the goop starting to burn.\nYou can feel goop in your ears, goop in your nose, goop everywhere.\nClimbing out, you notice that some of your gold is missing. Looking back to the puddle you see your missing coins combined with gold from unfortunate adventurers mixed together in the puddle.",
+   "combat": null,
+   "intro": "World of Goop is an Event encountered exclusively in Act 1. It is one of the events affected by Ascension A15.",
+   "options_preamble": null,
+   "notes": null,
+   "source_page": "World_of_Goop"
+  }
+ ]
+}

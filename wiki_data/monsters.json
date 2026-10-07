@@ -1,0 +1,4206 @@
+{
+ "meta": {
+  "source": "https://slaythespire.wiki.gg/",
+  "fetched": "2026-10-07",
+  "conventions": {
+   "hp": "asc7=A7 HP (普通怪/事件怪/召唤物), asc8=A8 HP (精英), asc9=A9 HP (Boss); wiki infobox 的 AscHP 按怪物类型归档到对应档",
+   "ascension": "文本中 'A<N>: X' 表示 wiki 原文的 {{Asc|N|X}} 模板（进阶 N 档数值）",
+   "damage": "数值为 int；区间 [min,max]；多段攻击保留原文形式如 '10×2'",
+   "intent_raw": "wiki Intents Table 的原始 Intent 字段（含攻击强度数字后缀）",
+   "zh_source": "zh 字段来源：'project'=本项目内容层 sts/content/monsters.py，非 wiki"
+  },
+  "coverage": "来源：本项目内容层枚举的 67 个怪物名（含 1 个无 wiki 页的项目内部占位）。wiki 合并页按个体拆条：Louses→Red/Green Louse；Slimes→Acid/Spike × S/M/L；Donu and Deca→Donu/Deca；Spire Shield and Spire Spear；Centurion and Mystic；Gremlins→5 小鬼；Slavers→Blue/Red Slaver；Thieves→Looter/Mugger；Shapes→Exploder/Repulsor/Spiker；Reptomancer 页带出 Dagger；The Collector 页带出 Torch Head；Bronze Automaton 页带出 Bronze Orb；Masked Bandits 页带出 Pointy/Romeo/Bear；Taskmaster 独立页；Fungi Beast 独立页。另含 wiki 页上的强化变体 Jaw Worm (Hard)（Act 3）。项目名 'Louse'（红绿随机抽象）由 Red Louse + Green Louse 两条覆盖；'Slot Placeholder' 无 wiki 页面，条目内注明。act 字段取 wiki infobox 的 Debut（Corrupt Heart/Spire Shield/Spire Spear 为 Act 4）。"
+ },
+ "monsters": [
+  {
+   "name": "Awakened One",
+   "zh": "觉醒者",
+   "zh_source": "project",
+   "act": 3,
+   "type": "Boss",
+   "hp": {
+    "asc0": 300,
+    "asc7": null,
+    "asc8": null,
+    "asc9": 320
+   },
+   "powers": "Regenerate 10 (15 (A19)) , Curiosity 1 (2 (A19)) , (Strength 2 (A4))",
+   "moves": [
+    {
+     "name": "Slash",
+     "kind": "Attack",
+     "intent_raw": "Attack5",
+     "damage": {
+      "asc0": 20
+     },
+     "effects": [],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Soul Strike",
+     "kind": "Attack",
+     "intent_raw": "Attack5",
+     "damage": {
+      "asc0": "6×4"
+     },
+     "effects": [],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Rebirth",
+     "kind": "Unknown",
+     "intent_raw": "Unknown",
+     "damage": null,
+     "effects": [
+      "Heals to full HP.",
+      "Removes all Debuffs.",
+      "Loses Curiosity."
+     ],
+     "gives_to_player": [],
+     "gives_to_enemy": [
+      "Curiosity"
+     ]
+    },
+    {
+     "name": "Dark Echo",
+     "kind": "Attack",
+     "intent_raw": "Attack7",
+     "damage": {
+      "asc0": 40
+     },
+     "effects": [],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Sludge",
+     "kind": "Attack+Debuff",
+     "intent_raw": "DebuffAttack4",
+     "damage": {
+      "asc0": 18
+     },
+     "effects": [
+      "Adds a Void into your draw pile."
+     ],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Tackle",
+     "kind": "Attack",
+     "intent_raw": "Attack7",
+     "damage": {
+      "asc0": "10×3"
+     },
+     "effects": [],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    }
+   ],
+   "ai": "Phase One\nAlways starts with Slash.\nEvery turn after:\n* Soul Strike 25% chance\n* Slash 75% chance\nSlash cannot be used three times in a row. Soul Strike cannot be used twice in a row.\nPhase Two\nOnce its HP reaches 0, it loses Curiosity and its intent changes to Rebirth. Any Strength gained from Curiosity is kept.\nAlways starts Phase Two with Dark Echo. Afterward, it has a 50/50 chance to use Tackle or Sludge. It cannot use either of these moves three times in a row.\nThe remaining Cultists will flee when the Awakened One is defeated in Phase Two.",
+   "found_with": null,
+   "notes": null,
+   "source_page": "Awakened_One"
+  },
+  {
+   "name": "Book of Stabbing",
+   "zh": "刺击之书",
+   "zh_source": "project",
+   "act": 2,
+   "type": "Elite",
+   "hp": {
+    "asc0": [
+     160,
+     164
+    ],
+    "asc7": null,
+    "asc8": [
+     168,
+     172
+    ],
+    "asc9": null
+   },
+   "powers": "Painful Stabs",
+   "moves": [
+    {
+     "name": "Multi Stab",
+     "kind": "Attack",
+     "intent_raw": "Attack3",
+     "damage": {
+      "asc0": "6×N",
+      "asc3": "7×N"
+     },
+     "effects": [
+      "(N = Number of times Multi Stab was used this combat, plus 2.; On (A18), N = Current turn, plus 1.)"
+     ],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Big Stab",
+     "kind": "Attack",
+     "intent_raw": "Attack5",
+     "damage": {
+      "asc0": 21,
+      "asc3": 24
+     },
+     "effects": [],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    }
+   ],
+   "ai": "15% chance to use Big Stab and an 85% chance to use Multi Stab.\nCannot use Multi Stab 3 times in a row and cannot use Big Stab twice in a row.",
+   "found_with": "Act 2\n* Solo",
+   "notes": null,
+   "source_page": "Book_of_Stabbing"
+  },
+  {
+   "name": "Bronze Automaton",
+   "zh": "青铜自律机",
+   "zh_source": "project",
+   "act": 2,
+   "type": "Boss",
+   "hp": {
+    "asc0": 300,
+    "asc7": null,
+    "asc8": null,
+    "asc9": 320
+   },
+   "powers": "Artifact 3",
+   "moves": [
+    {
+     "name": "Spawn Orbs",
+     "kind": "Unknown",
+     "intent_raw": "Unknown",
+     "damage": null,
+     "effects": [
+      "Summons 2 Bronze Orbs."
+     ],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Flail",
+     "kind": "Attack",
+     "intent_raw": "Attack3",
+     "damage": {
+      "asc0": "7×2",
+      "asc4": "8x2"
+     },
+     "effects": [],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Boost",
+     "kind": "Buff+Defend",
+     "intent_raw": "DefendBuff",
+     "damage": null,
+     "effects": [
+      "Gains 3 (A4: 4) Strength and 9 (A9: 12) Block."
+     ],
+     "gives_to_player": [],
+     "gives_to_enemy": [
+      "Strength",
+      "Block"
+     ]
+    },
+    {
+     "name": "HYPER BEAM",
+     "kind": "Attack",
+     "intent_raw": "Attack7",
+     "damage": {
+      "asc0": 45,
+      "asc4": 50
+     },
+     "effects": [],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Stunned",
+     "kind": "Unknown",
+     "intent_raw": "Unknown",
+     "damage": null,
+     "effects": [
+      "Does nothing."
+     ],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    }
+   ],
+   "ai": "Always starts with Spawn Orbs, then repeats the following pattern:\n#Flail\n#Boost\n#Flail\n#Boost\n#HYPER BEAM\n#Stunned\nOn Ascension A19, Bronze Automaton will always use Boost in place of Stunned.",
+   "found_with": null,
+   "notes": null,
+   "source_page": "Bronze_Automaton"
+  },
+  {
+   "name": "Bronze Orb",
+   "zh": "青铜球",
+   "zh_source": "project",
+   "act": 2,
+   "type": "Minion",
+   "hp": {
+    "asc0": [
+     52,
+     58
+    ],
+    "asc7": [
+     54,
+     60
+    ],
+    "asc8": null,
+    "asc9": null
+   },
+   "powers": "Minion",
+   "moves": [
+    {
+     "name": "Stasis",
+     "kind": "Debuff",
+     "intent_raw": "DebuffStrong",
+     "damage": null,
+     "effects": [
+      "Steals a random card of the highest rarity from your draw pile (or discard pile, if the draw pile is empty).",
+      "On death, returns the card to your hand."
+     ],
+     "gives_to_player": [],
+     "gives_to_enemy": [
+      "Stasis"
+     ]
+    },
+    {
+     "name": "Support Beam",
+     "kind": "Defend",
+     "intent_raw": "Defend",
+     "damage": null,
+     "effects": [
+      "Bronze Automaton gains 12 Block."
+     ],
+     "gives_to_player": [],
+     "gives_to_enemy": [
+      "Block"
+     ]
+    },
+    {
+     "name": "Beam",
+     "kind": "Attack",
+     "intent_raw": "Attack2",
+     "damage": {
+      "asc0": 8
+     },
+     "effects": [],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    }
+   ],
+   "ai": "Each Bronze Orb can only use Stasis once per combat. Stasis has a 75% chance to be used each turn until it has been picked. After using Stasis Bronze Orb has a 70% chance to use Support Beam and a 30% chance to use Beam each turn. Bronze Orb cannot use the same attack thrice in a row.\nStasis\nStasis will always prioritize the highest rarity Card in your draw pile. If your draw pile is empty, Stasis will pick from your discard pile instead. Cards in Stasis will not be affected by certain variables; for example, Masterful Stab's Energy cost will not increase even if the player takes damage.",
+   "found_with": null,
+   "notes": "",
+   "source_page": "Bronze_Automaton"
+  },
+  {
+   "name": "Byrd",
+   "zh": "伯德鸟",
+   "zh_source": "project",
+   "act": 2,
+   "type": "Normal",
+   "hp": {
+    "asc0": [
+     25,
+     31
+    ],
+    "asc7": [
+     26,
+     33
+    ],
+    "asc8": null,
+    "asc9": null
+   },
+   "powers": "Flying 3 (4 (A17))",
+   "moves": [
+    {
+     "name": "Peck",
+     "kind": "Attack",
+     "intent_raw": "Attack2",
+     "damage": {
+      "asc0": "1×5",
+      "asc2": "1×6"
+     },
+     "effects": [],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Caw",
+     "kind": "Buff",
+     "intent_raw": "Buff",
+     "damage": null,
+     "effects": [
+      "Gains 1 Strength."
+     ],
+     "gives_to_player": [],
+     "gives_to_enemy": [
+      "Strength"
+     ]
+    },
+    {
+     "name": "Swoop",
+     "kind": "Attack",
+     "intent_raw": "Attack3",
+     "damage": {
+      "asc0": 12,
+      "asc2": 14
+     },
+     "effects": [],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Stunned",
+     "kind": "Stunned",
+     "intent_raw": "Stunned",
+     "damage": null,
+     "effects": [
+      "Does nothing."
+     ],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Headbutt",
+     "kind": "Attack",
+     "intent_raw": "Attack1",
+     "damage": {
+      "asc0": 3
+     },
+     "effects": [],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Go Airborne",
+     "kind": "Unknown",
+     "intent_raw": "Unknown",
+     "damage": null,
+     "effects": [
+      "Gains 3 (A17: 4) Flying."
+     ],
+     "gives_to_player": [],
+     "gives_to_enemy": [
+      "Flying"
+     ]
+    }
+   ],
+   "ai": "Byrd never starts with Swoop. While it has Flying, Byrd will use one of the following actions each turn:\n* Peck (50% chance)\n* Caw (30% chance)\n* Swoop (20% chance)\nByrd cannot use Caw and Swoop twice in a row, or Peck three times in a row.\nPattern While Grounded\nIf Byrd does not have Flying, it will use the following actions in order before returning to its regular pattern:\n#Stunned (replaces current Intent when Flying is lost)\n#Headbutt\n#Go Airborne",
+   "found_with": "Act 2\nAs an easy pool encounter alongside:\n* 2 other Byrds\nAs a hard pool encounter alongside:\n* 1 Chosen",
+   "notes": null,
+   "source_page": "Byrd"
+  },
+  {
+   "name": "Centurion",
+   "zh": "百夫长",
+   "zh_source": "project",
+   "act": 2,
+   "type": "Normal",
+   "hp": {
+    "asc0": [
+     76,
+     80
+    ],
+    "asc7": [
+     78,
+     83
+    ],
+    "asc8": null,
+    "asc9": null
+   },
+   "powers": null,
+   "moves": [
+    {
+     "name": "Slash",
+     "kind": "Attack",
+     "intent_raw": "Attack3",
+     "damage": {
+      "asc0": 12,
+      "asc2": 14
+     },
+     "effects": [],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Protect",
+     "kind": "Defend",
+     "intent_raw": "Defend",
+     "damage": null,
+     "effects": [
+      "Mystic gains 15 (A17: 20) Block.",
+      "If alone, instead gains 15 (A17: 20) Block."
+     ],
+     "gives_to_player": [],
+     "gives_to_enemy": [
+      "Block"
+     ]
+    },
+    {
+     "name": "Fury",
+     "kind": "Attack",
+     "intent_raw": "Attack4",
+     "damage": {
+      "asc0": "6×3",
+      "asc2": "7×3"
+     },
+     "effects": [],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    }
+   ],
+   "ai": "Centurion will use one of the following actions each turn if the Mystic is alive:\n* Slash (65% chance)\n* Protect (35% chance)\nIf the Mystic is dead, Centurion will replace Protect with Fury. Centurion will never use any move three times in a row.",
+   "found_with": "Act 2\nAs a hard pool encounter alongside:\n* 1 Mystic",
+   "notes": null,
+   "source_page": "Centurion_and_Mystic"
+  },
+  {
+   "name": "Mystic",
+   "zh": "秘术师",
+   "zh_source": "project",
+   "act": 2,
+   "type": "Normal",
+   "hp": {
+    "asc0": [
+     48,
+     56
+    ],
+    "asc7": [
+     50,
+     58
+    ],
+    "asc8": null,
+    "asc9": null
+   },
+   "powers": null,
+   "moves": [
+    {
+     "name": "Attack",
+     "kind": "Attack+Debuff",
+     "intent_raw": "DebuffAttack2",
+     "damage": {
+      "asc0": 8,
+      "asc2": 9
+     },
+     "effects": [
+      "Applies 2 Frail."
+     ],
+     "gives_to_player": [
+      "Frail"
+     ],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Buff",
+     "kind": "Buff",
+     "intent_raw": "Buff",
+     "damage": null,
+     "effects": [
+      "All enemies gain 2 (A2: 3; A17: 4) Strength."
+     ],
+     "gives_to_player": [],
+     "gives_to_enemy": [
+      "Strength"
+     ]
+    },
+    {
+     "name": "Heal",
+     "kind": "Buff",
+     "intent_raw": "Buff",
+     "damage": null,
+     "effects": [
+      "All enemies heal 16 (A17: 20) HP."
+     ],
+     "gives_to_player": [],
+     "gives_to_enemy": [
+      "Heal"
+     ]
+    }
+   ],
+   "ai": "If an enemy is missing 16 (21 (A19)) or more HP, Mystic will use Heal, up to twice in a row. Otherwise, Mystic will use one of the following actions each turn:\n* Attack (60% chance)\n* Buff (40% chance)\nMystic will never use Attack or Buff three times in a row.\nOn Ascension A17, Mystic will never use Attack twice in a row.",
+   "found_with": "Act 2\nAs a hard pool encounter alongside:\n* 1 Centurion",
+   "notes": null,
+   "source_page": "Centurion_and_Mystic"
+  },
+  {
+   "name": "Chosen",
+   "zh": "被选者",
+   "zh_source": "project",
+   "act": 2,
+   "type": "Normal",
+   "hp": {
+    "asc0": [
+     95,
+     99
+    ],
+    "asc7": [
+     98,
+     103
+    ],
+    "asc8": null,
+    "asc9": null
+   },
+   "powers": null,
+   "moves": [
+    {
+     "name": "Poke",
+     "kind": "Attack",
+     "intent_raw": "Attack3",
+     "damage": {
+      "asc0": "5×2",
+      "asc2": "6×2"
+     },
+     "effects": [],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Hex",
+     "kind": "Debuff",
+     "intent_raw": "DebuffStrong",
+     "damage": null,
+     "effects": [
+      "Applies Hex."
+     ],
+     "gives_to_player": [
+      "Hex"
+     ],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Debilitate",
+     "kind": "Attack+Debuff",
+     "intent_raw": "DebuffAttack3",
+     "damage": {
+      "asc0": 10,
+      "asc2": 12
+     },
+     "effects": [
+      "Applies 2 Vulnerable."
+     ],
+     "gives_to_player": [
+      "Vulnerable"
+     ],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Drain",
+     "kind": "Debuff+Defend",
+     "intent_raw": "DebuffDefend",
+     "damage": null,
+     "effects": [
+      "Applies 3 Weak.",
+      "Gain 3 Strength."
+     ],
+     "gives_to_player": [
+      "Weak"
+     ],
+     "gives_to_enemy": [
+      "Strength"
+     ]
+    },
+    {
+     "name": "Zap",
+     "kind": "Attack",
+     "intent_raw": "Attack4",
+     "damage": {
+      "asc0": 18,
+      "asc2": 21
+     },
+     "effects": [],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    }
+   ],
+   "ai": "Always starts with Poke followed by Hex. After that, repeats the following pattern for the rest of the combat:\n#Debilitate (50% chance) or Drain (50% chance)\n#Poke (60% chance) or Zap (40% chance)\nOn Ascension A17, Chosen always starts with Hex instead of Poke.",
+   "found_with": "Act 2\nAs an easy pool encounter:\n* Solo\nAs a hard pool encounter alongside either:\n* 1 Byrd\n* 1 Cultist",
+   "notes": null,
+   "source_page": "Chosen"
+  },
+  {
+   "name": "Corrupt Heart",
+   "zh": "腐化之心",
+   "zh_source": "project",
+   "act": 4,
+   "type": "Boss",
+   "hp": {
+    "asc0": 750,
+    "asc7": null,
+    "asc8": null,
+    "asc9": 800
+   },
+   "powers": "Beat of Death 1 (2 (A19)) , Invincible 300 (200 (A19))",
+   "moves": [
+    {
+     "name": "Debilitate",
+     "kind": "Debuff",
+     "intent_raw": "DebuffStrong",
+     "damage": null,
+     "effects": [
+      "Applies 2 Vulnerable, 2 Weak and 2 Frail.",
+      "Adds 1 Burn, 1 Dazed, 1 Slimed, 1 Void and 1 Wound into your draw pile."
+     ],
+     "gives_to_player": [
+      "Vulnerable",
+      "Weak",
+      "Frail"
+     ],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Blood Shots",
+     "kind": "Attack",
+     "intent_raw": "Attack7",
+     "damage": {
+      "asc0": "2×12",
+      "asc4": "2×15"
+     },
+     "effects": [],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Echo",
+     "kind": "Attack",
+     "intent_raw": "Attack7",
+     "damage": {
+      "asc0": 40,
+      "asc4": 45
+     },
+     "effects": [],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Buff",
+     "kind": "Buff",
+     "intent_raw": "Buff",
+     "damage": null,
+     "effects": [
+      "Loses all negative Strength, then gains 2 Strength.",
+      "Gains an additional Buff:"
+     ],
+     "gives_to_player": [],
+     "gives_to_enemy": [
+      "Strength",
+      "Artifact",
+      "Beat of Death",
+      "Painful Stabs"
+     ]
+    }
+   ],
+   "ai": "Always starts with Debilitate. Uses Buff every 3 turns starting from turn 4.\nOn all other turns it has a 50/50 chance to use either Blood Shots followed by Echo or Echo followed by Blood Shots",
+   "found_with": null,
+   "notes": null,
+   "source_page": "Corrupt_Heart"
+  },
+  {
+   "name": "Cultist",
+   "zh": "邪教徒",
+   "zh_source": "project",
+   "act": 1,
+   "type": "Normal",
+   "hp": {
+    "asc0": [
+     48,
+     54
+    ],
+    "asc7": [
+     50,
+     56
+    ],
+    "asc8": null,
+    "asc9": null
+   },
+   "powers": null,
+   "moves": [
+    {
+     "name": "Incantation",
+     "kind": "Buff",
+     "intent_raw": "Buff",
+     "damage": null,
+     "effects": [
+      "Gains 3 (A2: 4; A17: 5) Ritual."
+     ],
+     "gives_to_player": [],
+     "gives_to_enemy": [
+      "Ritual"
+     ]
+    },
+    {
+     "name": "Dark Strike",
+     "kind": "Attack",
+     "intent_raw": "Attack2",
+     "damage": {
+      "asc0": 6
+     },
+     "effects": [],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    }
+   ],
+   "ai": "Always starts with Incantation, then uses Dark Strike every turn after.",
+   "found_with": "Act 1\nAs an easy pool encounter:\n* Solo\nAs half of an Exordium Thugs encounter in the hard pool:\n* 1 Acid Slime (M)\n* 1 Spike Slime (M)\n* 1 Green Louse\n* 1 Red Louse\nAct 2\nIn the hard pool alongside:\n* 2 other Cultists\n* 1 Chosen\nAct 3\nIn the Awakened One boss fight, alongside:\n* 1 other Cultist",
+   "notes": null,
+   "source_page": "Cultist"
+  },
+  {
+   "name": "Darkling",
+   "zh": "暗裔幼体",
+   "zh_source": "project",
+   "act": 3,
+   "type": "Normal",
+   "hp": {
+    "asc0": [
+     48,
+     56
+    ],
+    "asc7": [
+     50,
+     59
+    ],
+    "asc8": null,
+    "asc9": null
+   },
+   "powers": "Life Link",
+   "moves": [
+    {
+     "name": "Harden",
+     "kind": "Defend",
+     "intent_raw": "Defend",
+     "damage": null,
+     "effects": [
+      "Gains 12 Block(A17: and 2 Strength)"
+     ],
+     "gives_to_player": [],
+     "gives_to_enemy": [
+      "Block",
+      "Strength"
+     ]
+    },
+    {
+     "name": "Nip",
+     "kind": "Attack",
+     "intent_raw": "Attack2",
+     "damage": {
+      "asc0": "N"
+     },
+     "effects": [
+      "N = Number between 7-11 (A2: 9-13), chosen at the start of combat."
+     ],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Chomp",
+     "kind": "Attack",
+     "intent_raw": "Attack4",
+     "damage": {
+      "asc0": "8×2",
+      "asc2": "9×2"
+     },
+     "effects": [],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Regrowing...",
+     "kind": "Unknown",
+     "intent_raw": "Unknown",
+     "damage": null,
+     "effects": [
+      "Does nothing."
+     ],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Reincarnate",
+     "kind": "Buff",
+     "intent_raw": "Buff",
+     "damage": null,
+     "effects": [
+      "Revives with 50% HP."
+     ],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    }
+   ],
+   "ai": "On turn one all Darklings have a 50/50 chance of using either Nip or Harden. The middle Darkling continues this pattern but cannot use Chomp.\nThe outer two Darklings on all other turns:\n* Nip 30% chance\n* Chomp 40% chance\n* Harden 30% chance\nNeither Harden nor Chomp can be used twice in a row. Nip cannot be used three times in a row.\nAfter its HP reaches 0, its current intent changes to Regrowing... and cannot be targeted. On the next turn it will use Reincarnate.\nInteractions\n* Cards with the Fatal modifier only activate their effects whenever the last Darkling is killed.",
+   "found_with": "Act 3\n* Two other Darklings",
+   "notes": null,
+   "source_page": "Darkling"
+  },
+  {
+   "name": "Giant Head",
+   "zh": "巨人头",
+   "zh_source": "project",
+   "act": 3,
+   "type": "Elite",
+   "hp": {
+    "asc0": 500,
+    "asc7": null,
+    "asc8": 520,
+    "asc9": null
+   },
+   "powers": "Slow",
+   "moves": [
+    {
+     "name": "Count",
+     "kind": "Attack",
+     "intent_raw": "Attack3",
+     "damage": {
+      "asc0": 13
+     },
+     "effects": [],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Glare",
+     "kind": "Debuff",
+     "intent_raw": "Debuff",
+     "damage": null,
+     "effects": [
+      "Applies 1 Weak."
+     ],
+     "gives_to_player": [
+      "Weak"
+     ],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "It Is Time",
+     "kind": "Attack",
+     "intent_raw": "Attack7",
+     "damage": {
+      "asc0": 30,
+      "asc3": 40
+     },
+     "effects": [
+      "increased by 5 for each time It Is Time has been used this combat up to a maximum of 60 (A3: 70) damage."
+     ],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    }
+   ],
+   "ai": "For the first 4 (3 (A18)) turns, it has a 50/50 chance to use either Count or Glare. Cannot use either move three times in a row.\nAfterwards, it repeats It Is Time for the rest of combat.",
+   "found_with": "Act 3\n* Solo",
+   "notes": null,
+   "source_page": "Giant_Head"
+  },
+  {
+   "name": "Gremlin Leader",
+   "zh": "小鬼头目",
+   "zh_source": "project",
+   "act": 2,
+   "type": "Elite",
+   "hp": {
+    "asc0": [
+     140,
+     148
+    ],
+    "asc7": null,
+    "asc8": [
+     145,
+     155
+    ],
+    "asc9": null
+   },
+   "powers": null,
+   "moves": [
+    {
+     "name": "Encourage",
+     "kind": "Buff+Defend",
+     "intent_raw": "DefendBuff",
+     "damage": null,
+     "effects": [
+      "All enemies gain 3 (A3: 4; A18: 5) Strength.",
+      "Other enemies gain 6 (A18: 10) Block."
+     ],
+     "gives_to_player": [],
+     "gives_to_enemy": [
+      "Block",
+      "Strength"
+     ]
+    },
+    {
+     "name": "Stab",
+     "kind": "Attack",
+     "intent_raw": "Attack4",
+     "damage": {
+      "asc0": "6×3"
+     },
+     "effects": [],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Rally!",
+     "kind": "Unknown",
+     "intent_raw": "Unknown",
+     "damage": null,
+     "effects": [
+      "Summon 2 random Gremlins."
+     ],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    }
+   ],
+   "ai": "Depending on the amount of enemies in battle, Gremlin Leader will use one of the following actions each turn:\nWith 0 Gremlins\n* Rally! (75% chance)\n* Stab (25% chance)\nWith 1 Gremlin\n* Rally! (50% chance)*\n* Stab (50% chance)*\n:* If last used action was Encourage\nor\n* Rally! (62.5% chance)**\n* Encourage (37.5% chance)**\n:** If last used action was Stab\nWith 2 or more Gremlins\n* Encourage (66% chance)\n* Stab (34% chance)\nGremlin Leader cannot use any intent twice in a row. No more than 3 small Gremlins can be present at once.",
+   "found_with": "Act 2\nAs an Elite encounter alongside:\n* 2 random Gremlins",
+   "notes": null,
+   "source_page": "Gremlin_Leader"
+  },
+  {
+   "name": "Gremlin Nob",
+   "zh": "小鬼巨汉",
+   "zh_source": "project",
+   "act": 1,
+   "type": "Elite",
+   "hp": {
+    "asc0": [
+     82,
+     86
+    ],
+    "asc7": null,
+    "asc8": [
+     85,
+     90
+    ],
+    "asc9": null
+   },
+   "powers": null,
+   "moves": [
+    {
+     "name": "Bellow",
+     "kind": "Buff",
+     "intent_raw": "Buff",
+     "damage": null,
+     "effects": [
+      "Gains 2 (A18: 3) Enrage."
+     ],
+     "gives_to_player": [],
+     "gives_to_enemy": [
+      "Enrage"
+     ]
+    },
+    {
+     "name": "Skull Bash",
+     "kind": "Attack+Debuff",
+     "intent_raw": "DebuffAttack2",
+     "damage": {
+      "asc0": 6,
+      "asc3": 8
+     },
+     "effects": [
+      "Applies 2 Vulnerable."
+     ],
+     "gives_to_player": [
+      "Vulnerable"
+     ],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Bull Rush",
+     "kind": "Attack",
+     "intent_raw": "Attack3",
+     "damage": {
+      "asc0": 14,
+      "asc3": 16
+     },
+     "effects": [],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    }
+   ],
+   "ai": "Always starts with Bellow then has a 33% chance of using Skull Bash and a 67% chance of using Bull Rush. Cannot use Bull Rush three times in a row.\nAt Ascension A18, Gremlin Nob uses Skull Bash on the 2nd turn and uses Bull Rush twice afterwards, then repeats this pattern for the rest of the fight.",
+   "found_with": "Act 1\nAs an Elite:\n* Solo\nAct 2\nIn the The Colosseum event, when [Victory] is chosen, alongside:\n* 1 Taskmaster",
+   "notes": null,
+   "source_page": "Gremlin_Nob"
+  },
+  {
+   "name": "Hexaghost",
+   "zh": "六火幽灵",
+   "zh_source": "project",
+   "act": 1,
+   "type": "Boss",
+   "hp": {
+    "asc0": 250,
+    "asc7": null,
+    "asc8": null,
+    "asc9": 264
+   },
+   "powers": null,
+   "moves": [
+    {
+     "name": "Activate",
+     "kind": "Unknown",
+     "intent_raw": "Unknown",
+     "damage": null,
+     "effects": [
+      "Does nothing."
+     ],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Divider",
+     "kind": "Attack",
+     "intent_raw": "Attack7",
+     "damage": {
+      "asc0": "(N+1)×6"
+     },
+     "effects": [
+      "N = Player's HP at the start of the turn, divided by 12 (rounded down)."
+     ],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Sear",
+     "kind": "Attack+Debuff",
+     "intent_raw": "DebuffAttack2",
+     "damage": {
+      "asc0": 6
+     },
+     "effects": [
+      "Adds 1 (A19: 2) Burns into your discard pile."
+     ],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Tackle",
+     "kind": "Attack",
+     "intent_raw": "Attack3",
+     "damage": {
+      "asc0": "5×2",
+      "asc4": "6×2"
+     },
+     "effects": [],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Inflame",
+     "kind": "Buff+Defend",
+     "intent_raw": "DefendBuff",
+     "damage": null,
+     "effects": [
+      "Gains 12 Block and 2 (A19: 3) Strength."
+     ],
+     "gives_to_player": [],
+     "gives_to_enemy": [
+      "Strength",
+      "Block"
+     ]
+    },
+    {
+     "name": "Inferno",
+     "kind": "Attack+Debuff",
+     "intent_raw": "DebuffAttack5",
+     "damage": {
+      "asc0": "2×6",
+      "asc4": "3×6"
+     },
+     "effects": [
+      "Adds 3 Burns+ into your discard pile.",
+      "Upgrades all Burns.",
+      "For the rest of combat, any Burn created by Sear will be upgraded."
+     ],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    }
+   ],
+   "ai": "Always starts with Activate followed by Divider.\nFor the rest of combat, repeats the following pattern:\n# Sear\n# Tackle\n# Sear\n# Inflame\n# Tackle\n# Sear\n# Inferno",
+   "found_with": null,
+   "notes": "* This fight is a race to kill Hexaghost before turn 9. Before that, Hexaghost isn't very threatening, prefering to fire low damage Sears and Tackles. However, on the 9th turn, it will use Inferno, which deals 24 (30 (A4), 36 (A19)) damage and fills your discard pile with Burns+. It's very hard to survive this attack, let alone the turns after.\n** To kill Hexaghost in 9 turns, on average you need to deal around 30 damage per turn. Achieving this requires some sort of scaling, such as Strength or Poison.\n* On the 2nd turn, Hexaghost uses Divider, the only attack in the game that scales with your current HP. If you are already low on health, this attack deals pitiful damage. Therefore, it's often preferable to not rest before this fight, and instead upgrade a card that will help you beat Hexaghost before Inferno.\n** For example, if you have between 12 and 23 HP, Divider deals only 12 damage, easily blocked.",
+   "source_page": "Hexaghost"
+  },
+  {
+   "name": "Jaw Worm",
+   "zh": "颚虫",
+   "zh_source": "project",
+   "act": 1,
+   "type": "Normal",
+   "hp": {
+    "asc0": [
+     40,
+     44
+    ],
+    "asc7": [
+     42,
+     46
+    ],
+    "asc8": null,
+    "asc9": null
+   },
+   "powers": null,
+   "moves": [
+    {
+     "name": "Chomp",
+     "kind": "Attack",
+     "intent_raw": "Attack3",
+     "damage": {
+      "asc0": 11,
+      "asc2": 12
+     },
+     "effects": [],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Bellow",
+     "kind": "Buff+Defend",
+     "intent_raw": "DefendBuff",
+     "damage": null,
+     "effects": [
+      "Gains 3 (A2: 4; A17: 5) Strength.",
+      "Gains 6 (A17: 9) Block."
+     ],
+     "gives_to_player": [],
+     "gives_to_enemy": [
+      "Strength",
+      "Block"
+     ]
+    },
+    {
+     "name": "Thrash",
+     "kind": "Attack+Defend",
+     "intent_raw": "DefendAttack2",
+     "damage": {
+      "asc0": 7
+     },
+     "effects": [
+      "Gains 5 Block."
+     ],
+     "gives_to_player": [],
+     "gives_to_enemy": [
+      "Block"
+     ]
+    }
+   ],
+   "ai": "Always starts with Chomp. If it is found in Act 3, it starts with the effects of Bellow, and for its first action it has a 45% chance of starting with Bellow, a 30% chance of Thrash and a 25% chance of using Chomp\n* After using Chomp, it has a 59% chance of using Bellow and a 41% of Thrash\n* After using Bellow, it has a 56% chance of using Thrash and a 44% of using Chomp\n* After using Thrash, it has a 45% chance of using Bellow, a 30% chance of using Thrash and a 25% chance of using Chomp. Unless Thrash has been used 2 turns in a row, then it has a 64% chance of using Bellow, and a 36% of using Chomp",
+   "found_with": null,
+   "notes": "wiki 页将本体（Act 1）与 Act 3 强化变体共用同一张行动表；HP/Powers 见各自条目，行动概率描述覆盖两个变体。",
+   "source_page": "Jaw_Worm"
+  },
+  {
+   "name": "Jaw Worm (Hard)",
+   "zh": null,
+   "zh_source": null,
+   "act": 3,
+   "type": "Normal",
+   "hp": {
+    "asc0": [
+     40,
+     44
+    ],
+    "asc7": [
+     42,
+     46
+    ],
+    "asc8": null,
+    "asc9": null
+   },
+   "powers": "Strength 3 (4 (A2)/5 (A17)), Block 6 (9 (A17))",
+   "moves": [
+    {
+     "name": "Chomp",
+     "kind": "Attack",
+     "intent_raw": "Attack3",
+     "damage": {
+      "asc0": 11,
+      "asc2": 12
+     },
+     "effects": [],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Bellow",
+     "kind": "Buff+Defend",
+     "intent_raw": "DefendBuff",
+     "damage": null,
+     "effects": [
+      "Gains 3 (A2: 4; A17: 5) Strength.",
+      "Gains 6 (A17: 9) Block."
+     ],
+     "gives_to_player": [],
+     "gives_to_enemy": [
+      "Strength",
+      "Block"
+     ]
+    },
+    {
+     "name": "Thrash",
+     "kind": "Attack+Defend",
+     "intent_raw": "DefendAttack2",
+     "damage": {
+      "asc0": 7
+     },
+     "effects": [
+      "Gains 5 Block."
+     ],
+     "gives_to_player": [],
+     "gives_to_enemy": [
+      "Block"
+     ]
+    }
+   ],
+   "ai": "Always starts with Chomp. If it is found in Act 3, it starts with the effects of Bellow, and for its first action it has a 45% chance of starting with Bellow, a 30% chance of Thrash and a 25% chance of using Chomp\n* After using Chomp, it has a 59% chance of using Bellow and a 41% of Thrash\n* After using Bellow, it has a 56% chance of using Thrash and a 44% of using Chomp\n* After using Thrash, it has a 45% chance of using Bellow, a 30% chance of using Thrash and a 25% chance of using Chomp. Unless Thrash has been used 2 turns in a row, then it has a 64% chance of using Bellow, and a 36% of using Chomp",
+   "found_with": "Act 1\nAs an easy pool encounter:\n* Solo\nAs half of an Exodium Wildlife encounter in the hard pool:\n* 1 Red Louse\n* 1 Green Louse\n* 1 Spike Slime (M)\n* 1 Acid Slime (M)\nAct 3\nIn the Jaw Worm Horde encounter, it appears along with 2 other Jaw Worm's, all 3 are the Hard variant.",
+   "notes": "wiki 页将本体（Act 1）与 Act 3 强化变体共用同一张行动表；HP/Powers 见各自条目，行动概率描述覆盖两个变体。",
+   "source_page": "Jaw_Worm"
+  },
+  {
+   "name": "Lagavulin",
+   "zh": "拉格维林",
+   "zh_source": "project",
+   "act": 1,
+   "type": "Elite",
+   "hp": {
+    "asc0": [
+     109,
+     111
+    ],
+    "asc7": null,
+    "asc8": [
+     112,
+     115
+    ],
+    "asc9": null
+   },
+   "powers": "Metallicize 8 , Block 8",
+   "moves": [
+    {
+     "name": "Sleep",
+     "kind": "Sleep",
+     "intent_raw": "Sleep",
+     "damage": null,
+     "effects": [
+      "Does nothing."
+     ],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Stunned",
+     "kind": "Stunned",
+     "intent_raw": "Stunned",
+     "damage": null,
+     "effects": [
+      "Does nothing."
+     ],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Attack",
+     "kind": "Attack",
+     "intent_raw": "Attack4",
+     "damage": {
+      "asc0": 18,
+      "asc3": 20
+     },
+     "effects": [],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Siphon Soul",
+     "kind": "Debuff",
+     "intent_raw": "DebuffStrong",
+     "damage": null,
+     "effects": [
+      "Applies -1 (A18: -2) Dexterity and -1 (A18: -2) Strength."
+     ],
+     "gives_to_player": [
+      "Dexterity (Negative)",
+      "Strength (Negative)"
+     ],
+     "gives_to_enemy": []
+    }
+   ],
+   "ai": "When found in an Elite encounter:\nStarts off Sleeping. If it takes any damage, it will be stunned for one turn and then proceed to attack. If three turns pass without any damage taken, it will awake and immediately begin attacking. Once awoken, its Metallicize will be removed.\nWhen attacking it will repeat this pattern:\n* Attack\n* Attack\n* Siphon Soul\nWhen found in the Dead Adventurer fight:\nSpawns already awake and will repeat this pattern:\n* Siphon Soul\n* Attack\n* Attack",
+   "found_with": "Act 1\n* Solo\n* Can be found in the Dead Adventurer when choosing [Search].",
+   "notes": null,
+   "source_page": "Lagavulin"
+  },
+  {
+   "name": "Red Louse",
+   "zh": "红虱",
+   "zh_source": "project",
+   "act": 1,
+   "type": "Normal",
+   "hp": {
+    "asc0": [
+     10,
+     15
+    ],
+    "asc7": [
+     11,
+     16
+    ],
+    "asc8": null,
+    "asc9": null
+   },
+   "powers": "Curl Up N, where N is random between 3-7 (4-8 (A7) 9-12 (A17))",
+   "moves": [
+    {
+     "name": "Bite",
+     "kind": "Attack",
+     "intent_raw": "Attack2",
+     "damage": {
+      "asc0": "N"
+     },
+     "effects": [
+      "N = Number between 5-7 (A2: 6-8), chosen at the start of combat."
+     ],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Grow",
+     "kind": "Buff",
+     "intent_raw": "Buff",
+     "damage": null,
+     "effects": [
+      "Gains 3 (A17: 4) Strength."
+     ],
+     "gives_to_player": [],
+     "gives_to_enemy": [
+      "Strength"
+     ]
+    }
+   ],
+   "ai": "Has a 25% chance to use Grow and a 75% chance of using Bite. It cannot use the same move three times in a row.\nOn Ascension A17 it cannot use Grow any more than twice in a row.",
+   "found_with": "Act 1\nIn the Easy Pool along with:\n* Red or Green Louse\n* 2 Red or Green Louses\n* Cultist\n* Jaw Worm\nIn the Hard Pool with:\n* 2 Red or Green Louses\nCan be found as half of the Exordium Thugs encounter along with either:\n* One of the Slavers\n* One Cultist\n* One Looter\nCan be found as half of the Exordium Wildlife encounter with either:\n* Fungi Beast\n* Jaw Worm",
+   "notes": null,
+   "source_page": "Louses"
+  },
+  {
+   "name": "Green Louse",
+   "zh": "绿虱",
+   "zh_source": "project",
+   "act": 1,
+   "type": "Normal",
+   "hp": {
+    "asc0": [
+     11,
+     17
+    ],
+    "asc7": [
+     12,
+     18
+    ],
+    "asc8": null,
+    "asc9": null
+   },
+   "powers": "Curl Up N, where N is random between 3-7 (4-8 (A7) 9-12 (A17))",
+   "moves": [
+    {
+     "name": "Bite",
+     "kind": "Attack",
+     "intent_raw": "Attack2",
+     "damage": {
+      "asc0": "N"
+     },
+     "effects": [
+      "N = Number between 5-7 (A2: 6-8), chosen at the start of combat."
+     ],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Spit Web",
+     "kind": "Debuff",
+     "intent_raw": "Debuff",
+     "damage": null,
+     "effects": [
+      "Applies 2 Weak."
+     ],
+     "gives_to_player": [
+      "Weak"
+     ],
+     "gives_to_enemy": []
+    }
+   ],
+   "ai": "Has a 25% chance to use Spit Web and a 75% chance of using Bite. It cannot use the same move three times in a row.\nOn Ascension A17 it cannot use Spit Web any more than twice in a row.",
+   "found_with": "Act 1\nIn the Easy Pool along with:\n* Red or Green Louse\n* 2 Red or Green Louses\n* Cultist\n* Jaw Worm\nIn the Hard Pool with:\n* 2 Red or Green Louses\nCan be found as half of the Exordium Thugs encounter along with either:\n* One of the Slavers\n* One Cultist\n* One Looter\nCan be found as half of the Exordium Wildlife encounter with either:\n* Fungi Beast\n* Jaw Worm",
+   "notes": null,
+   "source_page": "Louses"
+  },
+  {
+   "name": "Pointy",
+   "zh": "尖刺",
+   "zh_source": "project",
+   "act": 2,
+   "type": "Event",
+   "hp": {
+    "asc0": 30,
+    "asc7": 34,
+    "asc8": null,
+    "asc9": null
+   },
+   "powers": null,
+   "moves": [
+    {
+     "name": "Pointy Special",
+     "kind": "Attack",
+     "intent_raw": "Attack3",
+     "damage": {
+      "asc0": "5×2",
+      "asc2": "6×2"
+     },
+     "effects": [],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    }
+   ],
+   "ai": "Uses Pointy Special every turn.",
+   "found_with": null,
+   "notes": null,
+   "source_page": "Masked_Bandits"
+  },
+  {
+   "name": "Romeo",
+   "zh": "罗密欧",
+   "zh_source": "project",
+   "act": 2,
+   "type": "Event",
+   "hp": {
+    "asc0": [
+     35,
+     39
+    ],
+    "asc7": [
+     37,
+     41
+    ],
+    "asc8": null,
+    "asc9": null
+   },
+   "powers": null,
+   "moves": [
+    {
+     "name": "Mock",
+     "kind": "Unknown",
+     "intent_raw": "Unknown",
+     "damage": null,
+     "effects": [
+      "Does nothing."
+     ],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Agonizing Slash",
+     "kind": "Attack+Debuff",
+     "intent_raw": "DebuffAttack3",
+     "damage": {
+      "asc0": 10,
+      "asc2": 12
+     },
+     "effects": [
+      "Applies 2 (A17: 3) Weak."
+     ],
+     "gives_to_player": [
+      "Weak"
+     ],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Cross Slash",
+     "kind": "Attack",
+     "intent_raw": "Attack4",
+     "damage": {
+      "asc0": 15,
+      "asc2": 17
+     },
+     "effects": [],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    }
+   ],
+   "ai": "Always starts with Mock, then alternates between Agonizing Slash and Cross Slash.\nOn Ascension A17, starts with Mock, then repeats the pattern of Agonizing Slash, Cross Slash, Cross Slash.",
+   "found_with": null,
+   "notes": null,
+   "source_page": "Masked_Bandits"
+  },
+  {
+   "name": "Bear",
+   "zh": "大熊",
+   "zh_source": "project",
+   "act": 2,
+   "type": "Event",
+   "hp": {
+    "asc0": [
+     38,
+     42
+    ],
+    "asc7": [
+     40,
+     44
+    ],
+    "asc8": null,
+    "asc9": null
+   },
+   "powers": null,
+   "moves": [
+    {
+     "name": "Bear Hug",
+     "kind": "Debuff",
+     "intent_raw": "Debuff",
+     "damage": null,
+     "effects": [
+      "Applies -2 (A17: -4) Dexterity."
+     ],
+     "gives_to_player": [
+      "Dexterity (Negative)"
+     ],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Lunge",
+     "kind": "Attack+Defend",
+     "intent_raw": "DefendAttack2",
+     "damage": {
+      "asc0": 9,
+      "asc2": 10
+     },
+     "effects": [
+      "Gains 9 Block."
+     ],
+     "gives_to_player": [],
+     "gives_to_enemy": [
+      "Block"
+     ]
+    },
+    {
+     "name": "Maul",
+     "kind": "Attack",
+     "intent_raw": "Attack4",
+     "damage": {
+      "asc0": 18,
+      "asc2": 20
+     },
+     "effects": [],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    }
+   ],
+   "ai": "Always starts with Bear Hug, then alternates between Lunge and Maul.",
+   "found_with": null,
+   "notes": null,
+   "source_page": "Masked_Bandits"
+  },
+  {
+   "name": "Nemesis",
+   "zh": "复仇者",
+   "zh_source": "project",
+   "act": 3,
+   "type": "Elite",
+   "hp": {
+    "asc0": 185,
+    "asc7": null,
+    "asc8": 200,
+    "asc9": null
+   },
+   "powers": "Intangible every other turn",
+   "moves": [
+    {
+     "name": "Tri Attack",
+     "kind": "Attack",
+     "intent_raw": "Attack4",
+     "damage": {
+      "asc0": "6×3",
+      "asc3": "7×3"
+     },
+     "effects": [],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Tri Burn",
+     "kind": "Debuff",
+     "intent_raw": "Debuff",
+     "damage": null,
+     "effects": [
+      "Adds 3 (A18: 5) Burns into your discard pile."
+     ],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Scythe",
+     "kind": "Attack",
+     "intent_raw": "Attack7",
+     "damage": {
+      "asc0": 45
+     },
+     "effects": [],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    }
+   ],
+   "ai": "On its first turn has a 50/50 chance of using either Tri Burn or Tri Attack.\nAfterwards it has approximately these chances:\n* Tri Burn (35% chance)\n* Tri Attack (35% chance)\n* Scythe (30% chance)\nCannot use Tri Burn or Scythe twice in a row. Cannot use Tri Attack three times in a row.",
+   "found_with": "Act 3\n* Solo",
+   "notes": null,
+   "source_page": "Nemesis"
+  },
+  {
+   "name": "Orb Walker",
+   "zh": "奥术行走者",
+   "zh_source": "project",
+   "act": 3,
+   "type": "Normal",
+   "hp": {
+    "asc0": [
+     90,
+     96
+    ],
+    "asc7": [
+     92,
+     102
+    ],
+    "asc8": null,
+    "asc9": null
+   },
+   "powers": "Strength Up 3 (5 (A17))",
+   "moves": [
+    {
+     "name": "Laser",
+     "kind": "Attack+Debuff",
+     "intent_raw": "DebuffAttack3",
+     "damage": {
+      "asc0": 10,
+      "asc2": 11
+     },
+     "effects": [
+      "Adds a Burn into your draw pile, and another Burn into your discard pile."
+     ],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Claw",
+     "kind": "Attack",
+     "intent_raw": "Attack4",
+     "damage": {
+      "asc0": 15,
+      "asc2": 16
+     },
+     "effects": [],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    }
+   ],
+   "ai": "Orb Walker will use one of the following actions each turn:\n* Laser (60% chance)\n* Claw (40% chance)\nOrb Walker cannot use either action three times in a row.",
+   "found_with": "Act 3\nAs an easy pool encounter:\n* Solo\nIn the Mysterious Sphere Event alongside:\n* 1 other Orb Walker",
+   "notes": null,
+   "source_page": "Orb_Walker"
+  },
+  {
+   "name": "Reptomancer",
+   "zh": "爬行者法师",
+   "zh_source": "project",
+   "act": 3,
+   "type": "Elite",
+   "hp": {
+    "asc0": [
+     180,
+     190
+    ],
+    "asc7": null,
+    "asc8": [
+     190,
+     200
+    ],
+    "asc9": null
+   },
+   "powers": null,
+   "moves": [
+    {
+     "name": "Spawn Dagger",
+     "kind": "Unknown",
+     "intent_raw": "Unknown",
+     "damage": null,
+     "effects": [
+      "Summons (1 Dagger;2 (A18) Daggers) (up to a maximum of 4)."
+     ],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Big Bite",
+     "kind": "Attack",
+     "intent_raw": "Attack7",
+     "damage": {
+      "asc0": 30,
+      "asc3": 34
+     },
+     "effects": [],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Snake Strike",
+     "kind": "Attack+Debuff",
+     "intent_raw": "DebuffAttack6",
+     "damage": {
+      "asc0": "13×2",
+      "asc3": "16×2"
+     },
+     "effects": [
+      "Applies 1 Weak."
+     ],
+     "gives_to_player": [
+      "Weak"
+     ],
+     "gives_to_enemy": []
+    }
+   ],
+   "ai": "Always starts with Spawn Dagger.\nAfterward it has an approximately equal chance of using Snake Strike, Big Bite, and Spawn Dagger.\nCannot use Snake Strike or Big Bite twice in a row. Cannot use Spawn Dagger three times in a row.\nOnly 4 Daggers can be in play at any time. If Spawn Dagger was chosen with 4 Daggers in play, it will use Snake Strike instead.",
+   "found_with": "Act 3\n* Two other Daggers",
+   "notes": null,
+   "source_page": "Reptomancer"
+  },
+  {
+   "name": "Dagger",
+   "zh": "匕首",
+   "zh_source": "project",
+   "act": 3,
+   "type": "Minion",
+   "hp": {
+    "asc0": [
+     20,
+     25
+    ],
+    "asc7": [
+     20,
+     25
+    ],
+    "asc8": null,
+    "asc9": null
+   },
+   "powers": "Minion",
+   "moves": [
+    {
+     "name": "Wound",
+     "kind": "Attack+Debuff",
+     "intent_raw": "DebuffAttack2",
+     "damage": {
+      "asc0": 9
+     },
+     "effects": [
+      "Adds a Wound into your discard pile."
+     ],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Explode",
+     "kind": "Attack",
+     "intent_raw": "Attack6",
+     "damage": {
+      "asc0": 25
+     },
+     "effects": [
+      "Dies"
+     ],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    }
+   ],
+   "ai": "Uses Wound and then Explode.",
+   "found_with": "Summoned during the Reptomancer fight and also found at the start of combat with:\n* One other Dagger\n* Reptomancer",
+   "notes": null,
+   "source_page": "Reptomancer"
+  },
+  {
+   "name": "Sentry",
+   "zh": "哨卫",
+   "zh_source": "project",
+   "act": 1,
+   "type": "Elite",
+   "hp": {
+    "asc0": [
+     38,
+     42
+    ],
+    "asc7": null,
+    "asc8": [
+     39,
+     45
+    ],
+    "asc9": null
+   },
+   "powers": "Artifact 1",
+   "moves": [
+    {
+     "name": "Bolt",
+     "kind": "Debuff",
+     "intent_raw": "Debuff",
+     "damage": null,
+     "effects": [
+      "Adds 2 (A18: 3) Dazed into your discard pile."
+     ],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Beam",
+     "kind": "Attack",
+     "intent_raw": "Attack2",
+     "damage": {
+      "asc0": 9,
+      "asc3": 10
+     },
+     "effects": [],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    }
+   ],
+   "ai": "Uses Bolt followed by Beam, repeating for the rest of the combat.\nIn the Elite encounter, the middle Sentry instead uses Beam followed by Bolt.",
+   "found_with": "Act 1\nAs an Elite alongside:\n* 2 other Sentries\nAct 2\nIn the hard pool alongside:\n* 1 Spheric Guardian",
+   "notes": "* During the Elite encounter, you should focus in eliminating the 1st or the 3rd Sentry as fast as possible, ignoring the 2nd one. This prevents you from taking 18 (20 (A3)) damage each other turn, making the rest of the fight much easier.\n* The Dazed in your discard pile won't hamper you as long as you have cards remaining in your draw pile. Once you run out of cards, they will be shuffled into your draw pile and massively reduce your ability to draw playable cards. It is important to kill at least one of the Sentries before you shuffle your draw pile, as you may no longer have the ability to deal with all Sentries at the same time once the Dazed come in.\n* Dark Embrace, Evolve, Feel No Pain and Fire Breathing convert Dazed into advantage.",
+   "source_page": "Sentry"
+  },
+  {
+   "name": "Exploder",
+   "zh": "爆爆虫",
+   "zh_source": "project",
+   "act": 3,
+   "type": "Normal",
+   "hp": {
+    "asc0": 30,
+    "asc7": [
+     30,
+     35
+    ],
+    "asc8": null,
+    "asc9": null
+   },
+   "powers": "Explosive 3",
+   "moves": [
+    {
+     "name": "Attack",
+     "kind": "Attack",
+     "intent_raw": "Attack2",
+     "damage": {
+      "asc0": 9,
+      "asc2": 11
+     },
+     "effects": [],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Explode",
+     "kind": "Unknown",
+     "intent_raw": "Unknown",
+     "damage": {
+      "asc0": 30
+     },
+     "effects": [
+      "Dies."
+     ],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    }
+   ],
+   "ai": "Always uses this pattern:\n* Attack\n* Attack\n* Explode",
+   "found_with": null,
+   "notes": null,
+   "source_page": "Shapes"
+  },
+  {
+   "name": "Repulsor",
+   "zh": "排斥者",
+   "zh_source": "project",
+   "act": 3,
+   "type": "Normal",
+   "hp": {
+    "asc0": [
+     29,
+     35
+    ],
+    "asc7": [
+     31,
+     38
+    ],
+    "asc8": null,
+    "asc9": null
+   },
+   "powers": null,
+   "moves": [
+    {
+     "name": "Daze",
+     "kind": "Debuff",
+     "intent_raw": "Debuff",
+     "damage": null,
+     "effects": [
+      "Adds 2 Dazed into your draw pile."
+     ],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Attack",
+     "kind": "Attack",
+     "intent_raw": "Attack3",
+     "damage": {
+      "asc0": 11,
+      "asc2": 13
+     },
+     "effects": [],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    }
+   ],
+   "ai": "On all turns:\n* Attack 20% chance\n* Daze 80% chance\nCannot use Attack twice in a row.",
+   "found_with": null,
+   "notes": null,
+   "source_page": "Shapes"
+  },
+  {
+   "name": "Spiker",
+   "zh": "尖刺体",
+   "zh_source": "project",
+   "act": 3,
+   "type": "Normal",
+   "hp": {
+    "asc0": [
+     42,
+     56
+    ],
+    "asc7": [
+     44,
+     60
+    ],
+    "asc8": null,
+    "asc9": null
+   },
+   "powers": "Thorns 3 (4 (A2) 7 (A17))",
+   "moves": [
+    {
+     "name": "Attack",
+     "kind": "Attack",
+     "intent_raw": "Attack2",
+     "damage": {
+      "asc0": 7,
+      "asc2": 9
+     },
+     "effects": [],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Buff Thorns",
+     "kind": "Buff",
+     "intent_raw": "Buff",
+     "damage": null,
+     "effects": [
+      "Gains 2 Thorns."
+     ],
+     "gives_to_player": [],
+     "gives_to_enemy": [
+      "Thorns"
+     ]
+    }
+   ],
+   "ai": "On every turn, it has a 50/50 chance of using either Attack or Buff Thorns.\nCannot use Attack twice in a row. Cannot use Buff Thorns once it has been used 6 times and will instead using Attack.",
+   "found_with": "Act 3\nIn the Easy Pool's 3 Shapes encounter with:\n* Three random Shapes (No more than two of the same shape)\nIn the Hard Pool's 4 Shapes encounter with:\n* Four random Shapes (No more than two of the same shape)\nIn the Spheric Guardian encounter with:\n* Spheric Guardian\n* Two random Shapes",
+   "notes": null,
+   "source_page": "Shapes"
+  },
+  {
+   "name": "Shelled Parasite",
+   "zh": "甲壳寄生虫",
+   "zh_source": "project",
+   "act": 2,
+   "type": "Normal",
+   "hp": {
+    "asc0": [
+     68,
+     72
+    ],
+    "asc7": [
+     70,
+     75
+    ],
+    "asc8": null,
+    "asc9": null
+   },
+   "powers": "Plated Armor 14",
+   "moves": [
+    {
+     "name": "Double Strike",
+     "kind": "Attack",
+     "intent_raw": "Attack3",
+     "damage": {
+      "asc0": "6×2",
+      "asc2": "7×2"
+     },
+     "effects": [],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Life Suck",
+     "kind": "Attack+Buff",
+     "intent_raw": "BuffAttack3",
+     "damage": {
+      "asc0": 10,
+      "asc2": 12
+     },
+     "effects": [
+      "Heals HP equal to unblocked damage dealt."
+     ],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Fell",
+     "kind": "Attack+Debuff",
+     "intent_raw": "DebuffAttack4",
+     "damage": {
+      "asc0": 18,
+      "asc2": 21
+     },
+     "effects": [
+      "Applies 2 Frail."
+     ],
+     "gives_to_player": [
+      "Frail"
+     ],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Stunned",
+     "kind": "Stunned",
+     "intent_raw": "Stunned",
+     "damage": null,
+     "effects": [
+      "Does nothing."
+     ],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    }
+   ],
+   "ai": "Shelled Parasite cannot use Fell on its first turn. After that, it will use one of the following attacks each turn:\n* Double Strike (40% chance)\n* Life Suck (40% chance)\n* Fell (20% chance)\nShelled Parasite cannot use Double Strike or Life Suck three times in a row, or Fell twice in a row.\nOn Ascension A17, Shelled Parasite will always start with Fell.\nIf all of its Plated Armor is broken, Shelled Parasite will change its current Intent to Stunned. This can only happen once per combat.",
+   "found_with": "Act 2\nAs an easy pool encounter:\n* Solo\nAs a hard pool encounter alongside:\n* 1 Fungi Beast",
+   "notes": null,
+   "source_page": "Shelled_Parasite"
+  },
+  {
+   "name": "Blue Slaver",
+   "zh": "蓝奴役者",
+   "zh_source": "project",
+   "act": 1,
+   "type": "Normal",
+   "hp": {
+    "asc0": [
+     46,
+     50
+    ],
+    "asc7": [
+     48,
+     52
+    ],
+    "asc8": null,
+    "asc9": null
+   },
+   "powers": null,
+   "moves": [
+    {
+     "name": "Stab",
+     "kind": "Attack",
+     "intent_raw": "Attack3",
+     "damage": {
+      "asc0": 12,
+      "asc2": 13
+     },
+     "effects": [],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Rake",
+     "kind": "Attack+Debuff",
+     "intent_raw": "DebuffAttack2",
+     "damage": {
+      "asc0": 7,
+      "asc2": 8
+     },
+     "effects": [
+      "Applies 1 (A17: 2) Weak."
+     ],
+     "gives_to_player": [
+      "Weak"
+     ],
+     "gives_to_enemy": []
+    }
+   ],
+   "ai": "Each turn, Blue Slaver has a 60% chance to use Stab and a 40% chance to use Rake. The same attack cannot be used three times in a row.\nOn Ascension A17, Blue Slaver will never use Rake twice in a row.",
+   "found_with": "Act 1\nAs a hard pool encounter:\n* Solo\nIn the Exordium Thugs encounter along with either:\n* 1 Green Louse or Red Louse\n* 1 Acid Slime (M) or Spike Slime (M)\nAct 2\nAs an Elite encounter along with:\n* 1 Taskmaster\n* 1 Red Slaver\nIn the first fight of The Colosseum Event alongside:\n* 1 Red Slaver",
+   "notes": null,
+   "source_page": "Slavers"
+  },
+  {
+   "name": "Red Slaver",
+   "zh": "红奴役者",
+   "zh_source": "project",
+   "act": 1,
+   "type": "Normal",
+   "hp": {
+    "asc0": [
+     46,
+     50
+    ],
+    "asc7": [
+     48,
+     52
+    ],
+    "asc8": null,
+    "asc9": null
+   },
+   "powers": null,
+   "moves": [
+    {
+     "name": "Stab",
+     "kind": "Attack",
+     "intent_raw": "Attack3",
+     "damage": {
+      "asc0": 13,
+      "asc2": 14
+     },
+     "effects": [],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Scrape",
+     "kind": "Attack+Debuff",
+     "intent_raw": "DebuffAttack2",
+     "damage": {
+      "asc0": 8,
+      "asc2": 9
+     },
+     "effects": [
+      "Applies 1 (A17: 2) Vulnerable."
+     ],
+     "gives_to_player": [
+      "Vulnerable"
+     ],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Entangle",
+     "kind": "Debuff",
+     "intent_raw": "DebuffStrong",
+     "damage": null,
+     "effects": [
+      "Applies 1 Entangled."
+     ],
+     "gives_to_player": [
+      "Entangled"
+     ],
+     "gives_to_enemy": []
+    }
+   ],
+   "ai": "Red Slaver will always start the battle with Stab. If Red Slaver has not used Entangle yet, it has a 25% chance to be used each turn. Red Slaver will repeat the pattern of Scrape, Scrape, Stab until Entangle is used. After using Entangle, Red Slaver has a 55% chance of using Stab and a 45% chance of using Scrape. Red Slaver cannot use the same attack three times in a row, and can only use Entangle once per combat.\nOn Ascension A17, Red Slaver will repeat the pattern of Scrape, Stab until Entangle is used. After Entangle is used, Red Slaver cannot use Scrape twice in a row.",
+   "found_with": "Act 1\nAs a hard pool encounter:\n* Solo\nIn the Exordium Thugs encounter along with either:\n* 1 Green Louse or Red Louse\n* 1 Acid Slime (M) or Spike Slime (M)\nAct 2\nAs an Elite encounter along with:\n* 1 Taskmaster\n* 1 Blue Slaver\nIn the first fight of The Colosseum Event alongside:\n* 1 Blue Slaver",
+   "notes": null,
+   "source_page": "Slavers"
+  },
+  {
+   "name": "Slime Boss",
+   "zh": "史莱姆老大",
+   "zh_source": "project",
+   "act": 1,
+   "type": "Boss",
+   "hp": {
+    "asc0": 140,
+    "asc7": null,
+    "asc8": null,
+    "asc9": 150
+   },
+   "powers": "Split",
+   "moves": [
+    {
+     "name": "Goop Spray",
+     "kind": "Debuff",
+     "intent_raw": "DebuffStrong",
+     "damage": null,
+     "effects": [
+      "Adds 3 (A19: 5) Slimed into your discard pile."
+     ],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Preparing",
+     "kind": "Unknown",
+     "intent_raw": "Unknown",
+     "damage": null,
+     "effects": [
+      "Does nothing."
+     ],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Slam",
+     "kind": "Attack",
+     "intent_raw": "Attack7",
+     "damage": {
+      "asc0": 35,
+      "asc4": 38
+     },
+     "effects": [],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Split",
+     "kind": "Unknown",
+     "intent_raw": "Unknown",
+     "damage": null,
+     "effects": [
+      "Disappears and spawns 1 Acid Slime (L) and 1 Spike Slime (L) with its current HP."
+     ],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    }
+   ],
+   "ai": "Repeats the following pattern:\n#Goop Spray\n#Preparing\n#Slam\nOnce its HP reaches 50% or lower, its current Intent will be immediately changed to Split.",
+   "found_with": null,
+   "notes": "* Until Slime Boss splits, Slam is the only way it can harm you. Other than this attack, it spends most of the fight doing nothing. There are many ways to deal with it other than with Block and Weak:\n** As long as you can deal 70 (75 (A9)) damage by turn 3, you can force Slime Boss to split before it attacks.\n** You may fully negate Slam with Buffer, Fossilized Helix, Incense Burner and Ghost in a Jar.\n** Rest before the fight to have more than 35 (38 (A4)) HP, then simply tank it. After all, you always heal after boss fights.\n* Split creates two Large Slimes with Slime Boss' remaining HP. Thus it's better to cause Slime Boss to lose as much health as possible before the splitting.\n** This can be done by bringing the boss as close as possible to half HP, then applying Vulnerable and spending as much energy as possible playing Attacks.\n** With Wrath, the Watcher is particularly good at killing or nearly killing Slime Boss before it can split.\n* Slime Boss and its Slimes will clog your Deck with Slimed the longer the fight goes on, particularly harshly on higher ascensions.\n** Evolve and Fire Breathing turn those Slimed into advantage.\n* Sources of AOE damage like Whirlwind are effective against the Slimes that spawn after Slime Boss Splits.",
+   "source_page": "Slime_Boss"
+  },
+  {
+   "name": "Spike Slime (L)",
+   "zh": "尖刺史莱姆（大）",
+   "zh_source": "project",
+   "act": 1,
+   "type": "Normal",
+   "hp": {
+    "asc0": [
+     64,
+     70
+    ],
+    "asc7": [
+     67,
+     73
+    ],
+    "asc8": null,
+    "asc9": null
+   },
+   "powers": "Split",
+   "moves": [
+    {
+     "name": "Lick",
+     "kind": "Debuff",
+     "intent_raw": "Debuff",
+     "damage": null,
+     "effects": [
+      "Applies 2 (A17: 3) Frail."
+     ],
+     "gives_to_player": [
+      "Frail"
+     ],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Flame Tackle",
+     "kind": "Attack+Debuff",
+     "intent_raw": "DebuffAttack4",
+     "damage": {
+      "asc0": 16,
+      "asc2": 18
+     },
+     "effects": [
+      "Adds 2 Slimed into your discard pile."
+     ],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Split",
+     "kind": "Unknown",
+     "intent_raw": "Unknown",
+     "damage": null,
+     "effects": [
+      "Disappears and spawns 2 Spike Slimes (M) with its current HP."
+     ],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    }
+   ],
+   "ai": "Has a 30% chance of using Flame Tackle and a 70% chance of using Lick. Cannot use the same move three times in a row.\nOn Ascension A17, it cannot use Lick twice in a row.\nOnce its HP reaches 50% or lower, its current Intent will be interrupted and changed to Split.",
+   "found_with": "It is only found by itself in combat.",
+   "notes": null,
+   "source_page": "Slimes"
+  },
+  {
+   "name": "Spike Slime (M)",
+   "zh": "尖刺史莱姆（中）",
+   "zh_source": "project",
+   "act": 1,
+   "type": "Normal",
+   "hp": {
+    "asc0": [
+     28,
+     32
+    ],
+    "asc7": [
+     29,
+     34
+    ],
+    "asc8": null,
+    "asc9": null
+   },
+   "powers": null,
+   "moves": [
+    {
+     "name": "Lick",
+     "kind": "Debuff",
+     "intent_raw": "Debuff",
+     "damage": null,
+     "effects": [
+      "Applies 1 Frail."
+     ],
+     "gives_to_player": [
+      "Frail"
+     ],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Flame Tackle",
+     "kind": "Attack+Debuff",
+     "intent_raw": "DebuffAttack2",
+     "damage": {
+      "asc0": 8,
+      "asc2": 10
+     },
+     "effects": [
+      "Adds a Slimed into your discard pile."
+     ],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    }
+   ],
+   "ai": "Identical to Spike Slime (L) but it cannot Split.",
+   "found_with": "Act 1\nCan be in the Easy Pool's Small Slimes encounter with an Acid Slime (S).\nCan be a part of the Exordium Thugs encounter along with either:\n* One of the Slavers\n* Cultist\n* Looter\nCan be a part of the Exordium Wildlife encounter along with either:\n* Fungi Beast\n* Jaw Worm",
+   "notes": null,
+   "source_page": "Slimes"
+  },
+  {
+   "name": "Spike Slime (S)",
+   "zh": "尖刺史莱姆（小）",
+   "zh_source": "project",
+   "act": 1,
+   "type": "Normal",
+   "hp": {
+    "asc0": [
+     10,
+     14
+    ],
+    "asc7": [
+     11,
+     15
+    ],
+    "asc8": null,
+    "asc9": null
+   },
+   "powers": null,
+   "moves": [
+    {
+     "name": "Tackle",
+     "kind": "Attack",
+     "intent_raw": "Attack2",
+     "damage": {
+      "asc0": 5,
+      "asc2": 6
+     },
+     "effects": [],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    }
+   ],
+   "ai": null,
+   "found_with": "Act 1\nCan be in the Easy Pool's Small Slimes encounter with an Acid Slime (M).\nIn the Lots of Slimes encounter with:\n* Two other Spike Slimes (S)\n* Two Small Acid Slimes",
+   "notes": null,
+   "source_page": "Slimes"
+  },
+  {
+   "name": "Acid Slime (L)",
+   "zh": "酸液史莱姆（大）",
+   "zh_source": "project",
+   "act": 1,
+   "type": "Normal",
+   "hp": {
+    "asc0": [
+     65,
+     69
+    ],
+    "asc7": [
+     68,
+     72
+    ],
+    "asc8": null,
+    "asc9": null
+   },
+   "powers": "Split",
+   "moves": [
+    {
+     "name": "Corrosive Spit",
+     "kind": "Attack+Debuff",
+     "intent_raw": "DebuffAttack3",
+     "damage": {
+      "asc0": 11,
+      "asc2": 12
+     },
+     "effects": [
+      "Adds 2 Slimed into your discard pile."
+     ],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Lick",
+     "kind": "Debuff",
+     "intent_raw": "Debuff",
+     "damage": null,
+     "effects": [
+      "Applies 2 Weak."
+     ],
+     "gives_to_player": [
+      "Weak"
+     ],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Tackle",
+     "kind": "Attack",
+     "intent_raw": "Attack4",
+     "damage": {
+      "asc0": 16,
+      "asc2": 18
+     },
+     "effects": [],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Split",
+     "kind": "Unknown",
+     "intent_raw": "Unknown",
+     "damage": null,
+     "effects": [
+      "Disappears and spawns 2 Acid Slimes (M) with its current HP."
+     ],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    }
+   ],
+   "ai": "Has a 30% (40% (A17)) chance of using Corrosive Spit, a 40% (30% (A17)) chance of using Tackle and a 30% chance of using Lick every turn.\nCannot use Tackle (Lick (A17)) twice in a row and cannot use other moves three times in a row.\nOnce its HP reaches 50% or lower, its current Intent will be interrupted and changed to Split.",
+   "found_with": "Act 1\nOnly found solo.",
+   "notes": null,
+   "source_page": "Slimes"
+  },
+  {
+   "name": "Acid Slime (M)",
+   "zh": "酸液史莱姆（中）",
+   "zh_source": "project",
+   "act": 1,
+   "type": "Normal",
+   "hp": {
+    "asc0": [
+     28,
+     32
+    ],
+    "asc7": [
+     29,
+     34
+    ],
+    "asc8": null,
+    "asc9": null
+   },
+   "powers": null,
+   "moves": [
+    {
+     "name": "Corrosive Spit",
+     "kind": "Attack+Debuff",
+     "intent_raw": "DebuffAttack2",
+     "damage": {
+      "asc0": 7,
+      "asc2": 8
+     },
+     "effects": [
+      "Adds a Slimed into your discard pile."
+     ],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Lick",
+     "kind": "Debuff",
+     "intent_raw": "Debuff",
+     "damage": null,
+     "effects": [
+      "Applies 1 Weak."
+     ],
+     "gives_to_player": [
+      "Weak"
+     ],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Tackle",
+     "kind": "Attack",
+     "intent_raw": "Attack3",
+     "damage": {
+      "asc0": 10,
+      "asc2": 12
+     },
+     "effects": [],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    }
+   ],
+   "ai": "Identical pattern to Acid Slime (L) but it cannot Split.\nOn Ascension A17: Every turn it has a 40% change of using Corrosive Spit, a 40% chance of using Tackle, and a 20% chance of using Lick. Lick cannot be used twice in a row and other moves cannot be used 3 times in a row.",
+   "found_with": "Act 1\nCan be in the Easy Pool's Small Slimes encounter with a Spike Slime (S).\nCan be a part of the Exordium Thugs encounter along with either:\n* One of the Slavers\n* Cultist\n* Looter\nCan be found as half of the Exordium Wildlife encounter with either:\n* Fungi Beast\n* Jaw Worm",
+   "notes": null,
+   "source_page": "Slimes"
+  },
+  {
+   "name": "Acid Slime (S)",
+   "zh": "酸液史莱姆（小）",
+   "zh_source": "project",
+   "act": 1,
+   "type": "Normal",
+   "hp": {
+    "asc0": [
+     8,
+     12
+    ],
+    "asc7": [
+     9,
+     13
+    ],
+    "asc8": null,
+    "asc9": null
+   },
+   "powers": null,
+   "moves": [
+    {
+     "name": "Lick",
+     "kind": "Debuff",
+     "intent_raw": "Debuff",
+     "damage": null,
+     "effects": [
+      "Applies 1 Weak."
+     ],
+     "gives_to_player": [
+      "Weak"
+     ],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Tackle",
+     "kind": "Attack",
+     "intent_raw": "Attack1",
+     "damage": {
+      "asc0": 3,
+      "asc2": 4
+     },
+     "effects": [],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    }
+   ],
+   "ai": null,
+   "found_with": "Act 1\nCan be in the Easy Pool's Small Slimes encounter with a Spike Slime (M).\nIn the Lots of Slimes encounter with:\n* One other Acid Slime (S)\n* Three Small Spike Slimes",
+   "notes": null,
+   "source_page": "Slimes"
+  },
+  {
+   "name": "Snake Plant",
+   "zh": "蛇藤",
+   "zh_source": "project",
+   "act": 2,
+   "type": "Normal",
+   "hp": {
+    "asc0": [
+     75,
+     79
+    ],
+    "asc7": [
+     78,
+     82
+    ],
+    "asc8": null,
+    "asc9": null
+   },
+   "powers": "Malleable 3",
+   "moves": [
+    {
+     "name": "Chomp Chomp",
+     "kind": "Attack",
+     "intent_raw": "Attack5",
+     "damage": {
+      "asc0": "7×3",
+      "asc2": "8×3"
+     },
+     "effects": [],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Enfeebling Spores",
+     "kind": "Debuff",
+     "intent_raw": "DebuffStrong",
+     "damage": null,
+     "effects": [
+      "Applies 2 Frail and 2 Weak."
+     ],
+     "gives_to_player": [
+      "Frail",
+      "Weak"
+     ],
+     "gives_to_enemy": []
+    }
+   ],
+   "ai": "Every turn:\n* Chomp Chomp 65% chance\n* Enfeebling Spores 35% chance\nCannot use Chomp Chomp three times in a row and cannot use Enfeebling Spores twice in a row.\nOn Ascension A17, when it uses Enfeebling Spores for the first time, its pattern changes to:\n* Chomp Chomp\n* Chomp Chomp\n* Enfeebling Spores",
+   "found_with": null,
+   "notes": null,
+   "source_page": "Snake_Plant"
+  },
+  {
+   "name": "Snecko",
+   "zh": "蛇颈龙",
+   "zh_source": "project",
+   "act": 2,
+   "type": "Normal",
+   "hp": {
+    "asc0": [
+     114,
+     120
+    ],
+    "asc7": [
+     120,
+     125
+    ],
+    "asc8": null,
+    "asc9": null
+   },
+   "powers": null,
+   "moves": [
+    {
+     "name": "Perplexing Glare",
+     "kind": "Debuff",
+     "intent_raw": "DebuffStrong",
+     "damage": null,
+     "effects": [
+      "Applies Confused."
+     ],
+     "gives_to_player": [
+      "Confused"
+     ],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Bite",
+     "kind": "Attack",
+     "intent_raw": "Attack4",
+     "damage": {
+      "asc0": 15,
+      "asc2": 18
+     },
+     "effects": [],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Tail Whip",
+     "kind": "Attack+Debuff",
+     "intent_raw": "DebuffAttack2",
+     "damage": {
+      "asc0": 8,
+      "asc2": 10
+     },
+     "effects": [
+      "Applies 2 Vulnerable(A17: and 2 Weak)."
+     ],
+     "gives_to_player": [
+      "Vulnerable",
+      "Weak"
+     ],
+     "gives_to_enemy": []
+    }
+   ],
+   "ai": "Always starts with Perplexing Glare, then uses one of the following actions each turn:\n* Bite (60% chance)\n* Tail Whip (40% chance)\nSnecko will not use Bite three times in a row.",
+   "found_with": "Act 2\nAs a hard pool encounter:\n* Solo",
+   "notes": null,
+   "source_page": "Snecko"
+  },
+  {
+   "name": "Spheric Guardian",
+   "zh": "球形守卫",
+   "zh_source": "project",
+   "act": 2,
+   "type": "Normal",
+   "hp": {
+    "asc0": 20,
+    "asc7": null,
+    "asc8": null,
+    "asc9": null
+   },
+   "powers": "Artifact 3 , Block 40 , Barricade",
+   "moves": [
+    {
+     "name": "Activate",
+     "kind": "Defend",
+     "intent_raw": "Defend",
+     "damage": null,
+     "effects": [
+      "Gains 25 (A17: 35) Block."
+     ],
+     "gives_to_player": [],
+     "gives_to_enemy": [
+      "Block"
+     ]
+    },
+    {
+     "name": "Debuff Attack",
+     "kind": "Attack+Debuff",
+     "intent_raw": "DebuffAttack3",
+     "damage": {
+      "asc0": 10,
+      "asc2": 11
+     },
+     "effects": [
+      "Applies 5 Frail."
+     ],
+     "gives_to_player": [
+      "Frail"
+     ],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Slam",
+     "kind": "Attack",
+     "intent_raw": "Attack5",
+     "damage": {
+      "asc0": "10×2",
+      "asc2": "11×2"
+     },
+     "effects": [],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Harden",
+     "kind": "Attack+Defend",
+     "intent_raw": "DefendAttack3",
+     "damage": {
+      "asc0": 10,
+      "asc2": 11
+     },
+     "effects": [
+      "Gains 15 Block."
+     ],
+     "gives_to_player": [],
+     "gives_to_enemy": [
+      "Block"
+     ]
+    }
+   ],
+   "ai": "Spheric Guardian always starts with Activate, then uses Debuff Attack. Afterwards, Spheric Guardian alternates between using Slam and Harden for the rest of the battle.",
+   "found_with": "Act 2\nAs an easy pool encounter:\n* Solo\nAs a hard pool encounter alongside:\n* 1 Sentry\nAct 3\nAs a hard pool encounter alongside:\n* 2 random Shapes",
+   "notes": null,
+   "source_page": "Spheric_Guardian"
+  },
+  {
+   "name": "Spire Growth",
+   "zh": "尖塔生长体",
+   "zh_source": "project",
+   "act": 3,
+   "type": "Normal",
+   "hp": {
+    "asc0": 170,
+    "asc7": 190,
+    "asc8": null,
+    "asc9": null
+   },
+   "powers": null,
+   "moves": [
+    {
+     "name": "Constrict",
+     "kind": "Debuff",
+     "intent_raw": "DebuffStrong",
+     "damage": null,
+     "effects": [
+      "Applies 10 (A2: 12) Constricted."
+     ],
+     "gives_to_player": [
+      "Constricted"
+     ],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Quick Tackle",
+     "kind": "Attack",
+     "intent_raw": "Attack4",
+     "damage": {
+      "asc0": 16,
+      "asc2": 18
+     },
+     "effects": [],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Smash",
+     "kind": "Attack",
+     "intent_raw": "Attack5",
+     "damage": {
+      "asc0": 22,
+      "asc2": 25
+     },
+     "effects": [],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    }
+   ],
+   "ai": "Each turn, it has a 50/50 chance to use either Quick Tackle or Constrict.\nIf Constrict was used last turn or the player already has Constricted, it uses Smash instead.\nCannot use either attack three times in a row.",
+   "found_with": "Act 3\n* Solo",
+   "notes": null,
+   "source_page": "Spire_Growth"
+  },
+  {
+   "name": "Spire Shield",
+   "zh": "尖塔之盾",
+   "zh_source": "project",
+   "act": 4,
+   "type": "Elite",
+   "hp": {
+    "asc0": 110,
+    "asc7": null,
+    "asc8": 125,
+    "asc9": null
+   },
+   "powers": "Artifact 1 (2 (A18))",
+   "moves": [
+    {
+     "name": "Bash",
+     "kind": "Attack+Debuff",
+     "intent_raw": "DebuffAttack3",
+     "damage": {
+      "asc0": 12,
+      "asc3": 14
+     },
+     "effects": [
+      "If the Player has an Orb Slot, there is 50% chance to apply -1 Focus.",
+      "Otherwise applies -1 Strength."
+     ],
+     "gives_to_player": [
+      "Strength (Negative)",
+      "Focus"
+     ],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Fortify",
+     "kind": "Defend",
+     "intent_raw": "Defend",
+     "damage": null,
+     "effects": [
+      "All enemies gain 30 Block."
+     ],
+     "gives_to_player": [],
+     "gives_to_enemy": [
+      "Block"
+     ]
+    },
+    {
+     "name": "Smash",
+     "kind": "Attack+Defend",
+     "intent_raw": "DefendAttack7",
+     "damage": {
+      "asc0": 34,
+      "asc3": 38
+     },
+     "effects": [
+      "(Gains Block equal to damage dealt.; Gains 99 (A18) Block.)"
+     ],
+     "gives_to_player": [],
+     "gives_to_enemy": [
+      "Block"
+     ]
+    }
+   ],
+   "ai": "Every three turns, starting from turn 3, it uses Smash.\nOtherwise has a 50/50 chance of using:\n* Bash followed by Fortify\n* Fortify followed by Bash",
+   "found_with": "Act 4\n* Spire Spear on the right side of the player.",
+   "notes": null,
+   "source_page": "Spire_Shield_and_Spire_Spear"
+  },
+  {
+   "name": "Spire Spear",
+   "zh": "尖塔之矛",
+   "zh_source": "project",
+   "act": 4,
+   "type": "Elite",
+   "hp": {
+    "asc0": 160,
+    "asc7": null,
+    "asc8": 180,
+    "asc9": null
+   },
+   "powers": "Artifact 1 (2 (A18))",
+   "moves": [
+    {
+     "name": "Burn Strike",
+     "kind": "Attack+Debuff",
+     "intent_raw": "DebuffAttack3",
+     "damage": {
+      "asc0": "5×2",
+      "asc3": "6×2"
+     },
+     "effects": [
+      "(Adds 2 Burns into your discard pile.; Adds 2 Burns on top of your draw pile (A18).)"
+     ],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Skewer",
+     "kind": "Attack",
+     "intent_raw": "Attack7",
+     "damage": {
+      "asc0": "10×3",
+      "asc3": "10×4"
+     },
+     "effects": [],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Piercer",
+     "kind": "Buff",
+     "intent_raw": "Buff",
+     "damage": null,
+     "effects": [
+      "All enemies gain 2 Strength."
+     ],
+     "gives_to_player": [],
+     "gives_to_enemy": [
+      "Strength"
+     ]
+    }
+   ],
+   "ai": "Always starts with Burn Strike.\nEvery 3 turns, starting from turn 2, it uses Skewer.\nOtherwise has a 50/50 chance of using:\n* Burn Strike followed by Piercer\n* Piercer followed by Burn Strike",
+   "found_with": "Act 4\n* Spire Shield on the left side of the player.",
+   "notes": null,
+   "source_page": "Spire_Shield_and_Spire_Spear"
+  },
+  {
+   "name": "The Champ",
+   "zh": "勇士",
+   "zh_source": "project",
+   "act": 2,
+   "type": "Boss",
+   "hp": {
+    "asc0": 420,
+    "asc7": null,
+    "asc8": null,
+    "asc9": 440
+   },
+   "powers": null,
+   "moves": [
+    {
+     "name": "Heavy Slash",
+     "kind": "Attack",
+     "intent_raw": "Attack4",
+     "damage": {
+      "asc0": 16,
+      "asc4": 18
+     },
+     "effects": [],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Face Slap",
+     "kind": "Attack+Debuff",
+     "intent_raw": "DebuffAttack3",
+     "damage": {
+      "asc0": 12,
+      "asc4": 14
+     },
+     "effects": [
+      "Applies 2 Frail and 2 Vulnerable"
+     ],
+     "gives_to_player": [
+      "Frail",
+      "Vulnerable"
+     ],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Defensive Stance",
+     "kind": "Buff+Defend",
+     "intent_raw": "DefendBuff",
+     "damage": null,
+     "effects": [
+      "Gains 15 (A9: 18; A19: 20) Block and 5 (A9: 6; A19: 7) Metallicize."
+     ],
+     "gives_to_player": [],
+     "gives_to_enemy": [
+      "Metallicize",
+      "Block"
+     ]
+    },
+    {
+     "name": "Gloat",
+     "kind": "Buff",
+     "intent_raw": "Buff",
+     "damage": null,
+     "effects": [
+      "Gains 2 (A4: 3; A19: 4) Strength."
+     ],
+     "gives_to_player": [],
+     "gives_to_enemy": [
+      "Strength"
+     ]
+    },
+    {
+     "name": "Taunt",
+     "kind": "Unknown",
+     "intent_raw": "Unknown",
+     "damage": null,
+     "effects": [
+      "Applies 2 Weak and 2 Vulnerable."
+     ],
+     "gives_to_player": [
+      "Weak",
+      "Vulnerable"
+     ],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Anger",
+     "kind": "Buff",
+     "intent_raw": "Buff",
+     "damage": null,
+     "effects": [
+      "Removes all Debuffs.",
+      "Gains 6 (A4: 9; A19: 12) Strength."
+     ],
+     "gives_to_player": [],
+     "gives_to_enemy": [
+      "Strength"
+     ]
+    },
+    {
+     "name": "Execute",
+     "kind": "Attack",
+     "intent_raw": "Attack7",
+     "damage": {
+      "asc0": "10×2"
+     },
+     "effects": [],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    }
+   ],
+   "ai": "Phase One\nAlways uses Taunt every 4 turns.\nOn all other turns:\n* Defensive Stance 15% chance\n* Gloat (Defensive Stance (A19)) 15% chance\n* Face Slap 25% chance\n* Heavy Slash 45% chance\nNo move can be used twice in a row.\nOn Ascension A19, when Gloat is replaced with Defensive Stance, if the last move was also Defensive Stance, he will instead use Gloat.\nPhase Two\nWhen his HP drops below 50%, he will use Anger on the next turn and enter Phase Two.\nAfter using Anger he will use Execute the turn after.\nHe will then repeat this pattern for the rest of combat:\n* Random Move (Same chances as Phase One)\n* Random Move (Same chances as Phase One)\n* Execute",
+   "found_with": null,
+   "notes": null,
+   "source_page": "The_Champ"
+  },
+  {
+   "name": "The Collector",
+   "zh": "收藏家",
+   "zh_source": "project",
+   "act": 2,
+   "type": "Boss",
+   "hp": {
+    "asc0": 282,
+    "asc7": null,
+    "asc8": null,
+    "asc9": 300
+   },
+   "powers": null,
+   "moves": [
+    {
+     "name": "Spawn",
+     "kind": "Unknown",
+     "intent_raw": "Unknown",
+     "damage": null,
+     "effects": [
+      "Summons up to 2 Torch Heads."
+     ],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Fireball",
+     "kind": "Attack",
+     "intent_raw": "Attack4",
+     "damage": {
+      "asc0": 18,
+      "asc4": 21
+     },
+     "effects": [],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Buff",
+     "kind": "Buff+Defend",
+     "intent_raw": "DefendBuff",
+     "damage": null,
+     "effects": [
+      "All enemies gain 3 (A4: 4; A19: 5) Strength.",
+      "Gains 15 (A9: 18; A19: 23) Block."
+     ],
+     "gives_to_player": [],
+     "gives_to_enemy": [
+      "Block",
+      "Strength"
+     ]
+    },
+    {
+     "name": "Mega Debuff",
+     "kind": "Debuff",
+     "intent_raw": "DebuffStrong",
+     "damage": null,
+     "effects": [
+      "Applies 3 (A19: 5) Weak, 3 (A19: 5) Vulnerable and 3 (A19: 5) Frail."
+     ],
+     "gives_to_player": [
+      "Vulnerable",
+      "Weak",
+      "Frail"
+     ],
+     "gives_to_enemy": []
+    }
+   ],
+   "ai": "Always starts with Spawn and always uses Mega Debuff on turn 4.\nCan only have two Torch Heads summoned at a time.\nIf there are 0-1 Torch Heads alive:\n* Spawn 25% chance\n* Fireball 45% chance\n* Buff 30% chance\nIf both Torch Heads are alive:\n* Fireball 70% chance\n* Buff 30% chance\nShe cannot use Buff twice in a row and cannot use Fireball 3 times in a row.",
+   "found_with": null,
+   "notes": null,
+   "source_page": "The_Collector"
+  },
+  {
+   "name": "Torch Head",
+   "zh": "火把头",
+   "zh_source": "project",
+   "act": 2,
+   "type": "Minion",
+   "hp": {
+    "asc0": [
+     38,
+     40
+    ],
+    "asc7": [
+     40,
+     45
+    ],
+    "asc8": null,
+    "asc9": null
+   },
+   "powers": "Minion",
+   "moves": [
+    {
+     "name": "Tackle",
+     "kind": "Attack",
+     "intent_raw": "Attack2",
+     "damage": {
+      "asc0": 7
+     },
+     "effects": [],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    }
+   ],
+   "ai": null,
+   "found_with": null,
+   "notes": null,
+   "source_page": "The_Collector"
+  },
+  {
+   "name": "The Guardian",
+   "zh": "守卫者",
+   "zh_source": "project",
+   "act": 1,
+   "type": "Boss",
+   "hp": {
+    "asc0": 240,
+    "asc7": null,
+    "asc8": null,
+    "asc9": 250
+   },
+   "powers": "Mode Shift 30 (35 (A9) 40 (A19))",
+   "moves": [
+    {
+     "name": "Charging Up",
+     "kind": "Defend",
+     "intent_raw": "Defend",
+     "damage": null,
+     "effects": [
+      "Gains 9 Block."
+     ],
+     "gives_to_player": [],
+     "gives_to_enemy": [
+      "Block"
+     ]
+    },
+    {
+     "name": "Fierce Bash",
+     "kind": "Attack",
+     "intent_raw": "Attack7",
+     "damage": {
+      "asc0": 32,
+      "asc4": 36
+     },
+     "effects": [],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Vent Steam",
+     "kind": "Debuff",
+     "intent_raw": "DebuffStrong",
+     "damage": null,
+     "effects": [
+      "Applies 2 Weak and 2 Vulnerable."
+     ],
+     "gives_to_player": [
+      "Weak",
+      "Vulnerable"
+     ],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Whirlwind",
+     "kind": "Attack",
+     "intent_raw": "Attack5",
+     "damage": {
+      "asc0": "5×4"
+     },
+     "effects": [],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Defensive Mode",
+     "kind": "Buff",
+     "intent_raw": "Buff",
+     "damage": null,
+     "effects": [
+      "Gains 3 (A19: 4) Sharp Hide."
+     ],
+     "gives_to_player": [],
+     "gives_to_enemy": [
+      "Sharp Hide"
+     ]
+    },
+    {
+     "name": "Roll Attack",
+     "kind": "Attack",
+     "intent_raw": "Attack2",
+     "damage": {
+      "asc0": 9,
+      "asc4": 10
+     },
+     "effects": [],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Twin Slam",
+     "kind": "Attack",
+     "intent_raw": "Attack4",
+     "damage": {
+      "asc0": "8×2"
+     },
+     "effects": [
+      "Loses Sharp Hide.",
+      "Gains 30 (A9: 35; A19: 40) Mode Shift, increased by 10 for each time Mode Shift triggered this combat."
+     ],
+     "gives_to_player": [],
+     "gives_to_enemy": [
+      "Sharp Hide",
+      "Mode Shift"
+     ]
+    }
+   ],
+   "ai": "Repeats the following pattern:\n#Charging Up\n#Fierce Bash\n#Vent Steam\n#Whirlwind\nWhen Guardian triggers Mode Shift the current Intent is replaced with Defensive Mode.\nAfter Defensive Mode, Guardian uses Roll Attack, followed by Twin Slam and Whirlwind. Then the initial pattern restarts.",
+   "found_with": null,
+   "notes": null,
+   "source_page": "The_Guardian"
+  },
+  {
+   "name": "The Maw",
+   "zh": "巨口",
+   "zh_source": "project",
+   "act": 3,
+   "type": "Normal",
+   "hp": {
+    "asc0": 300,
+    "asc7": null,
+    "asc8": null,
+    "asc9": null
+   },
+   "powers": null,
+   "moves": [
+    {
+     "name": "Roar",
+     "kind": "Debuff",
+     "intent_raw": "DebuffStrong",
+     "damage": null,
+     "effects": [
+      "Applies 3 (A17: 5) Weak and 3 (A17: 5) Frail."
+     ],
+     "gives_to_player": [
+      "Frail",
+      "Weak"
+     ],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Slam",
+     "kind": "Attack",
+     "intent_raw": "Attack6",
+     "damage": {
+      "asc0": 25,
+      "asc2": 30
+     },
+     "effects": [],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Nom Nom",
+     "kind": "Attack",
+     "intent_raw": "Attack2",
+     "damage": {
+      "asc0": "5×N"
+     },
+     "effects": [
+      "N = Current turn, divided by two (rounded up)."
+     ],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Drool",
+     "kind": "Buff",
+     "intent_raw": "Buff",
+     "damage": null,
+     "effects": [
+      "Gains 3 (A17: 5) Strength."
+     ],
+     "gives_to_player": [],
+     "gives_to_enemy": [
+      "Strength"
+     ]
+    }
+   ],
+   "ai": "Always starts with Roar. Afterwards it has a 50/50 chance of using either Slam or Nom Nom.\nAfter using Drool: 50/50 split between Slam and Nom Nom.\nAfter using Slam: 50/50 split between Nom Nom and Drool.\nAfter using Nom Nom: Always uses Drool.",
+   "found_with": "Act 3\n* Solo",
+   "notes": "* The Maw is the only enemy whose Max HP does not change based on Ascension level.",
+   "source_page": "The_Maw"
+  },
+  {
+   "name": "Looter",
+   "zh": "窃贼",
+   "zh_source": "project",
+   "act": 1,
+   "type": "Normal",
+   "hp": {
+    "asc0": [
+     44,
+     48
+    ],
+    "asc7": [
+     46,
+     50
+    ],
+    "asc8": null,
+    "asc9": null
+   },
+   "powers": "Thievery 15 (20 (A17))",
+   "moves": [
+    {
+     "name": "Mug",
+     "kind": "Attack",
+     "intent_raw": "Attack3",
+     "damage": {
+      "asc0": 10,
+      "asc2": 11
+     },
+     "effects": [],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Lunge",
+     "kind": "Attack",
+     "intent_raw": "Attack3",
+     "damage": {
+      "asc0": 12,
+      "asc2": 14
+     },
+     "effects": [],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Smoke Bomb",
+     "kind": "Defend",
+     "intent_raw": "Defend",
+     "damage": null,
+     "effects": [
+      "Gains 6 Block."
+     ],
+     "gives_to_player": [],
+     "gives_to_enemy": [
+      "Block"
+     ]
+    },
+    {
+     "name": "Escape",
+     "kind": "Escape",
+     "intent_raw": "Escape",
+     "damage": null,
+     "effects": [
+      "Flees combat with your Gold."
+     ],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    }
+   ],
+   "ai": "* Uses Mug for the first 2 turns.\n* Has a 50% chance to use Lunge or 50% chance to use Smoke Bomb.\n** If Lunge is used on its third turn, it will then use Smoke Bomb next.\n* The turn after Smoke Bomb has been used, it will Escape.",
+   "found_with": "Act 1\nAs a hard pool encounter:\n* Solo\nAs half of the Exodium Thugs encounter along with either:\n* 1 Red Louse\n* 1 Green Louse\n* 1 Spike Slime (M)\n* 1 Acid Slime (M)\nAct 2\nAs an easy pool encounter along with:\n* Mugger",
+   "notes": null,
+   "source_page": "Thieves"
+  },
+  {
+   "name": "Mugger",
+   "zh": "抢劫犯",
+   "zh_source": "project",
+   "act": 2,
+   "type": "Normal",
+   "hp": {
+    "asc0": [
+     48,
+     52
+    ],
+    "asc7": [
+     50,
+     54
+    ],
+    "asc8": null,
+    "asc9": null
+   },
+   "powers": "Thievery 15 (20 (A17))",
+   "moves": [
+    {
+     "name": "Mug",
+     "kind": "Attack",
+     "intent_raw": "Attack3",
+     "damage": {
+      "asc0": 10,
+      "asc2": 11
+     },
+     "effects": [],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Lunge",
+     "kind": "Attack",
+     "intent_raw": "Attack4",
+     "damage": {
+      "asc0": 16,
+      "asc2": 18
+     },
+     "effects": [],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Smoke Bomb",
+     "kind": "Defend",
+     "intent_raw": "Defend",
+     "damage": null,
+     "effects": [
+      "Gains 11 (A17: 17) Block."
+     ],
+     "gives_to_player": [],
+     "gives_to_enemy": [
+      "Block"
+     ]
+    },
+    {
+     "name": "Escape",
+     "kind": "Escape",
+     "intent_raw": "Escape",
+     "damage": null,
+     "effects": [
+      "Flees combat with your Gold."
+     ],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    }
+   ],
+   "ai": "Mugger has the same pattern as Looter.",
+   "found_with": "Act 2\nAs an easy pool encounter along with:\n* Looter",
+   "notes": null,
+   "source_page": "Thieves"
+  },
+  {
+   "name": "Time Eater",
+   "zh": "时间吞噬者",
+   "zh_source": "project",
+   "act": 3,
+   "type": "Boss",
+   "hp": {
+    "asc0": 456,
+    "asc7": null,
+    "asc8": null,
+    "asc9": 480
+   },
+   "powers": "Time Warp",
+   "moves": [
+    {
+     "name": "Reverberate",
+     "kind": "Attack",
+     "intent_raw": "Attack5",
+     "damage": {
+      "asc0": "7×3",
+      "asc4": "8×3"
+     },
+     "effects": [],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Head Slam",
+     "kind": "Attack+Debuff",
+     "intent_raw": "DebuffAttack6",
+     "damage": {
+      "asc0": 26,
+      "asc4": 32
+     },
+     "effects": [
+      "Applies 1 Draw Reduction.",
+      "(A19: Adds 2 Slimed into your discard pile)"
+     ],
+     "gives_to_player": [
+      "Draw Reduction"
+     ],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Ripple",
+     "kind": "Debuff+Defend",
+     "intent_raw": "DebuffDefend",
+     "damage": null,
+     "effects": [
+      "Gains 20 Block.",
+      "Applies 1 Vulnerable, 1 Weak(A19: and 1 Frail)"
+     ],
+     "gives_to_player": [
+      "Vulnerable",
+      "Weak",
+      "Frail"
+     ],
+     "gives_to_enemy": [
+      "Block"
+     ]
+    },
+    {
+     "name": "Haste",
+     "kind": "Buff",
+     "intent_raw": "Buff",
+     "damage": null,
+     "effects": [
+      "Removes all Debuffs.",
+      "Heals to 50% HP.",
+      "(A19: Gains 32 Block)"
+     ],
+     "gives_to_player": [],
+     "gives_to_enemy": [
+      "Heal",
+      "Block"
+     ]
+    }
+   ],
+   "ai": "Time Eater will always use Haste when it is reduced to below half HP. Haste can only be used once per combat. Time Eater will use one of the following three attacks each turn:\n* Reverberate (45% chance)\n* Head Slam (35% chance)\n* Ripple (20% chance)\nTime Eater will not use Reverberate three times in a row, or Head Slam/Ripple twice in a row.",
+   "found_with": null,
+   "notes": null,
+   "source_page": "Time_Eater"
+  },
+  {
+   "name": "Transient",
+   "zh": "瞬变体",
+   "zh_source": "project",
+   "act": 3,
+   "type": "Normal",
+   "hp": {
+    "asc0": 999,
+    "asc7": null,
+    "asc8": null,
+    "asc9": null
+   },
+   "powers": "Fading 5 (6 (A17)) , Shifting",
+   "moves": [
+    {
+     "name": "Attack",
+     "kind": "Attack",
+     "intent_raw": "Attack7",
+     "damage": {
+      "asc0": "20+N",
+      "asc2": "30+N"
+     },
+     "effects": [
+      "N = Current turn, multiplied by 10."
+     ],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    }
+   ],
+   "ai": null,
+   "found_with": "Act 3\n* Solo",
+   "notes": null,
+   "source_page": "Transient"
+  },
+  {
+   "name": "Donu",
+   "zh": "多努",
+   "zh_source": "project",
+   "act": 3,
+   "type": "Boss",
+   "hp": {
+    "asc0": 250,
+    "asc7": null,
+    "asc8": null,
+    "asc9": 265
+   },
+   "powers": "Artifact 2 (3 (A19))",
+   "moves": [
+    {
+     "name": "Circle of Power",
+     "kind": "Buff",
+     "intent_raw": "Buff",
+     "damage": null,
+     "effects": [
+      "All enemies gain 3 Strength."
+     ],
+     "gives_to_player": [],
+     "gives_to_enemy": [
+      "Strength"
+     ]
+    },
+    {
+     "name": "Beam",
+     "kind": "Attack",
+     "intent_raw": "Attack6",
+     "damage": {
+      "asc0": "10×2",
+      "asc4": "12×2"
+     },
+     "effects": [],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    }
+   ],
+   "ai": "Alternates between Circle of Power and Beam.",
+   "found_with": null,
+   "notes": null,
+   "source_page": "Donu_and_Deca"
+  },
+  {
+   "name": "Deca",
+   "zh": "德卡",
+   "zh_source": "project",
+   "act": 3,
+   "type": "Boss",
+   "hp": {
+    "asc0": 250,
+    "asc7": null,
+    "asc8": null,
+    "asc9": 265
+   },
+   "powers": "Artifact 2 (3 (A19))",
+   "moves": [
+    {
+     "name": "Beam",
+     "kind": "Attack+Debuff",
+     "intent_raw": "DebuffAttack5",
+     "damage": {
+      "asc0": "10×2",
+      "asc4": "12×2"
+     },
+     "effects": [
+      "Adds 2 Dazed into your discard pile."
+     ],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Square of Protection",
+     "kind": "Defend",
+     "intent_raw": "Defend",
+     "damage": null,
+     "effects": [
+      "All enemies gain 16 Block(A19: and 3 Plated Armor)."
+     ],
+     "gives_to_player": [],
+     "gives_to_enemy": [
+      "Plated Armor",
+      "Block"
+     ]
+    }
+   ],
+   "ai": "Alternates between Beam and Square of Protection.",
+   "found_with": null,
+   "notes": null,
+   "source_page": "Donu_and_Deca"
+  },
+  {
+   "name": "Fat Gremlin",
+   "zh": "肥硕小鬼",
+   "zh_source": "project",
+   "act": 1,
+   "type": "Normal",
+   "hp": {
+    "asc0": [
+     13,
+     17
+    ],
+    "asc7": [
+     14,
+     18
+    ],
+    "asc8": null,
+    "asc9": null
+   },
+   "powers": null,
+   "moves": [
+    {
+     "name": "Smash",
+     "kind": "Attack+Debuff",
+     "intent_raw": "DebuffAttack1",
+     "damage": {
+      "asc0": 4,
+      "asc2": 5
+     },
+     "effects": [
+      "Applies 1 Weak(A17: and 1 Frail)"
+     ],
+     "gives_to_player": [
+      "Weak",
+      "Frail"
+     ],
+     "gives_to_enemy": []
+    }
+   ],
+   "ai": "Fat Gremlin uses Smash every turn.",
+   "found_with": null,
+   "notes": null,
+   "source_page": "Gremlins"
+  },
+  {
+   "name": "Mad Gremlin",
+   "zh": "狂怒小鬼",
+   "zh_source": "project",
+   "act": 1,
+   "type": "Normal",
+   "hp": {
+    "asc0": [
+     20,
+     24
+    ],
+    "asc7": [
+     21,
+     25
+    ],
+    "asc8": null,
+    "asc9": null
+   },
+   "powers": "Angry 1 (2 (A17))",
+   "moves": [
+    {
+     "name": "Scratch",
+     "kind": "Attack",
+     "intent_raw": "Attack1",
+     "damage": {
+      "asc0": 4,
+      "asc2": 5
+     },
+     "effects": [],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    }
+   ],
+   "ai": "Mad Gremlin uses Scratch every turn.",
+   "found_with": null,
+   "notes": null,
+   "source_page": "Gremlins"
+  },
+  {
+   "name": "Shield Gremlin",
+   "zh": "盾牌小鬼",
+   "zh_source": "project",
+   "act": 1,
+   "type": "Normal",
+   "hp": {
+    "asc0": [
+     12,
+     15
+    ],
+    "asc7": [
+     13,
+     17
+    ],
+    "asc8": null,
+    "asc9": null
+   },
+   "powers": null,
+   "moves": [
+    {
+     "name": "Protect",
+     "kind": "Defend",
+     "intent_raw": "Defend",
+     "damage": null,
+     "effects": [
+      "Random enemy gains 7 (A2: 8; A17: 11) Block.",
+      "Only chooses self if alone."
+     ],
+     "gives_to_player": [],
+     "gives_to_enemy": [
+      "Block"
+     ]
+    },
+    {
+     "name": "Shield Bash",
+     "kind": "Attack",
+     "intent_raw": "Attack2",
+     "damage": {
+      "asc0": 6,
+      "asc2": 8
+     },
+     "effects": [],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    }
+   ],
+   "ai": "Shield Gremlin uses Protect every turn. If it is the only enemy left, it will switch to using Shield Bash every turn.",
+   "found_with": null,
+   "notes": null,
+   "source_page": "Gremlins"
+  },
+  {
+   "name": "Sneaky Gremlin",
+   "zh": "狡诈小鬼",
+   "zh_source": "project",
+   "act": 1,
+   "type": "Normal",
+   "hp": {
+    "asc0": [
+     10,
+     14
+    ],
+    "asc7": [
+     11,
+     15
+    ],
+    "asc8": null,
+    "asc9": null
+   },
+   "powers": null,
+   "moves": [
+    {
+     "name": "Puncture",
+     "kind": "Attack",
+     "intent_raw": "Attack2",
+     "damage": {
+      "asc0": 9,
+      "asc2": 10
+     },
+     "effects": [],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    }
+   ],
+   "ai": "Sneaky Gremlin uses Puncture every turn.",
+   "found_with": null,
+   "notes": null,
+   "source_page": "Gremlins"
+  },
+  {
+   "name": "Gremlin Wizard",
+   "zh": "小鬼法师",
+   "zh_source": "project",
+   "act": 1,
+   "type": "Normal",
+   "hp": {
+    "asc0": [
+     21,
+     25
+    ],
+    "asc7": [
+     22,
+     26
+    ],
+    "asc8": null,
+    "asc9": null
+   },
+   "powers": null,
+   "moves": [
+    {
+     "name": "Charging",
+     "kind": "Unknown",
+     "intent_raw": "Unknown",
+     "damage": null,
+     "effects": [
+      "Does nothing."
+     ],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Ultimate Blast",
+     "kind": "Attack",
+     "intent_raw": "Attack6",
+     "damage": {
+      "asc0": 25,
+      "asc2": 30
+     },
+     "effects": [],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    }
+   ],
+   "ai": "Gremlin Wizard will always start by using Charging twice in a row, then using Ultimate Blast. After that and for the rest of combat, Gremlin Wizard will use Charging three times in a row before using Ultimate Blast.\nOn Ascension A17, Gremlin Wizard will use Charging twice in a row, then use Ultimate Blast every turn for the rest of combat.",
+   "found_with": "Act 1\nIn the Gremlin Gang encounter, randomly choosing from the following list for a total of 4 enemies:\n* 2 Fat Gremlins\n* 2 Sneaky Gremlins\n* 2 Mad Gremlins\n* 1 Shield Gremlin\n* 1 Gremlin Wizard\nAct 2\nAs Minions in an Elite encounter consisting of:\n* 2 random Gremlins\n* 1 Gremlin Leader",
+   "notes": null,
+   "source_page": "Gremlins"
+  },
+  {
+   "name": "Writhing Mass",
+   "zh": "扭结团块",
+   "zh_source": "project",
+   "act": 3,
+   "type": "Normal",
+   "hp": {
+    "asc0": 160,
+    "asc7": 175,
+    "asc8": null,
+    "asc9": null
+   },
+   "powers": "Malleable 4 , Reactive",
+   "moves": [
+    {
+     "name": "Multi Hit",
+     "kind": "Attack",
+     "intent_raw": "Attack5",
+     "damage": {
+      "asc0": "7×3",
+      "asc2": "9×3"
+     },
+     "effects": [],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Debuff Attack",
+     "kind": "Attack+Debuff",
+     "intent_raw": "DebuffAttack3",
+     "damage": {
+      "asc0": 10,
+      "asc2": 12
+     },
+     "effects": [
+      "Applies 2 Weak and 2 Vulnerable."
+     ],
+     "gives_to_player": [
+      "Weak",
+      "Vulnerable"
+     ],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Big Hit",
+     "kind": "Attack",
+     "intent_raw": "Attack7",
+     "damage": {
+      "asc0": 32,
+      "asc2": 38
+     },
+     "effects": [],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Block Attack",
+     "kind": "Attack+Defend",
+     "intent_raw": "DefendAttack4",
+     "damage": {
+      "asc0": 15,
+      "asc2": 16
+     },
+     "effects": [
+      "Gains 16 Block."
+     ],
+     "gives_to_player": [],
+     "gives_to_enemy": [
+      "Block"
+     ]
+    },
+    {
+     "name": "Parasite",
+     "kind": "Debuff",
+     "intent_raw": "DebuffStrong",
+     "damage": null,
+     "effects": [
+      "Permanently adds a Parasite to your deck."
+     ],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    }
+   ],
+   "ai": "On its first turn, it has an (approximately) equal chance to use Multi Hit, Big Hit, or Debuff Attack.\nAfterwards:\n* Parasite 10% chance\n* Block Attack 30% chance\n* Debuff Attack 20% chance\n* Multi Hit 30% chance\n* Big Hit 10% chance\nParasite can only be used once.\nThe same move cannot be used (or rerolled via Reactive) twice in a row.\nIntent\\Used | Parasite | Block | Debuff | Multi Hit | Big Hit\nParasite\n- || ~14% || 12.5% || ~14% || ~11%\nBlock\n~33% || - || 37.5% || ~43% || ~33%\nDebuff\n~22% || ~29% || - || ~29% || ~22%\nMulti Hit\n~33% || ~43% || 37.5% || - || ~33%\nBig Hit\n~11% || ~14% || 12.5% || ~14% || -",
+   "found_with": "Act 3\n* Solo",
+   "notes": null,
+   "source_page": "Writhing_Mass"
+  },
+  {
+   "name": "Fungi Beast",
+   "zh": "真菌兽",
+   "zh_source": "project",
+   "act": 1,
+   "type": "Normal",
+   "hp": {
+    "asc0": [
+     22,
+     28
+    ],
+    "asc7": [
+     24,
+     28
+    ],
+    "asc8": null,
+    "asc9": null
+   },
+   "powers": "Spore Cloud 2",
+   "moves": [
+    {
+     "name": "Bite",
+     "kind": "Attack",
+     "intent_raw": "Attack2",
+     "damage": {
+      "asc0": 6
+     },
+     "effects": [],
+     "gives_to_player": [],
+     "gives_to_enemy": []
+    },
+    {
+     "name": "Grow",
+     "kind": "Buff",
+     "intent_raw": "Buff",
+     "damage": null,
+     "effects": [
+      "Gains 3 (A2: 4; A17: 5) Strength."
+     ],
+     "gives_to_player": [],
+     "gives_to_enemy": [
+      "Strength"
+     ]
+    }
+   ],
+   "ai": "Fungi Beast will use one of the following attacks each turn:\n* Bite (60% chance)\n* Grow (40% chance)\nFungi Beast will not use Bite 3 times in a row or Grow twice in a row.",
+   "found_with": "Act 1\nAs a hard pool encounter alongside:\n* 1 other Fungi Beast\nAs half of the Exordium Wildlife encounter along with either:\n* 1 Green Louse or Red Louse\n* 1 Acid Slime (M) or Spike Slime (M)\nIn the Hypnotizing Colored Mushrooms Event alongside:\n* 2 other Fungi Beasts\nAct 2\nAs a hard pool encounter alongside:\n* 1 Shelled Parasite",
+   "notes": null,
+   "source_page": "Fungi_Beast"
+  },
+  {
+   "name": "Taskmaster",
+   "zh": "监工",
+   "zh_source": "project",
+   "act": 2,
+   "type": "Elite",
+   "hp": {
+    "asc0": [
+     54,
+     60
+    ],
+    "asc7": null,
+    "asc8": [
+     57,
+     64
+    ],
+    "asc9": null
+   },
+   "powers": null,
+   "moves": [
+    {
+     "name": "Scouring Whip",
+     "kind": "Attack+Debuff",
+     "intent_raw": "DebuffAttack2",
+     "damage": {
+      "asc0": 7
+     },
+     "effects": [
+      "Adds (1 Wound; 2 (A2) ; 3 (A18) Wounds) into your discard pile.",
+      "(A18: Gains 1 Strength)"
+     ],
+     "gives_to_player": [],
+     "gives_to_enemy": [
+      "Strength"
+     ]
+    }
+   ],
+   "ai": null,
+   "found_with": "Act 2\nFound in the Slavers Elite encounter with:\n* Red Slaver\n* Blue Slaver\nFound in The Colosseum event alongside:\n* Gremlin Nob",
+   "notes": null,
+   "source_page": "Taskmaster"
+  },
+  {
+   "name": "Slot Placeholder",
+   "zh": "占位槽",
+   "zh_source": "project",
+   "act": null,
+   "type": "Minion",
+   "hp": {
+    "asc0": 0,
+    "asc7": null,
+    "asc8": null,
+    "asc9": null
+   },
+   "powers": null,
+   "moves": [],
+   "ai": null,
+   "found_with": null,
+   "source_page": null,
+   "notes": "无 wiki 页面。本项目内部死亡占位槽：Gremlin Leader / Bronze Automaton / The Collector 遭遇的空槽（对齐 C++ MonsterGroup 默认构造的 INVALID 槽），HP 0、无意图、不行动；战斗中生成怪（Rally/Spawn Orbs/Spawn Torch Heads）会原位覆写本槽。"
+  }
+ ]
+}
