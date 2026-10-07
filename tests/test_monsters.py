@@ -4567,7 +4567,7 @@ def test_romeo_mock_then_alternating():
 
 def test_bear_hug_lunge_maul_cycle():
     bc, m = solo_battle(Bear)
-    assert 38 <= m.hp <= 52
+    assert 38 <= m.hp <= 42  # wiki 38-42（lightspeed 表 52 系笔误，比照修正）
     assert m.current_move.name == "Bear Hug"
     bc.end_turn()  # 熊抱：敏捷 -2
     assert bc.player.statuses.get(PlayerStatus.DEXTERITY) == -2

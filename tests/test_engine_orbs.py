@@ -187,7 +187,7 @@ def test_rebound_two_layers_decrement():
 
 
 def test_storm_channels_on_power_card():
-    from sts.content.defect_cards import STORM
+    from sts.content.cards.defect import STORM
 
     bc = BattleContext(seed=514, deck=[STRIKE] * 10)
     bc.player.special["storm"] = 1
@@ -202,8 +202,8 @@ def test_storm_channels_on_power_card():
 
 
 def test_hello_world_generates_power():
-    from sts.content.defect_cards import CAPACITOR
-    from sts.content import defect_cards
+    from sts.content.cards.defect import CAPACITOR
+    import sts.content.cards.defect as defect_cards
 
     bc = BattleContext(seed=515, deck=[STRIKE] * 10)
     for seed_off in range(30):

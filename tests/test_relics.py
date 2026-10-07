@@ -1365,7 +1365,7 @@ def test_ring_of_the_serpent_draw_1_every_turn():
 
 
 def test_ninja_scroll_three_shivs():
-    from sts.content.silent_cards import SHIV
+    from sts.content.cards.silent import SHIV
 
     bc = BattleContext(seed=316, relics=[RelicId.NINJA_SCROLL], deck=[STRIKE] * 10)
     shivs = [c for c in bc.cards.hand if c.card is SHIV]
@@ -1440,7 +1440,7 @@ def test_teardrop_locket_starts_in_calm():
 
 
 def test_pure_water_and_holy_water_miracles():
-    from sts.content.watcher_cards import MIRACLE
+    from sts.content.cards.watcher import MIRACLE
 
     bc = BattleContext(seed=323, relics=[RelicId.PURE_WATER], deck=[STRIKE] * 10)
     assert len([c for c in bc.cards.hand if c.card is MIRACLE]) == 1
@@ -1589,3 +1589,76 @@ def test_turnip_blocks_frail():
     bc.add_to_bot(Actions.debuff_player(PlayerStatus.FRAIL, 2, True))
     run_queue(bc)
     assert not bc.player.statuses.has(PlayerStatus.FRAIL)
+
+
+# ---- wiki 比照补齐：BRIMSTONE/CHEMICAL_X/FROZEN_CORE/GOLDEN_EYE/MARK_OF_THE_BLOOM/BLACK_BLOOD ----
+
+
+def test_brimstone_strength_both_sides():
+    """BRIMSTONE 每回合开始 +2 力量/全体怪 +1。观察点：敌方回合结束后的
+    新回合（on_turn_start 在 after_monster_turns 内触发）。"""
+    # 用尖刺史莱姆（小）（无力量成长）排除 Cultist 仪式叠加干扰
+    from sts.content.monsters import SpikeSlimeS
+
+    bc = BattleContext(seed=238, encounter="cultist", relics=[RelicId.BRIMSTONE],
+                       deck=[STRIKE] * 10)
+    bc.monsters.monsters[0].statuses.set(MonsterStatus.STRENGTH, 0)  # 清 BRIMSTONE 预置
+    # 换成尖刺史莱姆断言：直接跟踪 BRIMSTONE 自身给怪加的力量
+    bc2 = BattleContext(seed=238, relics=[RelicId.BRIMSTONE], deck=[STRIKE] * 10)
+    m = bc2.monsters.monsters[0]
+    cultist_str = m.statuses.get(MonsterStatus.STRENGTH)  # 0
+    bc2.end_turn()
+    assert bc2.player.statuses.get(PlayerStatus.STRENGTH) == 2  # 回合 2 开始触发
+    # Cultist 仪式也会加力量——只断言 BRIMSTONE 的 +1 增量
+    assert m.statuses.get(MonsterStatus.STRENGTH) == cultist_str + 1
+    bc2.end_turn()
+    assert bc2.player.statuses.get(PlayerStatus.STRENGTH) == 4  # 每回合持续
+
+
+def test_chemical_x_bonus_energy():
+    from sts.content.cards import WHIRLWIND
+
+    bc = BattleContext(seed=239, relics=[RelicId.CHEMICAL_X])
+    setup_hand(bc, WHIRLWIND)
+    m = bc.monsters.monsters[0]
+    hp0 = m.hp
+    bc.play_card(0)  # 3 能量 + Chemical X 2 = 5 遍 × 5 伤（Whirlwind 5 伤 AoE）
+    assert m.hp == hp0 - 25
+    assert bc.player.energy == 0
+
+
+def test_frozen_core_channels_frost_on_empty_slot():
+    from sts.combat.types import Orb
+
+    bc = BattleContext(seed=240, relics=[RelicId.FROZEN_CORE], deck=[STRIKE] * 10)
+    bc.end_turn()  # 无球空槽 → 引导 1 冰球
+    assert bc.player.orbs == [Orb.FROST]
+
+
+def test_golden_eye_scry_bonus():
+    bc = BattleContext(seed=241, deck=[STRIKE] * 15)
+    bc.player  # noqa
+    bc2 = BattleContext(seed=241, relics=[RelicId.GOLDEN_EYE], deck=[STRIKE] * 15)
+    bc2.open_scry(3)
+    assert len(bc2.scry_cards) == 5  # 3 + 2
+    bc2.choose_scry(5)
+
+
+def test_mark_of_the_bloom_blocks_healing():
+    bc = BattleContext(seed=242, relics=[RelicId.MARK_OF_THE_BLOOM])
+    bc.player.hp = 40
+    bc.relics._heal(bc, 6)
+    assert bc.player.hp == 40  # 归零
+
+
+def test_black_blood_heals_12_on_victory():
+    from sts.combat.types import Outcome
+
+    bc = BattleContext(seed=243, relics=[RelicId.BLACK_BLOOD])
+    m = bc.monsters.monsters[0]
+    m.hp = 1
+    bc.player.hp = 40
+    setup_hand(bc, STRIKE)
+    bc.play_card(0)
+    assert bc.outcome == Outcome.PLAYER_VICTORY
+    assert bc.player.hp == 52

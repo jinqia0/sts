@@ -5,7 +5,7 @@
 Metamorphosis/Jack of All Trades/Transmutation/Violence/Madness）只断言结构性
 性质（张数/类型/费用/落堆），不锁随机结果。
 
-引擎接线状态（见 colorless_cards.py 模块注释）：
+引擎接线状态（见 cards/colorless.py 模块注释）：
 - Mayhem / Magnetism：钩子已接（前置提交 8de8f33），全流程可测；
 - Panache / Sadistic Nature / Dark Shackles(SHACKLED 回补)：仅标记/状态落地，
   触发段待引擎接线——对应测试只断言标记。
@@ -98,7 +98,7 @@ def pile_names(bc, pile) -> list:
 
 
 def test_colorless_reexport_via_cards_module():
-    import sts.content.colorless_cards as cc
+    import sts.content.cards.colorless as cc
     import sts.content.cards as cards_mod
 
     assert cards_mod.BANDAGE_UP is cc.BANDAGE_UP
@@ -107,9 +107,9 @@ def test_colorless_reexport_via_cards_module():
 
 
 def test_colorless_first_import_order_keeps_reexport():
-    """colorless_cards 被先行导入时，cards.py 的惰性 re-export 仍可用。"""
+    """cards.colorless 被先行导入时，包根 eager re-export 仍可用。"""
     code = (
-        "import sts.content.colorless_cards as cc; "
+        "import sts.content.cards.colorless as cc; "
         "from sts.content import cards; "
         "assert cards.BANDAGE_UP is cc.BANDAGE_UP; "
         "from sts.content.cards import REGRET"  # 诅咒 re-export 不受影响
@@ -959,7 +959,7 @@ def test_violence_hand_full_overflows_to_discard():
 
 
 def test_colorless_combat_pool_excludes_bandage_up():
-    from sts.content.colorless_cards import _random_colorless_card
+    from sts.content.cards.colorless import _random_colorless_card
 
     bc = BattleContext(seed=380)
     names = {_random_colorless_card(bc).name for _ in range(300)}

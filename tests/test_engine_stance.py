@@ -139,7 +139,7 @@ def test_swivel_makes_next_attack_free():
 
 def test_retained_card_increments():
     from sts.combat import BattleContext
-    from sts.content.watcher_cards import PERSEVERANCE, WINDMILL_STRIKE, SANDS_OF_TIME
+    from sts.content.cards.watcher import PERSEVERANCE, WINDMILL_STRIKE, SANDS_OF_TIME
 
     bc = BattleContext(seed=322, deck=[STRIKE] * 10)
     bc.cards.hand.clear()
@@ -159,7 +159,7 @@ def test_retained_card_increments():
 def test_establishment_discounts_retained():
     from sts.combat import BattleContext
     from sts.content.cards import STRIKE
-    from sts.content.watcher_cards import PROTECT
+    from sts.content.cards.watcher import PROTECT
 
     bc = BattleContext(seed=323, deck=[STRIKE] * 10)
     bc.player.special["establishment"] = 1

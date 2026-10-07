@@ -1,4 +1,4 @@
-"""诅咒卡逐卡断言（curses_cards.py；对齐 lightspeed useNoTriggerCard L933-961）。
+"""诅咒卡逐卡断言（cards/curses.py；对齐 lightspeed useNoTriggerCard L933-961）。
 
 构造手牌沿用 test_cards.py 的 setup_hand 模式（清空手牌直接放入指定卡，
 初始 5 张直接消失）。默认遭遇 cultist 首动 INCANTATION（无伤害），
@@ -11,7 +11,7 @@ import pytest
 from sts.combat import BattleContext
 from sts.combat.types import PlayerStatus
 from sts.content.cards import BURN, BURNING_PACT, DEFEND, STRIKE
-from sts.content.curses_cards import (
+from sts.content.cards.curses import (
     ASCENDERS_BANE,
     CLUMSY,
     CURSE_OF_THE_BELL,

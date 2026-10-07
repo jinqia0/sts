@@ -4,7 +4,7 @@ Cards.h 交叉校验费用/消耗/固有/X 费位）。
 逐卡至少 1 用例 + 升级分支；构造模式沿用 test_watcher_cards.py
 （setup_hand / fill_draw / add_cultist，出牌序列确定、不依赖初始洗牌）。
 
-三类接线状态分层断言（详见 defect_cards.py 模块注释）：
+三类接线状态分层断言（详见 cards/defect.py 模块注释）：
 - 引擎已接（充能球全套/EQUILIBRIUM/next_turn_energy/DRAW_REDUCTION 负层/
   CARD_SELECT/X 费快照/静态消耗位）：全流程断言；
 - 槽位落地 + 引擎接线需求（REBOUND 触发/LOCK_ON 乘区/bias_focus/
@@ -22,7 +22,7 @@ from sts.combat.actions import Actions
 from sts.combat.card_manager import MAX_HAND_SIZE
 from sts.combat.types import InputState, MonsterStatus, Orb, Outcome, PlayerStatus
 from sts.content.cards import BURN, CardDef, STRIKE, VOID
-from sts.content.defect_cards import (
+from sts.content.cards.defect import (
     AGGREGATE,
     ALL_FOR_ONE,
     AMPLIFY,
@@ -153,7 +153,7 @@ def to_discard(bc: BattleContext, *cards) -> None:
 
 def test_defect_reexport_via_cards_module():
     import sts.content.cards as cards_mod
-    import sts.content.defect_cards as d
+    import sts.content.cards.defect as d
 
     assert cards_mod.ZAP is d.ZAP
     assert cards_mod.METEOR_STRIKE is d.METEOR_STRIKE
@@ -164,9 +164,9 @@ def test_defect_reexport_via_cards_module():
 
 
 def test_defect_first_import_order_keeps_reexport():
-    """defect_cards 被先行导入时，cards.py 的惰性 re-export 仍可用。"""
+    """cards.defect 被先行导入时，包根 eager re-export 仍可用。"""
     code = (
-        "import sts.content.defect_cards as d; "
+        "import sts.content.cards.defect as d; "
         "from sts.content import cards; "
         "assert cards.ZAP is d.ZAP; "
         "from sts.content.cards import REGRET; "
@@ -179,7 +179,7 @@ def test_defect_first_import_order_keeps_reexport():
 def test_defect_card_count():
     """wiki 口径：4 基础 + 18 普通 + 36 非普通 + 17 稀有 = 75 个 CardDef
     （本模块另自 cards.py 导入 BURN/VOID 两个状态卡模板，不计入）。"""
-    import sts.content.defect_cards as d
+    import sts.content.cards.defect as d
 
     own = {n: g for n, g in vars(d).items()
            if isinstance(g, CardDef) and g not in (BURN, VOID)}
@@ -214,7 +214,7 @@ def test_defect_flags_per_cards_h():
     assert FORCE_FIELD.cost == 4 and FORCE_FIELD.upgraded_cost is None
     assert ECHO_FORM.ethereal
     # 无保留位（Cards.h doesCardSelfRetain 无 Defect 卡）与虚无（仅 ECHO_FORM）
-    for g in vars(sys.modules["sts.content.defect_cards"]).values():
+    for g in vars(sys.modules["sts.content.cards.defect"]).values():
         if isinstance(g, CardDef) and g not in (BURN, VOID):
             assert not g.self_retain, g.name
             assert g.ethereal is (g is ECHO_FORM), g.name
@@ -1264,7 +1264,7 @@ def test_white_noise_random_power():
 
 
 def test_white_noise_pool_excludes_self_repair():
-    from sts.content.defect_cards import SELF_REPAIR, _defect_pool
+    from sts.content.cards.defect import SELF_REPAIR, _defect_pool
 
     pool = _defect_pool("Power", exclude=(SELF_REPAIR,))
     assert SELF_REPAIR not in pool

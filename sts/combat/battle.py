@@ -224,8 +224,11 @@ class BattleContext:
                 raise ValueError("目标不可选")
 
         if inst.card.x_cost:
-            # X 费：消耗全部能量，能量快照进队列项（对齐 energyOnUse）
-            item = CardQueueItem(card=inst, target=target, energy_on_use=self.player.energy)
+            # X 费：消耗全部能量，能量快照进队列项（对齐 energyOnUse）；
+            # CHEMICAL_X：效果 +2 次（wiki）——快照值 = 能量 + 2
+            bonus = self.relics.chemical_x_bonus(self)
+            item = CardQueueItem(card=inst, target=target,
+                                 energy_on_use=self.player.energy + bonus)
             self.player.energy = 0
         else:
             cost = inst.cost
@@ -256,8 +259,8 @@ class BattleContext:
 
     def _gen_shiv(self) -> None:
         """生成 1 张 Shiv（AFTER_IMAGE/INFINITE_BLADES 状态结算；SHIV 定义
-        在内容层 silent_cards.py，惰性导入沿用 encounters 先例）。"""
-        from sts.content.silent_cards import SHIV
+        在内容层 cards/silent.py，惰性导入沿用 encounters 先例）。"""
+        from sts.content.cards.silent import SHIV
 
         self.cards.create_temp_card_in_hand(SHIV)
 
@@ -314,7 +317,9 @@ class BattleContext:
     # ---- Scry（批次 E：对齐 InputState::SCRY，C++ 无实现按 wiki 自建）----
     def open_scry(self, count: int) -> None:
         """检视抽牌堆顶 count 张：不足取全部。展示顺序 = 堆顶优先（抽牌
-        从 draw_pile 尾弹出，故展示 = 尾部倒序）。无牌时直接结束。"""
+        从 draw_pile 尾弹出，故展示 = 尾部倒序）。无牌时直接结束。
+        GOLDEN_EYE：额外检视 2 张（wiki）。"""
+        count += self.relics.golden_eye_scry_bonus(self)
         n = min(count, len(self.cards.draw_pile))
         if n <= 0:
             return
@@ -606,7 +611,7 @@ class BattleContext:
         p.apply_end_of_turn_powers(self)
         # Watcher special 回合末钩子：study（生成 Insight）/omega（全体 50/60）
         if self.player.special.get("study"):
-            from sts.content.watcher_cards import INSIGHT
+            from sts.content.cards.watcher import INSIGHT
 
             self.cards.create_temp_card_in_hand(INSIGHT, self.player.special.get("master_reality", False))
         if self.player.special.get("omega"):
@@ -667,13 +672,13 @@ class BattleContext:
             self.player.statuses.add(PlayerStatus.FOCUS, -n_bias)
         n_hw = self.player.special.pop("hello_world", 0)
         if n_hw:
-            from sts.content.defect_cards import random_power_card
+            from sts.content.cards.defect import random_power_card
 
             for _ in range(n_hw):
                 self.cards.create_temp_card_in_hand(random_power_card(), False)
         n_ca = self.player.special.pop("creative_ai", 0)
         if n_ca:
-            from sts.content.defect_cards import random_power_card
+            from sts.content.cards.defect import random_power_card
 
             for _ in range(n_ca):
                 self.cards.create_temp_card_in_hand(random_power_card(), False)
@@ -688,7 +693,7 @@ class BattleContext:
         if n_scry:
             self.open_scry(n_scry)
         if self.player.special.get("battle_hymn"):
-            from sts.content.watcher_cards import SMITE
+            from sts.content.cards.watcher import SMITE
 
             for _ in range(self.player.special["battle_hymn"]):
                 self.cards.create_temp_card_in_hand(SMITE, self.player.special.get("master_reality", False))
@@ -696,7 +701,7 @@ class BattleContext:
             self.player.special["deva_form_counter"] = self.player.special.get("deva_form_counter", 1) + 1
             self.add_to_bot(Actions.gain_energy(self.player.special["deva_form_counter"] - 1))
         if self.player.special.pop("collect_miracles", 0):
-            from sts.content.watcher_cards import MIRACLE
+            from sts.content.cards.watcher import MIRACLE
 
             self.cards.create_temp_card_in_hand(MIRACLE, True)  # 必须升级版
         # Wave of the Hand 每回合清零

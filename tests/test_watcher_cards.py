@@ -4,7 +4,7 @@ Cards.h 交叉校验费用/消耗/保留/固定位）。
 逐卡至少 1 用例 + 升级分支；构造模式沿用 test_silent_cards.py
 （setup_hand / fill_draw / add_cultist，出牌序列确定、不依赖初始洗牌）。
 
-三类接线状态分层断言（详见 watcher_cards.py 模块注释）：
+三类接线状态分层断言（详见 cards/watcher.py 模块注释）：
 - 引擎已接（MANTRA/DEVOTION/RUSHDOWN/Scry/Retain/VIGOR/next_turn_draw 等）：
   全流程断言；
 - 内容层仿真（Calm 退出 +2 能量 / Divinity 进入 +3 能量 / Flurry 回手 /
@@ -31,7 +31,7 @@ from sts.combat.types import InputState, MonsterStatus, Outcome, PlayerStatus, S
 from sts.content.cards import CardDef, STRIKE, WOUND
 from sts.content.monsters import Cultist
 
-from sts.content.watcher_cards import (
+from sts.content.cards.watcher import (
     ALPHA,
     BATTLE_HYMN,
     BETA,
@@ -156,7 +156,7 @@ def pile_names(bc, pile) -> list[str]:
 
 def test_watcher_reexport_via_cards_module():
     import sts.content.cards as cards_mod
-    import sts.content.watcher_cards as w
+    import sts.content.cards.watcher as w
 
     assert cards_mod.ERUPTION is w.ERUPTION
     assert cards_mod.WORSHIP is w.WORSHIP
@@ -168,9 +168,9 @@ def test_watcher_reexport_via_cards_module():
 
 
 def test_watcher_first_import_order_keeps_reexport():
-    """watcher_cards 被先行导入时，cards.py 的惰性 re-export 仍可用。"""
+    """cards.watcher 被先行导入时，包根 eager re-export 仍可用。"""
     code = (
-        "import sts.content.watcher_cards as w; "
+        "import sts.content.cards.watcher as w; "
         "from sts.content import cards; "
         "assert cards.ERUPTION is w.ERUPTION; "
         "from sts.content.cards import REGRET; "
@@ -183,7 +183,7 @@ def test_watcher_first_import_order_keeps_reexport():
 def test_watcher_card_count():
     """wiki 口径：池内 75（4 基础 + 19 普通 + 35 非普通 + 17 稀有）+ 8 生成卡
     = 83 个 CardDef。"""
-    import sts.content.watcher_cards as w
+    import sts.content.cards.watcher as w
 
     cards = [g for g in vars(w).values() if isinstance(g, CardDef)]
     assert len(cards) == 83
@@ -304,7 +304,7 @@ def test_vigilance_upgraded_12_block():
 
 
 def test_calm_exit_grants_2_energy():
-    """Keywords#Stance：退出平静 +2 能量（内容层仿真，见 watcher_cards 注释）。"""
+    """Keywords#Stance：退出平静 +2 能量（内容层仿真，见 cards/watcher 注释）。"""
     bc = BattleContext(seed=708, deck=[STRIKE] * 10)
     setup_hand(bc, VIGILANCE, ERUPTION)
     bc.player.energy = 5
@@ -1114,7 +1114,7 @@ def test_foreign_influence_upgraded_zero_cost():
 
 
 def test_foreign_influence_pool_exclusions():
-    from sts.content.watcher_cards import _foreign_influence_pool
+    from sts.content.cards.watcher import _foreign_influence_pool
 
     pool = _foreign_influence_pool()
     names = {c.name for c in pool}

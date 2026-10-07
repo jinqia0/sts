@@ -2,4 +2,7 @@
 
 引擎（sts/combat/）不感知任何具体卡牌与怪物；本包把效果表达为
 「向 BattleContext 入队原子动作」。扩内容 = 往这里加定义，不动引擎。
+
+卡牌按类别收拢在 cards/ 包（CardDef 于 _base.py，六类各一模块，
+包根统一 re-export）；怪物在 monsters.py；遭遇在 encounters.py。
 """

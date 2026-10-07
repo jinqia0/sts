@@ -7,7 +7,7 @@ Cards.h 交叉校验费用/消耗/固定位；状态语义对齐 lightspeed C++ 
 即判负"的守卫（battle.py execute_actions），测试中清空抽牌堆的用例必须
 在断言前保留至少一张牌在手/堆中。
 
-引擎接线状态（见 silent_cards.py 模块注释）：
+引擎接线状态（见 cards/silent.py 模块注释）：
 - 已接（f0d724f / 批次 A）：POISON/ENVENOM/CORPSE_EXPLOSION/弃牌管线/
   Retain/next_turn_cards/special["wlp"]/NO_DRAW/NOXIOUS_FUMES 落点等——
   全流程断言；
@@ -30,7 +30,7 @@ from sts.content.cards import CardDef
 from sts.content.monsters import Cultist
 
 from sts.content.cards import STRIKE
-from sts.content.silent_cards import (
+from sts.content.cards.silent import (
     ENDLESS_AGONY,
     EVISCERATE,
     ACCURACY,
@@ -148,7 +148,7 @@ def pile_names(bc, pile) -> list[str]:
 
 
 def test_silent_reexport_via_cards_module():
-    import sts.content.silent_cards as sc
+    import sts.content.cards.silent as sc
     import sts.content.cards as cards_mod
 
     assert cards_mod.SHIV is sc.SHIV
@@ -161,9 +161,9 @@ def test_silent_reexport_via_cards_module():
 
 
 def test_silent_first_import_order_keeps_reexport():
-    """silent_cards 被先行导入时，cards.py 的惰性 re-export 仍可用。"""
+    """cards.silent 被先行导入时，包根 eager re-export 仍可用。"""
     code = (
-        "import sts.content.silent_cards as sc; "
+        "import sts.content.cards.silent as sc; "
         "from sts.content import cards; "
         "assert cards.SHIV is sc.SHIV; "
         "from sts.content.cards import REGRET; "  # 诅咒 re-export 不受影响
@@ -175,7 +175,7 @@ def test_silent_first_import_order_keeps_reexport():
 def test_silent_card_count_and_types():
     """wiki 口径：75 张（4 基础 + 19 普通 + 33 非普通 + 19 稀有，含跳过的
     Alchemize）；本模块正式定义 74 张 + SHIV = 75 个 CardDef。"""
-    import sts.content.silent_cards as sc
+    import sts.content.cards.silent as sc
 
     cards = [g for g in vars(sc).values() if isinstance(g, CardDef)]
     assert len(cards) == 75

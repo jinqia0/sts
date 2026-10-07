@@ -5094,7 +5094,8 @@ class Bear(Monster):
 
     name = "Bear"
     zh = "大熊"
-    hp_range = (38, 52)
+    # wiki：38-42（lightspeed 表 {{38,52}} 系其笔误——wiki/官方数据 38-42，wiki 比照修正）
+    hp_range = (38, 42)
 
     BEAR_HUG = MoveDef("Bear Hug", "熊抱", "debuff", intent_text="敏捷 -2")
     LUNGE = MoveDef("Lunge", "突袭", "attack", base_damage=9)
@@ -5105,7 +5106,7 @@ class Bear(Monster):
 
     @classmethod
     def create(cls, bc: BattleContext, idx: int) -> "Bear":
-        hp = bc.rngs.monster_hp.int_inclusive(*(40, 44) if bc.ascension >= 7 else (38, 52))
+        hp = bc.rngs.monster_hp.int_inclusive(*(40, 44) if bc.ascension >= 7 else (38, 42))
         return cls(idx, hp, hp)
 
     def get_move_for_roll(self, bc: BattleContext, roll: int) -> MoveDef:

@@ -64,7 +64,7 @@ from sts.combat.actions import Actions
 from sts.combat.card_manager import MAX_HAND_SIZE
 from sts.combat.queue import Action, CardQueueItem
 from sts.combat.types import MonsterStatus, Orb, PlayerStatus, Stance
-from sts.content import cards as _content_cards
+from sts.content.cards import ironclad as _ironclad_cards  # CombatCardPool 口径：当前职业（铁甲）的卡池
 from sts.content.cards import _STRIKE_CARD_NAMES as _STRIKE_NAMES  # 打击牌族（isStrikeCard）
 from sts.content.cards import CardDef, HAND_OF_GREED
 
@@ -94,14 +94,15 @@ def _combat_card_pool(ctype: str | None = None) -> list[CardDef]:
     """铁甲色随机卡池（对齐 getTrulyRandomCardInCombat，Game.cpp:215-219 /
     221-224：CombatCardPool / CombatTypeCardPool）。
 
-    动态扫描 content.cards 模块级 CardDef：批次 4 新增卡自动入池。
+    动态扫描 cards.ironclad 模块级 CardDef（包化前 = 平铺 cards.py 的
+    vars()，即铁甲卡；批次 4 新增卡自动入池）：
     排除无色（_COLORLESS_CARDS，C++ CombatCardPool 不含无色）与
     状态/诅咒（池仅 Attack/Skill/Power）。按 name 排序保证抽样映射
     确定（DESIGN.md §3：不做轨迹对齐，池序不向 C++ blob 看齐）。
     """
     pool = [
         g
-        for g in vars(_content_cards).values()
+        for g in vars(_ironclad_cards).values()
         if isinstance(g, CardDef)
         and g.ctype in ("Attack", "Skill", "Power")
         and g not in _COLORLESS_CARDS
@@ -268,6 +269,13 @@ class RelicId(IntEnum):
     ODD_MUSHROOM = 110  # 自身易伤仅 +25% 伤害（乘区 1.5→1.25，wiki）
     GINGER = 111  # 不可被施加虚弱（wiki）
     TURNIP = 112  # 不可被施加脆弱（wiki）
+    # ---- wiki 比照补齐（2026-10-07，diff_wiki TODO 接线清单）----
+    BRIMSTONE = 113  # 回合开始 +2 力量、全体敌人 +1 力量（铁甲商店，wiki）
+    CHEMICAL_X = 114  # X 费卡效果 +2（商店，wiki）
+    FROZEN_CORE = 115  # 回合结束存在空球槽 → 引导 1 冰球（故障 Boss，wiki）
+    GOLDEN_EYE = 116  # 每次 Scry 额外 Scry 2 张（观者稀有，wiki）
+    MARK_OF_THE_BLOOM = 117  # 战斗中无法回复 HP（事件，wiki）
+    BLACK_BLOOD = 118  # Burning Blood 升级版：胜利回复 12 HP（铁甲 Boss，wiki）
 
 
 class RelicContainer:
@@ -323,6 +331,8 @@ class RelicContainer:
         Player.cpp:161-163 为 floor（×3/2 整除），奇数治疗量少 1——审计
         批次修正为 (×3+1)//2（半值进位，偶数治疗量不变）。
         """
+        if self.has(RelicId.MARK_OF_THE_BLOOM):
+            return 0  # 无法回复 HP（wiki，事件遗物）
         if self.has(RelicId.MAGIC_FLOWER):
             amount = (amount * 3 + 1) // 2
         return amount
@@ -460,20 +470,20 @@ class RelicContainer:
             elif rid == RelicId.PURE_WATER:
                 # wiki：At the start of each combat, add 1 [Retain] Miracle
                 # into your hand（观者开局遗物；MIRACLE 自带保留）
-                from sts.content.watcher_cards import MIRACLE
+                from sts.content.cards.watcher import MIRACLE
 
                 _temp_card_into_hand(bc, MIRACLE)
             elif rid == RelicId.HOLY_WATER:
                 # wiki：At the start of each combat, add 3 Miracles into
                 # your hand（PURE_WATER 的 Boss 升级版）
-                from sts.content.watcher_cards import MIRACLE
+                from sts.content.cards.watcher import MIRACLE
 
                 for _ in range(3):
                     _temp_card_into_hand(bc, MIRACLE)
             elif rid == RelicId.NINJA_SCROLL:
                 # wiki：At the start each combat, add 3 Shivs into your hand
                 #（抽首手前入手；现行版为生成 Shiv，非旧版"+4 Shiv 伤害"）
-                from sts.content.silent_cards import SHIV
+                from sts.content.cards.silent import SHIV
 
                 for _ in range(3):
                     _temp_card_into_hand(bc, SHIV)
@@ -614,6 +624,12 @@ class RelicContainer:
         # 不符；审计批次改走 gain_mantra 统一入口——满 10 进 DIVINITY）
         if self.has(RelicId.DAMARU):
             p.gain_mantra(bc, 1)
+        # BRIMSTONE（wiki）：回合开始 +2 力量、全体敌人 +1 力量
+        if self.has(RelicId.BRIMSTONE):
+            p.statuses.add(PlayerStatus.STRENGTH, 2)
+            for m in bc.monsters.monsters:
+                if m.is_targetable():
+                    m.statuses.add(MonsterStatus.STRENGTH, 1)
         # EMOTION_CHIP（wiki：If you lost HP during the previous turn,
         # trigger the passive ability of all Orbs at the start of your turn；
         # lightspeed Player.cpp:299/518 两处 TODO 未实现，审计批次补）。
@@ -1032,7 +1048,7 @@ class RelicContainer:
         # 清单原记"每回合 Scry 1"系误记）。入队而非直接开：动作在本次抽牌
         # 全部完成后弹出（wiki：triggers after the cards causing the shuffle
         # are fully drawn），open_scry 挂 SCRY 输入态由外部 choose_scry 恢复
-        # ——与观者 Foresight 的既有接线模式一致（content/watcher_cards.py
+        # ——与观者 Foresight 的既有接线模式一致（content/cards/watcher.py
         # 同为 Action(lambda bc: bc.open_scry(n))）。Golden Eye 才 +5，未迁移。
         if self.has(RelicId.MELANGE):
             bc.add_to_bot(Action(lambda bc2: bc2.open_scry(3)))
@@ -1059,6 +1075,14 @@ class RelicContainer:
     def player_vulnerable_multiplier(self, bc: BattleContext) -> float:
         """玩家易伤受伤乘区（ODD_MUSHROOM：1.5 → 1.25）。"""
         return 1.25 if self.has(RelicId.ODD_MUSHROOM) else 1.5
+
+    def chemical_x_bonus(self, bc: BattleContext) -> int:
+        """CHEMICAL_X：X 费卡效果 +2（wiki）。battle.play_card 快照能量时加成。"""
+        return 2 if self.has(RelicId.CHEMICAL_X) else 0
+
+    def golden_eye_scry_bonus(self, bc: BattleContext) -> int:
+        """GOLDEN_EYE：每次 Scry 额外检视 2 张（wiki）。"""
+        return 2 if self.has(RelicId.GOLDEN_EYE) else 0
 
     def debuff_player_allowed(self, status) -> bool:
         """玩家可施加状态拦截（GINGER：不可虚弱；TURNIP：不可脆弱）。"""
@@ -1129,6 +1153,9 @@ class RelicContainer:
         # 仅一次（批次 1 修正：原实现 turn>=7 每回合触发与 C++ 不符）
         if self.has(RelicId.STONE_CALENDAR) and bc.turn == 7:
             bc.add_to_bot(Actions.damage_all_enemy(52))
+        # FROZEN_CORE（wiki）：回合结束存在空充能球槽 → 引导 1 冰球
+        if self.has(RelicId.FROZEN_CORE) and len(bc.player.orbs) < bc.player.orb_slots:
+            bc.add_to_bot(Actions.channel_orb(Orb.FROST))
         # NILRYS_CODEX：L2046-2048（选卡 + 卡池，批次 3+）
 
     # ============================================================
@@ -1144,6 +1171,9 @@ class RelicContainer:
         # BURNING_BLOOD：L569-573
         if self.has(RelicId.BURNING_BLOOD):
             self._heal(bc, 6)
+        # BLACK_BLOOD：Burning Blood 升级版（wiki：回复 12）
+        if self.has(RelicId.BLACK_BLOOD):
+            self._heal(bc, 12)
         # MEAT_ON_THE_BONE：L581-585（curHp ≤ maxHp/2，整数除法等价 hp*2 ≤ max）
         if self.has(RelicId.MEAT_ON_THE_BONE):
             if p.hp * 2 <= p.max_hp:
