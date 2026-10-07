@@ -13,7 +13,17 @@ from __future__ import annotations
 
 import numpy as np
 
-from sts.env import ACTION_END_TURN, HAND_SLOT_BASE, TARGETED_BASE, StsBattleEnv
+from sts.combat.types import InputState
+from sts.env import (
+    ACTION_END_TURN,
+    HAND_SLOT_BASE,
+    N_SELECT_WINDOW,
+    SCRY_BASE,
+    SELECT_BASE,
+    SELECT_CONFIRM,
+    TARGETED_BASE,
+    StsBattleEnv,
+)
 
 EVAL_SEEDS = range(100)
 
@@ -89,6 +99,19 @@ def heuristic_policy(env: StsBattleEnv) -> int:
     """
     bc = env.bc
     mask = env.action_masks()
+
+    # ---- 挂起态安全闸（批次 5b）----
+    # env 现在可到达 CARD_SELECT/SCRY（选卡/检视卡牌组）：启发式本体
+    # 只懂出牌逻辑，挂起态下按「最保守合法动作」推进，避免返回非法的
+    # END_TURN。更聪明的选卡/药水启发式是 5c 训练侧的事。
+    if bc.input_state == InputState.CARD_SELECT:
+        if mask[SELECT_CONFIRM]:
+            return SELECT_CONFIRM  # can_pick_zero：空选最保守
+        return SELECT_BASE + int(np.flatnonzero(mask[SELECT_BASE : SELECT_BASE + N_SELECT_WINDOW])[0])
+    if bc.input_state == InputState.SCRY:
+        # 保守：全部保留（不弃牌不改变抽牌节奏）
+        k = int(np.flatnonzero(mask[SCRY_BASE:]).max())
+        return SCRY_BASE + k
 
     # 可打出的攻击清单（槽号, 出伤估值），能量贪心从高到低
     attacks = [
