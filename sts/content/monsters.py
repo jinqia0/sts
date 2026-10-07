@@ -4994,3 +4994,146 @@ class CorruptHeart(Monster):
             case _:
                 raise AssertionError(f"未知招式 {move}")
         self.turns_taken += 1
+
+
+# ---- 红面具帮（Masked Bandits 事件专属，MonsterSpecific.cpp:405-437/2946-2958）----
+
+
+class Pointy(Monster):
+    """尖刺（红面具帮三当家的）：固定 5×2 段攻击（A2 起 6×2），无 roll。
+
+    lightspeed MonsterIds.h monsterHpRange：30 固定（A7+ 34）。
+    """
+
+    name = "Pointy"
+    zh = "尖刺"
+    hp_range = (30, 30)
+
+    ATTACK = MoveDef("Attack", "戳刺", "attack", base_damage=5)  # ×2 段
+
+    def __init__(self, idx: int, hp: int, max_hp: int):
+        super().__init__(idx, hp, max_hp, "尖刺(Pointy)")
+        if hp > 30:  # A7+ 段伤害提升
+            self.ATTACK = MoveDef("Attack", "戳刺", "attack", base_damage=6)
+
+    @classmethod
+    def create(cls, bc: BattleContext, idx: int) -> "Pointy":
+        asc = bc.ascension
+        hp = 34 if asc >= 7 else 30
+        return cls(idx, hp, hp)
+
+    def get_move_for_roll(self, bc: BattleContext, roll: int) -> MoveDef:
+        return self.ATTACK
+
+    def take_turn(self, bc: BattleContext) -> None:
+        dmg = bc.calculate_monster_damage(self, 6 if bc.ascension >= 2 else 5)
+        bc.log.append(f"{self.display_name} 使用 戳刺(Attack)。")
+        for _ in range(2):
+            bc.add_to_bot(Actions.attack_player(self.idx, dmg))
+        bc.add_to_bot(Actions.no_op_roll_move())
+        self.turns_taken += 1
+
+
+class Romeo(Monster):
+    """罗密欧（红面具帮二当家的）：首回合嘲讽（无效果），此后痛苦斩与
+    十字斩交替。HP 35-39（A7+ 37-41）。
+
+    痛苦斩 10 伤 + 2 层虚弱（A17: 3）；十字斩 15 伤（A2: 17）。
+    """
+
+    name = "Romeo"
+    zh = "罗密欧"
+    hp_range = (35, 39)
+
+    MOCK = MoveDef("Mock", "嘲讽", "unknown", intent_text="（无效果）")
+    AGONIZING_SLASH = MoveDef("Agonizing Slash", "痛苦斩", "attack", base_damage=10)
+    CROSS_SLASH = MoveDef("Cross Slash", "十字斩", "attack", base_damage=15)
+
+    def __init__(self, idx: int, hp: int, max_hp: int):
+        super().__init__(idx, hp, max_hp, "罗密欧(Romeo)")
+
+    @classmethod
+    def create(cls, bc: BattleContext, idx: int) -> "Romeo":
+        hp = bc.rngs.monster_hp.int_inclusive(*(37, 41) if bc.ascension >= 7 else (35, 39))
+        return cls(idx, hp, hp)
+
+    def get_move_for_roll(self, bc: BattleContext, roll: int) -> MoveDef:
+        if self.turns_taken == 0:
+            return self.MOCK
+        return self.AGONIZING_SLASH
+
+    def take_turn(self, bc: BattleContext) -> None:
+        asc = bc.ascension
+        move = self.move_history[0]
+        match move.name:
+            case "Mock":
+                bc.log.append(f"{self.display_name} 使用 嘲讽(Mock)。")
+                self.set_move(self.AGONIZING_SLASH)
+            case "Agonizing Slash":
+                dmg = bc.calculate_monster_damage(self, 10)
+                weak = 3 if asc >= 17 else 2
+                bc.log.append(f"{self.display_name} 使用 痛苦斩(Agonizing Slash)。")
+                bc.add_to_bot(Actions.attack_player(self.idx, dmg))
+                bc.add_to_bot(Actions.debuff_player(PlayerStatus.WEAK, weak, True))
+                self.set_move(self.CROSS_SLASH)
+            case "Cross Slash":
+                dmg = bc.calculate_monster_damage(self, 17 if asc >= 2 else 15)
+                bc.log.append(f"{self.display_name} 使用 十字斩(Cross Slash)。")
+                bc.add_to_bot(Actions.attack_player(self.idx, dmg))
+                self.set_move(self.AGONIZING_SLASH)
+            case _:
+                raise AssertionError(f"未知招式 {move}")
+        bc.add_to_bot(Actions.no_op_roll_move())
+        self.turns_taken += 1
+
+
+class Bear(Monster):
+    """大熊（红面具帮大当家的）：熊抱（敏捷 -2/A17 -4）→ 突袭（9 伤+9 格挡，
+    A2: 10）→ 撕裂（18 伤，A2: 20）→ 突袭↔撕裂循环。HP 38-52（A7+ 40-44）。
+    """
+
+    name = "Bear"
+    zh = "大熊"
+    hp_range = (38, 52)
+
+    BEAR_HUG = MoveDef("Bear Hug", "熊抱", "debuff", intent_text="敏捷 -2")
+    LUNGE = MoveDef("Lunge", "突袭", "attack", base_damage=9)
+    MAUL = MoveDef("Maul", "撕裂", "attack", base_damage=18)
+
+    def __init__(self, idx: int, hp: int, max_hp: int):
+        super().__init__(idx, hp, max_hp, "大熊(Bear)")
+
+    @classmethod
+    def create(cls, bc: BattleContext, idx: int) -> "Bear":
+        hp = bc.rngs.monster_hp.int_inclusive(*(40, 44) if bc.ascension >= 7 else (38, 52))
+        return cls(idx, hp, hp)
+
+    def get_move_for_roll(self, bc: BattleContext, roll: int) -> MoveDef:
+        if self.turns_taken == 0:
+            return self.BEAR_HUG
+        return self.LUNGE
+
+    def take_turn(self, bc: BattleContext) -> None:
+        asc = bc.ascension
+        move = self.move_history[0]
+        match move.name:
+            case "Bear Hug":
+                dex_loss = 4 if asc >= 17 else 2
+                bc.log.append(f"{self.display_name} 使用 熊抱(Bear Hug)，敏捷 -{dex_loss}。")
+                bc.add_to_bot(Actions.debuff_player(PlayerStatus.DEXTERITY, -dex_loss, True))
+                self.set_move(self.LUNGE)
+            case "Lunge":
+                dmg = bc.calculate_monster_damage(self, 10 if asc >= 2 else 9)
+                bc.log.append(f"{self.display_name} 使用 突袭(Lunge)。")
+                bc.add_to_bot(Actions.attack_player(self.idx, dmg))
+                bc.add_to_bot(Actions.monster_gain_block(self.idx, 9))
+                self.set_move(self.MAUL)
+            case "Maul":
+                dmg = bc.calculate_monster_damage(self, 20 if asc >= 2 else 18)
+                bc.log.append(f"{self.display_name} 使用 撕裂(Maul)。")
+                bc.add_to_bot(Actions.attack_player(self.idx, dmg))
+                self.set_move(self.LUNGE)
+            case _:
+                raise AssertionError(f"未知招式 {move}")
+        bc.add_to_bot(Actions.no_op_roll_move())
+        self.turns_taken += 1

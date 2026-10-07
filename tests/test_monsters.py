@@ -35,6 +35,7 @@ from sts.content.monsters import (
     Donu,
     Exploder,
     FatGremlin,
+    Bear,
     FungiBeast,
     GiantHead,
     GremlinLeader,
@@ -54,6 +55,8 @@ from sts.content.monsters import (
     RedSlaver,
     Reptomancer,
     Repulsor,
+    Pointy,
+    Romeo,
     Sentry,
     ShelledParasite,
     ShieldGremlin,
@@ -4523,3 +4526,92 @@ def test_audit_centurion_protect_self_when_mystic_dead():
     force_intent(centurion, Centurion.DEFEND)
     bc.end_turn()
     assert centurion.block == 15
+
+
+# ---- 档 1：事件战斗遭遇（Pointy/Romeo/Bear + 6 遭遇装配）----
+
+
+def test_pointy_fixed_double_attack():
+    bc, m = solo_battle(Pointy)
+    assert m.hp == 30 and m.max_hp == 30
+    assert m.current_move.kind == "attack"
+    bc.end_turn()
+    assert bc.player.hp == PLAYER_MAX_HP - 10  # 5 × 2 段
+    bc2, _ = solo_battle(Pointy, ascension=7)
+    assert bc2.monsters.monsters[0].hp == 34  # A7+ 固定 34
+    bc3, _ = solo_battle(Pointy, ascension=2)
+    bc3.end_turn()
+    assert bc3.player.hp == PLAYER_MAX_HP - 12  # A2: 6×2
+
+
+def test_romeo_mock_then_alternating():
+    bc, m = solo_battle(Romeo)
+    assert 35 <= m.hp <= 39
+    assert m.current_move.name == "Mock"
+    bc.end_turn()  # 嘲讽：无效果
+    assert bc.player.hp == PLAYER_MAX_HP
+    assert m.current_move.name == "Agonizing Slash"
+    bc.end_turn()  # 痛苦斩 10 + 2 虚弱
+    assert bc.player.hp == PLAYER_MAX_HP - 10
+    assert bc.player.statuses.get(PlayerStatus.WEAK) == 2
+    assert m.current_move.name == "Cross Slash"
+    hp = bc.player.hp
+    bc.end_turn()  # 十字斩 15
+    assert bc.player.hp == hp - 15
+    assert m.current_move.name == "Agonizing Slash"  # 循环
+    bc4, m4 = solo_battle(Romeo, ascension=17)
+    m4.set_move(Romeo.AGONIZING_SLASH)
+    bc4.end_turn()
+    assert bc4.player.statuses.get(PlayerStatus.WEAK) == 3
+
+
+def test_bear_hug_lunge_maul_cycle():
+    bc, m = solo_battle(Bear)
+    assert 38 <= m.hp <= 52
+    assert m.current_move.name == "Bear Hug"
+    bc.end_turn()  # 熊抱：敏捷 -2
+    assert bc.player.statuses.get(PlayerStatus.DEXTERITY) == -2
+    assert m.current_move.name == "Lunge"
+    bc.end_turn()  # 突袭 9 + 9 格挡
+    assert bc.player.hp == PLAYER_MAX_HP - 9
+    assert m.block == 9
+    assert m.current_move.name == "Maul"
+    hp = bc.player.hp
+    bc.end_turn()  # 撕裂 18
+    assert bc.player.hp == hp - 18
+    assert m.current_move.name == "Lunge"  # 循环
+    # A17 熊抱 -4 敏捷
+    bc5, _ = solo_battle(Bear, ascension=17)
+    bc5.end_turn()
+    assert bc5.player.statuses.get(PlayerStatus.DEXTERITY) == -4
+
+
+@pytest.mark.parametrize("name,check", [
+    ("mushrooms_event", lambda bc: len(bc.monsters.monsters) == 3
+        and all(isinstance(m, FungiBeast) for m in bc.monsters.monsters)),
+    ("colosseum_slavers", lambda bc: len(bc.monsters.monsters) == 2),
+    ("colosseum_nobs", lambda bc: len(bc.monsters.monsters) == 2),
+    ("mysterious_sphere", lambda bc: len(bc.monsters.monsters) == 2),
+    ("masked_bandits", lambda bc: [m.display_name for m in bc.monsters.monsters]
+        == ["尖刺(Pointy)", "罗密欧(Romeo)", "大熊(Bear)"]),
+])
+def test_event_encounter_composition(name, check):
+    for seed in range(6):
+        bc = BattleContext(seed=seed, encounter=name)
+        assert check(bc), f"{name} seed={seed}"
+
+
+def test_dead_adventurer_three_options():
+    seen = set()
+    for seed in range(60):
+        bc = BattleContext(seed=seed, encounter="dead_adventurer")
+        seen.add(bc.monsters.monsters[0].__class__.__name__)
+    assert seen == {"Lagavulin", "GremlinNob", "Sentry"}
+
+
+def test_mindbloom_boss_three_options():
+    seen = set()
+    for seed in range(60):
+        bc = BattleContext(seed=seed, encounter="mindbloom_boss")
+        seen.add(bc.monsters.monsters[0].__class__.__name__)
+    assert seen == {"TheGuardian", "Hexaghost", "SlimeBoss"}

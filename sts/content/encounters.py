@@ -87,6 +87,7 @@ from sts.content.monsters import (
     AcidSlimeL,
     AcidSlimeM,
     AcidSlimeS,
+    Bear,
     AwakenedOne,
     BlueSlaver,
     BookOfStabbing,
@@ -111,6 +112,8 @@ from sts.content.monsters import (
     GremlinWizard,
     Hexaghost,
     JawWorm,
+    Pointy,
+    Romeo,
     Lagavulin,
     Looter,
     MadGremlin,
@@ -537,6 +540,57 @@ def _setup_the_heart(bc: BattleContext) -> None:
     _spawn(bc, CorruptHeart)
 
 
+# ---- 事件战斗遭遇（档 1：事件审计报告——战斗组件已齐备的事件形态；
+# 事件后奖励（金币/遗物/卡）属局外层，单战框架不模拟）----
+
+
+def _setup_mushrooms_event(bc: BattleContext) -> None:
+    """Mushrooms 事件：3×真菌兽（事件审计档 1）。"""
+    _spawn(bc, FungiBeast, FungiBeast, FungiBeast)
+
+
+def _setup_dead_adventurer(bc: BattleContext) -> None:
+    """Dead Adventurer 事件：三选一精英战（拉格维林/小鬼巨汉/三哨卫）。"""
+    roll = bc.rngs.misc.int_inclusive(0, 2)
+    if roll == 0:
+        _spawn(bc, Lagavulin)
+    elif roll == 1:
+        _spawn(bc, GremlinNob)
+    else:
+        _spawn(bc, Sentry, Sentry, Sentry)
+
+
+def _setup_colosseum_slavers(bc: BattleContext) -> None:
+    """Colosseum 事件第一战：蓝+红奴役者（原版两连战，单战框架拆开注册）。"""
+    _spawn(bc, BlueSlaver, RedSlaver)
+
+
+def _setup_colosseum_nobs(bc: BattleContext) -> None:
+    """Colosseum 事件第二战：监工+小鬼巨汉（COLOSSEUM_EVENT_NOBS）。"""
+    _spawn(bc, Taskmaster, GremlinNob)
+
+
+def _setup_mysterious_sphere(bc: BattleContext) -> None:
+    """Mysterious Sphere 事件：2×奥术行走者。"""
+    _spawn(bc, OrbWalker, OrbWalker)
+
+
+def _setup_masked_bandits(bc: BattleContext) -> None:
+    """Masked Bandits 事件：红面具帮（尖刺+罗密欧+大熊）。"""
+    _spawn(bc, Pointy, Romeo, Bear)
+
+
+def _setup_mindbloom_boss(bc: BattleContext) -> None:
+    """Mindbloom 事件：随机 Act 1 Boss（本体 shuffle 三选一）。"""
+    roll = bc.rngs.misc.int_inclusive(0, 2)
+    if roll == 0:
+        _spawn(bc, TheGuardian)
+    elif roll == 1:
+        _spawn(bc, Hexaghost)
+    else:
+        _spawn(bc, SlimeBoss)
+
+
 ENCOUNTERS = {
     "cultist": _setup_cultist,
     "jaw_worm": _setup_jaw_worm,
@@ -597,7 +651,14 @@ ENCOUNTERS = {
     "donu_and_deca": _setup_donu_and_deca,
     # ---- Act 4（批次 D）----
     "shield_and_spear": _setup_shield_and_spear,
-    "the_heart": _setup_the_heart,
+    "the_heart": _setup_the_heart,    "mushrooms_event": _setup_mushrooms_event,
+    "dead_adventurer": _setup_dead_adventurer,
+    "colosseum_slavers": _setup_colosseum_slavers,
+    "colosseum_nobs": _setup_colosseum_nobs,
+    "mysterious_sphere": _setup_mysterious_sphere,
+    "masked_bandits": _setup_masked_bandits,
+    "mindbloom_boss": _setup_mindbloom_boss,
+
 }
 
 
