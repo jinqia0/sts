@@ -929,9 +929,9 @@ class BattleContext:
         d = float(base_damage)
         d += m.statuses.get(MonsterStatus.STRENGTH)
         if m.statuses.has(MonsterStatus.WEAK):
-            d *= 0.75
+            d *= self.relics.monster_weak_multiplier(self)  # PAPER_KRANE：0.75→0.6
         if self.player.statuses.has(PlayerStatus.VULNERABLE):
-            d *= 1.5
+            d *= self.relics.player_vulnerable_multiplier(self)  # ODD_MUSHROOM：1.5→1.25
         return max(0, math.floor(d))
 
     # ---- 结束判定（对齐 checkCombat / die）----

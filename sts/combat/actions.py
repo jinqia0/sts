@@ -316,6 +316,8 @@ class Actions:
     @staticmethod
     def debuff_player(status: IntEnum, amount: int, is_source_monster: bool) -> Action:
         def run(bc: BattleContext) -> None:
+            if not bc.relics.debuff_player_allowed(status):
+                return  # GINGER（不可虚弱）/ TURNIP（不可脆弱），wiki
             bc.player.statuses.add(status, amount)
             if is_source_monster and status.name in ("WEAK", "VULNERABLE", "FRAIL"):
                 bc.player.statuses.set_just_applied(status, True)
@@ -348,6 +350,8 @@ class Actions:
             if bc.player.statuses.has(PlayerStatus.SADISTIC):
                 bc.add_to_bot(
                     Actions.damage_enemy(idx, bc.player.statuses.get(PlayerStatus.SADISTIC)))
+            # 审计批次：施加 debuff 后的遗物触发（CHAMPION_BELT/SNECKO_SKULL）
+            bc.relics.on_monster_debuff_applied(bc, status, idx)
 
         return Action(run)
 
@@ -369,6 +373,7 @@ class Actions:
                     m.statuses.set_just_applied(status, True)
                 if sadistic > 0:
                     bc.add_to_bot(Actions.damage_enemy(m.idx, sadistic))
+                bc.relics.on_monster_debuff_applied(bc, status, m.idx)
 
         return Action(run)
 

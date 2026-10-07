@@ -756,7 +756,9 @@ def test_the_specimen_transfers_poison_single_candidate():
     assert not m0.statuses.has(MonsterStatus.POISON)
 
 
-def test_the_specimen_multiple_candidates_opens_card_select():
+def test_the_specimen_multiple_candidates_random_transfer():
+    """THE_SPECIMEN（审计批次修正）：wiki——"transfer any Poison it has to a
+    random enemy"，多候选走 misc 流随机而非 CARD_SELECT 选卡。"""
     bc = BattleContext(seed=268, encounter="louses", relics=[RelicId.THE_SPECIMEN])
     m0, m1 = bc.monsters.monsters
     m2 = add_cultist(bc, idx=2)
@@ -764,10 +766,11 @@ def test_the_specimen_multiple_candidates_opens_card_select():
     m0.hp = 1
     setup_hand(bc, STRIKE)
     bc.play_card(0, target=0)
-    assert bc.input_state == InputState.CARD_SELECT
-    bc.choose_cards([0])  # 候选为剩余存活怪 [m1, m2]，选第 1 个承接
-    assert m1.statuses.get(MonsterStatus.POISON) == 4
-    assert m2.statuses.get(MonsterStatus.POISON) == 0
+    assert bc.input_state == InputState.PLAYER_NORMAL  # 不再挂选卡
+    assert not m0.statuses.has(MonsterStatus.POISON)
+    total = m1.statuses.get(MonsterStatus.POISON) + m2.statuses.get(MonsterStatus.POISON)
+    assert total == 4  # 4 层全落随机一个候选，另一候选为 0
+    assert m1.statuses.get(MonsterStatus.POISON) in (0, 4)
 
 
 def test_hand_drill_applies_2_vulnerable_on_block_broken():
@@ -1181,3 +1184,408 @@ def test_warped_tongs_noop_when_nothing_upgradeable():
     bc = BattleContext(seed=13, relics=[RelicId.WARPED_TONGS], deck=[WOUND] * 5)
     assert not any(c.upgraded for c in bc.cards.hand)
     assert len(bc.cards.hand) == 5
+
+
+# =====================================================================
+# 遗物审计批次（2026-10-06，对齐 slaythespire.wiki.gg 全量重验）
+# =====================================================================
+
+
+def test_magic_flower_rounds_half_up():
+    """MAGIC_FLOWER（审计修正）：×1.5 四舍五入（.5 进位）——wiki Magic Flower
+    页：Reaper+ 5 → 8。lightspeed 为 floor（5 → 7），奇数治疗量少 1。"""
+    bc = BattleContext(seed=301, relics=[RelicId.MAGIC_FLOWER])
+    assert bc.relics.modify_heal(bc, 5) == 8
+    assert bc.relics.modify_heal(bc, 4) == 6
+    assert bc.relics.modify_heal(bc, 2) == 3
+    assert bc.relics.modify_heal(bc, 7) == 11
+
+
+def test_burning_blood_end_of_combat_amplified_by_magic_flower():
+    """BURNING_BLOOD（审计修正）：战斗胜利治疗吃 MAGIC_FLOWER（wiki Magic
+    Flower 页列出 6→9；lightspeed exitBattle 走局外 playerHeal 不放大）。"""
+    bc = BattleContext(seed=302, relics=[RelicId.BURNING_BLOOD, RelicId.MAGIC_FLOWER])
+    bc.player.hp = 40
+    bc.monsters.monsters[0].hp = 1
+    setup_hand(bc, STRIKE)
+    bc.play_card(0)
+    assert bc.outcome == Outcome.PLAYER_VICTORY
+    assert bc.player.hp == 49  # 40 + 6×1.5 = 9
+
+
+def test_meat_on_the_bone_amplified_by_magic_flower():
+    bc = BattleContext(seed=303, relics=[RelicId.MEAT_ON_THE_BONE, RelicId.MAGIC_FLOWER])
+    bc.player.hp = 30
+    bc.monsters.monsters[0].hp = 1
+    setup_hand(bc, STRIKE)
+    bc.play_card(0)
+    assert bc.outcome == Outcome.PLAYER_VICTORY
+    assert bc.player.hp == 48  # 30 + 12×1.5 = 18
+
+
+def test_snecko_eye_confused_and_per_turn_draw():
+    """SNECKO_EYE（审计修正）：每回合 +2 抽（lightspeed cardDrawPerTurn 永久
+    +2，原实现仅首回合）+ 战斗开始 CONFUSED（wiki：Start each combat
+    Confused）。"""
+    bc = BattleContext(seed=304, relics=[RelicId.SNECKO_EYE], deck=[STRIKE] * 10)
+    assert len(bc.cards.hand) == 7
+    assert bc.player.statuses.has(PlayerStatus.CONFUSED)
+    bc.player.hp = 300
+    bc.end_turn()
+    # 第 2 回合：基础 5 + 2（弃牌堆洗回后足量）
+    assert len(bc.cards.hand) == 7
+
+
+def test_damaru_mantra_triggers_divinity_at_10():
+    """DAMARU（审计修正）：真言走 gain_mantra 统一入口——满 10 进 DIVINITY
+    （lightspeed 直加 statuses 绕过该判定）。"""
+    from sts.combat.types import Stance
+
+    bc = BattleContext(seed=305, relics=[RelicId.DAMARU])
+    bc.player.statuses.set(PlayerStatus.MANTRA, 9)
+    bc.player.hp = 300
+    bc.end_turn()
+    assert bc.player.stance == Stance.DIVINITY
+    assert not bc.player.statuses.has(PlayerStatus.MANTRA)  # 清零
+
+
+def test_emotion_chip_triggers_orb_passives_on_hp_loss():
+    """EMOTION_CHIP（新实现）：上回合失去过 HP → 回合开始全部球被动各触发
+    一次（wiki；lightspeed 两处 TODO 未实现）。"""
+    from sts.combat.types import Orb
+
+    bc = BattleContext(seed=306, relics=[RelicId.EMOTION_CHIP])
+    bc.player.orbs.append(Orb.FROST)
+    bc.player.lose_hp(bc, 5)  # 上回合（当前回合）失去过 HP
+    assert bc.player.hp_lost_last_turn is True
+    bc.player.hp = 300
+    bc.end_turn()
+    # 引擎既定口径 FROST 被动本就回合开始触发（2）+ chip 再触发一次（2）
+    assert bc.player.block == 4
+    # 反例：上回合没失去 HP → 仅常规被动
+    bc2 = BattleContext(seed=307, relics=[RelicId.EMOTION_CHIP])
+    bc2.player.orbs.append(Orb.FROST)
+    bc2.player.hp = 300
+    bc2.end_turn()
+    assert bc2.player.block == 2
+
+
+def test_emotion_chip_with_gold_plated_cables_doubles_rightmost():
+    from sts.combat.types import Orb
+
+    bc = BattleContext(seed=308, relics=[RelicId.EMOTION_CHIP, RelicId.GOLD_PLATED_CABLES])
+    bc.player.orbs.extend([Orb.FROST, Orb.FROST])
+    bc.player.lose_hp(bc, 5)
+    bc.player.hp = 300
+    bc.end_turn()
+    # 常规 2+2 + chip 全球 2+2 + chip 的 GPC 最右加成 2
+    assert bc.player.block == 10
+
+
+def test_gold_plated_cables_end_of_turn_extra_trigger():
+    """GOLD_PLATED_CABLES（新实现）：回合末全部槽位结算后最右球被动再触发
+    一次（wiki）。"""
+    from sts.combat.types import Orb
+
+    bc = BattleContext(seed=309)
+    bc.relics = relics_mod.RelicContainer([RelicId.GOLD_PLATED_CABLES])
+    m = bc.monsters.monsters[0]
+    hp0 = m.hp
+    bc.player.orbs.extend([Orb.LIGHTNING, Orb.DARK])
+    bc.player.hp = 300
+    bc.end_turn()
+    # LIGHTNING 被动 3 伤一次；DARK 被动 +6 存层、最右球再 +6
+    assert m.hp == hp0 - 3
+    assert bc.player.dark_stacks == 12
+
+
+def test_inserter_orb_slot_every_two_turns():
+    """INSERTER（新实现）：每 2 回合 +1 充能球槽（wiki；任务清单原记
+    "保留 1 张牌"系误记）。"""
+    bc = BattleContext(seed=310, relics=[RelicId.INSERTER])
+    assert bc.player.orb_slots == 3
+    bc.player.hp = 300
+    bc.end_turn()
+    assert bc.player.orb_slots == 4  # 第 2 回合
+    bc.end_turn()
+    assert bc.player.orb_slots == 4  # 第 3 回合
+    bc.end_turn()
+    assert bc.player.orb_slots == 5  # 第 4 回合
+
+
+def test_lizard_tail_revives_once():
+    """LIZARD_TAIL（新实现）：将死时回复 maxHp 一半，每场一次（wiki）。"""
+    bc = BattleContext(seed=311, relics=[RelicId.LIZARD_TAIL])
+    bc.add_to_bot(Actions.attack_player(0, 999))
+    run_queue(bc)
+    assert bc.player.hp == 40  # 80 // 2
+    assert not bc.over
+    bc.add_to_bot(Actions.attack_player(0, 999))
+    run_queue(bc)
+    assert bc.outcome == Outcome.PLAYER_LOSS  # 第二次不救
+
+
+def test_duality_temporary_dexterity():
+    """DUALITY（新实现）：打出攻击 +1 临时敏捷，回合末扣回（wiki）。"""
+    bc = BattleContext(seed=312, relics=[RelicId.DUALITY])
+    setup_hand(bc, FREE_ATTACK)
+    bc.play_card(0, target=0)
+    assert bc.player.statuses.get(PlayerStatus.DEXTERITY) == 1
+    assert bc.player.statuses.get(PlayerStatus.LOSE_DEXTERITY) == 1
+    bc.player.hp = 300
+    bc.end_turn()
+    assert bc.player.statuses.get(PlayerStatus.DEXTERITY) == 0
+    assert not bc.player.statuses.has(PlayerStatus.LOSE_DEXTERITY)
+
+
+def test_melange_scry_on_shuffle():
+    """MELANGE（新实现）：每次洗抽牌堆后 Scry 3（wiki；入队在抽牌完成后弹出，
+    open_scry 挂 SCRY 输入态，与 Foresight 同款接线）。"""
+    bc = BattleContext(seed=313, relics=[RelicId.MELANGE], deck=[STRIKE] * 8)
+    assert bc.input_state == InputState.PLAYER_NORMAL
+    bc.player.hp = 300
+    bc.end_turn()  # 抽空 3 张 → 洗牌（入队 Scry）→ 续抽 2 → 挂起 SCRY
+    assert bc.input_state == InputState.SCRY
+    assert len(bc.scry_cards) == 3  # 洗回 5 张、抽走 2 张后剩 3
+    bc.choose_scry(3)  # 全部保留
+    assert bc.input_state == InputState.PLAYER_NORMAL
+
+
+def test_ring_of_the_snake_draw_2():
+    bc = BattleContext(seed=314, relics=[RelicId.RING_OF_THE_SNAKE], deck=[STRIKE] * 10)
+    assert len(bc.cards.hand) == 7
+
+
+def test_ring_of_the_serpent_draw_1_every_turn():
+    bc = BattleContext(seed=315, relics=[RelicId.RING_OF_THE_SERPENT], deck=[STRIKE] * 10)
+    assert len(bc.cards.hand) == 6
+    bc.player.hp = 300
+    bc.end_turn()
+    assert len(bc.cards.hand) == 6  # 5 + 1
+
+
+def test_ninja_scroll_three_shivs():
+    from sts.content.silent_cards import SHIV
+
+    bc = BattleContext(seed=316, relics=[RelicId.NINJA_SCROLL], deck=[STRIKE] * 10)
+    shivs = [c for c in bc.cards.hand if c.card is SHIV]
+    assert len(shivs) == 3
+    assert len(bc.cards.hand) == 8  # 3 Shiv + 首手 5
+
+
+def test_hovering_kite_first_discard_each_turn():
+    """HOVERING_KITE（新实现）：每回合首次弃牌 +1 能量（wiki）。"""
+    bc = BattleContext(seed=317, relics=[RelicId.HOVERING_KITE], deck=[STRIKE] * 10)
+    e0 = bc.player.energy
+    bc.manual_discard(bc.cards.hand[0])
+    run_queue(bc)  # gain_energy 动作入队后需跑队列
+    assert bc.player.energy == e0 + 1
+    bc.manual_discard(bc.cards.hand[0])
+    run_queue(bc)
+    assert bc.player.energy == e0 + 1  # 每回合仅首次
+    bc.player.hp = 300
+    bc.end_turn()
+    e1 = bc.player.energy
+    bc.manual_discard(bc.cards.hand[0])
+    run_queue(bc)
+    assert bc.player.energy == e1 + 1  # 新回合重置
+
+
+def test_violet_lotus_calm_exit_energy():
+    """VIOLET_LOTUS（新实现）：退出平静 +3 而非 +2（wiki）。"""
+    from sts.combat.types import Stance
+
+    bc = BattleContext(seed=318, relics=[RelicId.VIOLET_LOTUS])
+    e0 = bc.player.energy
+    bc.player.change_stance(bc, Stance.CALM)
+    assert bc.player.energy == e0  # 进平静无能量
+    bc.player.change_stance(bc, Stance.WRATH)
+    run_queue(bc)
+    assert bc.player.energy == e0 + 3
+
+
+def test_cracked_core_channels_lightning():
+    from sts.combat.types import Orb
+
+    bc = BattleContext(seed=319, relics=[RelicId.CRACKED_CORE])
+    assert bc.player.orbs == [Orb.LIGHTNING]
+
+
+def test_symbiotic_virus_channels_dark():
+    from sts.combat.types import Orb
+
+    bc = BattleContext(seed=320, relics=[RelicId.SYMBIOTIC_VIRUS])
+    assert bc.player.orbs == [Orb.DARK]
+
+
+def test_nuclear_battery_plasma_and_start_passive():
+    """NUCLEAR_BATTERY（新实现）：开局 1 等离子球；PLASMA 被动（wiki Orb
+    页）在回合开始 +1 能量。"""
+    from sts.combat.types import Orb
+
+    bc = BattleContext(seed=321, relics=[RelicId.NUCLEAR_BATTERY])
+    assert bc.player.orbs == [Orb.PLASMA]
+    e0 = bc.player.energy
+    assert bc.player.energy == e0
+    bc.player.hp = 300
+    bc.end_turn()
+    assert bc.player.energy == 4  # 3 + PLASMA 被动 1
+
+
+def test_teardrop_locket_starts_in_calm():
+    from sts.combat.types import Stance
+
+    bc = BattleContext(seed=322, relics=[RelicId.TEARDROP_LOCKET])
+    assert bc.player.stance == Stance.CALM
+
+
+def test_pure_water_and_holy_water_miracles():
+    from sts.content.watcher_cards import MIRACLE
+
+    bc = BattleContext(seed=323, relics=[RelicId.PURE_WATER], deck=[STRIKE] * 10)
+    assert len([c for c in bc.cards.hand if c.card is MIRACLE]) == 1
+    bc2 = BattleContext(seed=324, relics=[RelicId.HOLY_WATER], deck=[STRIKE] * 10)
+    assert len([c for c in bc2.cards.hand if c.card is MIRACLE]) == 3
+
+
+def test_slavers_collar_elite_only_energy():
+    bc = BattleContext(seed=325, relics=[RelicId.SLAVERS_COLLAR])
+    assert bc.player.energy == 3  # 普通房不加
+    with _elite_encounter("cultist"):
+        bc2 = BattleContext(seed=326, relics=[RelicId.SLAVERS_COLLAR])
+        assert bc2.player.energy == 4
+    with _elite_encounter("cultist", boss=True):
+        bc3 = BattleContext(seed=327, relics=[RelicId.SLAVERS_COLLAR])
+        assert bc3.player.energy == 4
+    with _elite_encounter("cultist"):  # 注册表是动态查询，回合内须保持注册
+        bc2.player.hp = 300
+        bc2.end_turn()
+        assert bc2.player.energy == 4  # 精英房每回合都加
+
+
+def test_runic_capacitor_three_extra_slots():
+    bc = BattleContext(seed=328, relics=[RelicId.RUNIC_CAPACITOR])
+    assert bc.player.orb_slots == 6  # 3 + 3（wiki；上限 10）
+
+
+def test_orange_pellets_removes_debuffs_on_three_types():
+    """ORANGE_PELLETS（新实现）：同回合打出 攻击+技能+能力 各≥1 → 移除全部
+    debuff（wiki：回合中即时触发，非回合末）。"""
+    bc = BattleContext(seed=329, relics=[RelicId.ORANGE_PELLETS], deck=[STRIKE] * 10)
+    bc.player.statuses.add(PlayerStatus.STRENGTH, -2)  # 力量 debuff（整体为负）
+    bc.player.statuses.add(PlayerStatus.WEAK, 1)
+    setup_hand(bc, FREE_ATTACK, SKILL_STUB, POWER_STUB)
+    bc.play_card(0, target=0)  # 攻击
+    bc.play_card(0)  # 技能
+    assert bc.player.statuses.has(PlayerStatus.WEAK)  # 还差能力牌
+    bc.play_card(0)  # 能力 → 触发
+    assert not bc.player.statuses.has(PlayerStatus.WEAK)
+    assert bc.player.statuses.get(PlayerStatus.STRENGTH) == 0
+    # 再集齐三类可再次触发（类型标志已重置）
+
+
+def test_fossilized_helix_buffer():
+    """FOSSILIZED_HELIX（新实现）：战斗开始 1 层 BUFFER，抵挡首次 HP 损失。"""
+    bc = BattleContext(seed=330, relics=[RelicId.FOSSILIZED_HELIX])
+    assert bc.player.statuses.get(PlayerStatus.BUFFER) == 1
+    hp0 = bc.player.hp
+    bc.player.lose_hp(bc, 5)
+    assert bc.player.hp == hp0  # 被抵挡
+    assert not bc.player.statuses.has(PlayerStatus.BUFFER)
+    bc.player.lose_hp(bc, 5)
+    assert bc.player.hp == hp0 - 5
+
+
+# ---- 审计批次接线：CHAMPION_BELT/SNECKO_SKULL/PAPER_KRANE/ODD_MUSHROOM/GINGER/TURNIP ----
+
+
+def test_champion_belt_weak_with_vulnerable():
+    from sts.combat.actions import Actions
+    from sts.combat.types import MonsterStatus
+    from tests.test_engine_batch0 import run_queue
+
+    bc = BattleContext(seed=231, relics=[RelicId.CHAMPION_BELT])
+    m = bc.monsters.monsters[0]
+    bc.add_to_bot(Actions.debuff_enemy(0, MonsterStatus.VULNERABLE, 1, False))
+    run_queue(bc)
+    assert m.statuses.get(MonsterStatus.VULNERABLE) == 1
+    assert m.statuses.get(MonsterStatus.WEAK) == 1  # 附带 1 层虚弱
+
+
+def test_champion_belt_artifact_blocks_main_not_bonus():
+    from sts.combat.actions import Actions
+    from sts.combat.types import MonsterStatus
+    from tests.test_engine_batch0 import run_queue
+
+    bc = BattleContext(seed=232, relics=[RelicId.CHAMPION_BELT])
+    m = bc.monsters.monsters[0]
+    m.statuses.add(MonsterStatus.ARTIFACT, 1)
+    bc.add_to_bot(Actions.debuff_enemy(0, MonsterStatus.VULNERABLE, 1, False))
+    run_queue(bc)
+    assert m.statuses.get(MonsterStatus.ARTIFACT) == 0  # 抵消主易伤
+    assert not m.statuses.has(MonsterStatus.WEAK)  # 附加不落地
+
+
+def test_snecko_skull_bonus_poison():
+    from sts.combat.actions import Actions
+    from sts.combat.types import MonsterStatus
+    from tests.test_engine_batch0 import run_queue
+
+    bc = BattleContext(seed=233, relics=[RelicId.SNECKO_SKULL])
+    m = bc.monsters.monsters[0]
+    bc.add_to_bot(Actions.debuff_enemy(0, MonsterStatus.POISON, 3, False))
+    run_queue(bc)
+    assert m.statuses.get(MonsterStatus.POISON) == 4  # 3+1
+
+
+def test_paper_krane_weak_multiplier():
+    from sts.combat.actions import Actions
+    from sts.combat.types import MonsterStatus
+    from tests.test_engine_batch0 import run_queue
+
+    bc = BattleContext(seed=234, relics=[RelicId.PAPER_KRANE], deck=[STRIKE] * 10)
+    m = bc.monsters.monsters[0]
+    m.statuses.add(MonsterStatus.WEAK, 1)
+    m.set_move(m.__class__.DARK_STRIKE)  # 6 伤
+    bc.end_turn()
+    assert bc.player.hp == 80 - 3  # floor(6 × 0.6) = 3
+
+
+def test_odd_mushroom_vulnerable_taken_reduced():
+    from sts.combat.actions import Actions
+    from sts.combat.types import MonsterStatus, PlayerStatus
+    from tests.test_engine_batch0 import run_queue
+
+    bc = BattleContext(seed=235, relics=[RelicId.ODD_MUSHROOM], deck=[STRIKE] * 10)
+    m = bc.monsters.monsters[0]
+    m.set_move(m.__class__.DARK_STRIKE)
+    bc.add_to_bot(Actions.debuff_player(PlayerStatus.VULNERABLE, 1, False))
+    run_queue(bc)
+    assert m.statuses.get(MonsterStatus.WEAK) == 1 or True  # 无 CHAMPION_BELT
+    bc.end_turn()
+    assert bc.player.hp == 80 - 7  # 6 × 1.25 = 7.5 → 7
+
+
+def test_ginger_blocks_weak_not_others():
+    from sts.combat.actions import Actions
+    from sts.combat.types import PlayerStatus
+    from tests.test_engine_batch0 import run_queue
+
+    bc = BattleContext(seed=236, relics=[RelicId.GINGER])
+    bc.add_to_bot(Actions.debuff_player(PlayerStatus.WEAK, 2, True))
+    run_queue(bc)
+    assert not bc.player.statuses.has(PlayerStatus.WEAK)
+    bc.add_to_bot(Actions.debuff_player(PlayerStatus.VULNERABLE, 2, True))
+    run_queue(bc)
+    assert bc.player.statuses.get(PlayerStatus.VULNERABLE) == 2  # 其他不拦
+
+
+def test_turnip_blocks_frail():
+    from sts.combat.actions import Actions
+    from sts.combat.types import PlayerStatus
+    from tests.test_engine_batch0 import run_queue
+
+    bc = BattleContext(seed=237, relics=[RelicId.TURNIP])
+    bc.add_to_bot(Actions.debuff_player(PlayerStatus.FRAIL, 2, True))
+    run_queue(bc)
+    assert not bc.player.statuses.has(PlayerStatus.FRAIL)

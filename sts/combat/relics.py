@@ -36,6 +36,18 @@ STRANGE_SPOON（L1985-1990，批次 1 已实现，批次 3 复核一致）；
 卡池范围见 CardPools.h（CombatCardPool L177-187 / CombatTypeCardPool
 L150-175 / CombatColorlessCardPool L189-198）与 Game.cpp:209-243、
 canUpgrade（CardInstance.cpp:55-59）、moveToHandHelper（BattleContext.cpp:2531-2537）。
+
+遗物审计批次（2026-10-06，wiki 全量重验）：以 slaythespire.wiki.gg 逐个
+核对全部战斗内遗物（~80 个已实现 + 任务清单点名项），修正 lightspeed
+继承错误（MAGIC_FLOWER 取整、胜利治疗吃放大、SNECKO_EYE 每回合计数、
+DAMARU 绕过 gain_mantra、THE_SPECIMEN 选卡→随机），并补齐 lightspeed
+留空的遗物（EMOTION_CHIP/INSERTER/LIZARD_TAIL/DUALITY/FOSSILIZED_HELIX
+等）与三职业专属战斗内遗物（MELANGE/RING_OF_THE_SERPENT/NINJA_SCROLL/
+HOVERING_KITE/VIOLET_LOTUS/CRACKED_CORE/PURE_WATER/HOLY_WATER/
+GOLD_PLATED_CABLES/SYMBIOTIC_VIRUS/TEARDROP_LOCKET/NUCLEAR_BATTERY/
+SLAVERS_COLLAR/RUNIC_CAPACITOR/ORANGE_PELLETS 等）。各条目注释标注 wiki
+依据；未接线项（CHAMPION_BELT/SNECKO_SKULL/PAPER_KRANE/GINGER/TURNIP/
+ODD_MUSHROOM——钩子位在 battle.py/actions.py）见审计报告。
 """
 
 from __future__ import annotations
@@ -51,7 +63,7 @@ if TYPE_CHECKING:
 from sts.combat.actions import Actions
 from sts.combat.card_manager import MAX_HAND_SIZE
 from sts.combat.queue import Action, CardQueueItem
-from sts.combat.types import MonsterStatus, PlayerStatus
+from sts.combat.types import MonsterStatus, Orb, PlayerStatus, Stance
 from sts.content import cards as _content_cards
 from sts.content.cards import _STRIKE_CARD_NAMES as _STRIKE_NAMES  # 打击牌族（isStrikeCard）
 from sts.content.cards import CardDef, HAND_OF_GREED
@@ -145,8 +157,8 @@ class RelicId(IntEnum):
     PRESERVED_INSECT = 13  # 精英房敌人 HP 减 25%（L316-323）
     PANTOGRAPH = 14  # Boss 房战斗开始回复 25 HP（L310-313）
     NEOWS_LAMENT = 15  # 跨战斗语义（跳过，批次 3+）
-    FOSSILIZED_HELIX = 16  # BUFFER 状态未迁移（跳过）
-    DATA_DISK = 17  # 战斗开始 +1 专长 FOCUS（L264-265；无充能球体系，状态惰性）
+    FOSSILIZED_HELIX = 16  # 战斗开始 1 层 BUFFER（wiki：Prevent the first time you would lose HP in combat；BUFFER 状态批次 F 已迁移，审计批次接线）
+    DATA_DISK = 17  # 战斗开始 +1 专长 FOCUS（L264-265）
     ECTOPLASM = 18  # 能量 +1，无法获得金币（战斗内无经济，仅能量；L136-138）
     SOZU = 19  # 能量 +1，无法使用药水（药水未迁移，仅能量；L214-216）
     BUSTED_CROWN = 20  # 能量 +1（L244-246；奖励卡惩罚为局外）
@@ -161,12 +173,12 @@ class RelicId(IntEnum):
     HAPPY_FLOWER = 29  # 每 3 回合 +1 能量（L148-154 + Player.cpp:522-527）
     INCENSE_BURNER = 30  # 每 6 回合获得 1 层 INTANGIBLE（L156-162 + Player.cpp:535-539）
     INK_BOTTLE = 31  # 每打出 10 张牌抽 1 张（L164-166 + onUseXxxCard 四处计数）
-    INSERTER = 32  # Retain 未实现（跳过）
+    INSERTER = 32  # 每 2 回合 +1 充能球槽（wiki：Every 2 turns, gain 1 Orb slot；任务清单原"保留 1 张牌"系误记）
     NUNCHAKU = 33  # 每打出 10 张攻击牌 +1 能量（L181-183 + BattleContext.cpp:1709-1714，跨回合累计）
     PEN_NIB = 34  # 打出第 10 张攻击牌后，下一张攻击伤害翻倍（L189-196 + L1697-1703）
     SUNDIAL = 35  # 每洗 3 次牌 +2 能量（L218-220 + onShuffle L2804-2811）
     OMAMORI = 36  # 装载 2 充能；抵消诅咒逻辑待"获得诅咒"事件源（L185-187；TODO，本框架战斗内无诅咒获得来源）
-    LIZARD_TAIL = 37  # 需要免死引擎位（跳过）
+    LIZARD_TAIL = 37  # 将死时回复 maxHp/2，每场一次（wiki：When you would die, heal to 50% of your Max HP instead. Works once.）
     MERCURY_HOURGLASS = 38  # 每回合开始对所有敌人 3 伤（L432-434 + Player.cpp:551-553）
     RED_SKULL = 39  # HP ≤50% 时持有 3 力量（进出半血线 ±3，Player.cpp:169-171/311-313 + L436-438）
     # ---- 战斗开始-抽牌前桶 ----
@@ -183,7 +195,7 @@ class RelicId(IntEnum):
     HORN_CLEAT = 48  # 第 2 回合开始 +14 格挡（Player.cpp:529-533，lightspeed turn==1）
     DAMARU = 49  # 每回合 +1 MANTRA（Player.cpp:513-516；无姿态体系，状态惰性）
     CAPTAINS_WHEEL = 50  # 第 3 回合开始 +18 格挡（Player.cpp:507-511，lightspeed turn==2）
-    EMOTION_CHIP = 51  # lightspeed 未实现（Player.cpp:299/518 两处 TODO），效果待核实
+    EMOTION_CHIP = 51  # 上回合失去过 HP → 回合开始全部充能球被动各触发一次（wiki；lightspeed 两处 TODO 未实现，审计批次补）
     POCKETWATCH = 52  # 上回合打出 ≤3 张牌 → 抽 3 张（Player.cpp:663-667）
     ICE_CREAM = 53  # 能量回合结束不清空（Player.cpp:715-720 rechargeEnergy）
     WARPED_TONGS = 54  # 每回合开始（含首回合）：随机升级 1 张手牌（Player.cpp:669-671 + Actions.cpp:940-960）
@@ -192,7 +204,7 @@ class RelicId(IntEnum):
     ORNAMENTAL_FAN = 56  # 每回合每打出 3 张攻击牌获得 4 格挡（L1683-1685）
     SHURIKEN = 57  # 每回合每打出 3 张攻击牌 +1 力量（L1687-1689）
     NECRONOMICON = 58  # 每回合首张 ≥2 费攻击牌（或 X 费 ≥2 能量）额外结算一次（L1691-1695 + Player.cpp:555-557）
-    DUALITY = 59  # TODO（Defect 奥义，批次 3+）
+    DUALITY = 59  # 每打出攻击牌 +1 临时敏捷（wiki：1 temporary Dexterity + 1 Dexterity Down；观者遗物，任务清单原记"Defect 奥义"系误记）
     LETTER_OPENER = 60  # 每回合每打出 3 张技能牌对所有敌人 5 伤（L1796-1800）
     BIRD_FACED_URN = 61  # 每打出能力牌回复 2 HP（L1854-1856）
     MUMMIFIED_HAND = 62  # 打出 Power 后：随机 1 张费用>0 的手牌本回合 0 费（L1874-1876 + L2847-2873）
@@ -232,6 +244,30 @@ class RelicId(IntEnum):
     # ---- 批次 A 新增（弃牌遗物；lightspeed 未实现效果，按 wiki 补）----
     TINGSHA = 89  # 每弃 1 张牌：随机敌人 3 伤
     TOUGH_BANDAGES = 90  # 每弃 1 张牌：得 3 格挡
+    # ---- 遗物审计批次（2026-10-06，对齐 slaythespire.wiki.gg 全量重验）----
+    MELANGE = 91  # 每次洗抽牌堆后 Scry 3（wiki；任务清单原记"每回合 Scry 1"系误记）
+    RING_OF_THE_SNAKE = 92  # 战斗开始额外抽 2 张（Silent 开局遗物，wiki）
+    RING_OF_THE_SERPENT = 93  # 每回合开始额外抽 1 张（Silent Boss，wiki）
+    NINJA_SCROLL = 94  # 战斗开始 3 张 Shiv 入手（wiki；旧版"+4 Shiv 伤害"已改版）
+    HOVERING_KITE = 95  # 每回合首次弃牌 +1 能量（Silent Boss，wiki）
+    VIOLET_LOTUS = 96  # 退出平静额外 +1 能量（2→3；观者 Boss，wiki）
+    CRACKED_CORE = 97  # 战斗开始引导 1 闪电球（Defect 开局遗物，wiki）
+    PURE_WATER = 98  # 战斗开始 1 张奇迹入手（观者开局遗物，wiki）
+    HOLY_WATER = 99  # 战斗开始 3 张奇迹入手（PURE_WATER 的 Boss 升级版，wiki）
+    GOLD_PLATED_CABLES = 100  # 回合末最右球被动额外触发一次（Defect，wiki）
+    SYMBIOTIC_VIRUS = 101  # 战斗开始引导 1 暗球（Defect，wiki）
+    TEARDROP_LOCKET = 102  # 战斗开始进入平静（观者，wiki）
+    NUCLEAR_BATTERY = 103  # 战斗开始引导 1 等离子球（Defect Boss，wiki）
+    SLAVERS_COLLAR = 104  # 精英/Boss 房每回合 +1 能量（Boss，wiki）
+    RUNIC_CAPACITOR = 105  # 战斗开始 +3 充能球槽（上限 10；Defect 商店，wiki）
+    ORANGE_PELLETS = 106  # 同回合打出过 攻击+技能+能力 各≥1 → 移除全部 debuff（商店，wiki；任务清单原记"战斗结束"系误记——为回合中触发）
+    # ---- 审计批次接线（2026-10-06 wiki 确认，钩子在 actions/battle）----
+    CHAMPION_BELT = 107  # 施加易伤时附带 1 层虚弱（wiki）
+    SNECKO_SKULL = 108  # 施加中毒时 +1 层（wiki）
+    PAPER_KRANE = 109  # 虚弱的敌人伤害再 -40%（乘区 0.75→0.6，wiki）
+    ODD_MUSHROOM = 110  # 自身易伤仅 +25% 伤害（乘区 1.5→1.25，wiki）
+    GINGER = 111  # 不可被施加虚弱（wiki）
+    TURNIP = 112  # 不可被施加脆弱（wiki）
 
 
 class RelicContainer:
@@ -252,6 +288,9 @@ class RelicContainer:
         self.relics: list[RelicId] = list(relic_ids or [])  # 获取顺序
         self._set = frozenset(self.relics)
         self.counters: dict[RelicId, int] = {r: 0 for r in self.relics}
+        # ORANGE_PELLETS 的"本回合出过能力牌"标志（攻击/技能直接读
+        # player.attacks/skills_played_this_turn；回合开始与触发后重置）
+        self._pellet_power_played = False
 
     def has(self, rid: RelicId) -> bool:
         return rid in self._set
@@ -278,9 +317,14 @@ class RelicContainer:
         bc.player.heal(amount, bc)
 
     def modify_heal(self, bc: BattleContext, amount: int) -> int:
-        """MAGIC_FLOWER：治疗量 ×3//2（Player.cpp:161-163，整数截断）。"""
+        """MAGIC_FLOWER：治疗 ×1.5，四舍五入（.5 进位）。
+
+        wiki Magic Flower：Reaper+ 5 → 8（5×1.5=7.5 → 8）。lightspeed
+        Player.cpp:161-163 为 floor（×3/2 整除），奇数治疗量少 1——审计
+        批次修正为 (×3+1)//2（半值进位，偶数治疗量不变）。
+        """
         if self.has(RelicId.MAGIC_FLOWER):
-            amount = amount * 3 // 2
+            amount = (amount * 3 + 1) // 2
         return amount
 
     def on_after_heal(self, bc: BattleContext, was_bloodied: bool) -> None:
@@ -348,9 +392,8 @@ class RelicContainer:
                     p.statuses.add(PlayerStatus.INTANGIBLE, 1)
             elif rid == RelicId.RED_SKULL:
                 # L436-438：开局已在半血线（hp ≤ max/2）→ +3 力量。
-                # 失 HP 跌破半血线的 +3 见 on_player_hp_was_lost；
-                # 治疗回到半血线以上的 -3（Player.cpp:169-171）因 Player.heal
-                # 无遗物钩子（entities.py 本批次不可改）暂缺，TODO。
+                # 失 HP 跌破半血线的 +3 见 on_player_hp_was_lost；治疗回到
+                # 半血线以上的 -3 见 on_after_heal（Player.heal 已接遗物钩子）。
                 if p.hp * 2 <= p.max_hp:
                     p.statuses.add(PlayerStatus.STRENGTH, 3)
             elif rid == RelicId.DU_VU_DOLL:
@@ -389,8 +432,64 @@ class RelicContainer:
                 # L264-265：+1 FOCUS（无充能球体系，状态惰性装载）
                 p.statuses.add(PlayerStatus.FOCUS, 1)
             elif rid == RelicId.DAMARU:
-                # L260-262：开局 MANTRA +1（每回合开始的 +1 见 on_turn_start）
-                p.statuses.add(PlayerStatus.MANTRA, 1)
+                # L260-262：开局 MANTRA +1（每回合开始的 +1 见 on_turn_start）。
+                # 走 Player.gain_mantra 统一入口（wiki：真言满 10 进 DIVINITY；
+                # lightspeed 直加 statuses 绕过该判定系其姿态体系未实现，
+                # 本项目姿态已迁移——审计批次修正）
+                p.gain_mantra(bc, 1)
+            elif rid == RelicId.SNECKO_EYE:
+                # wiki：Start each combat Confused（CONFUSED 状态已迁移，
+                # 抽到的牌费用随机 0~3；直接落状态不经 ARTIFACT 抵消——
+                # wiki Clockwork Souvenir 页确认 Artifact 不可抵消）。
+                # +2 抽牌见 on_battle_start_extra_draw / on_turn_start_post_draw。
+                p.statuses.add(PlayerStatus.CONFUSED, 1)
+            elif rid == RelicId.CRACKED_CORE:
+                # wiki：At the start of each combat, Channel 1 Lightning
+                #（Defect 开局遗物；引导先于其他球类遗物=获取序）
+                bc.add_to_bot(Actions.channel_orb(Orb.LIGHTNING))
+            elif rid == RelicId.SYMBIOTIC_VIRUS:
+                # wiki：At the start of each combat, Channel 1 Dark
+                bc.add_to_bot(Actions.channel_orb(Orb.DARK))
+            elif rid == RelicId.NUCLEAR_BATTERY:
+                # wiki：At the start of each combat, Channel 1 Plasma
+                bc.add_to_bot(Actions.channel_orb(Orb.PLASMA))
+            elif rid == RelicId.TEARDROP_LOCKET:
+                # wiki：Start each combat in Calm（进 Calm 不得能量、退出 +2/3；
+                # change_stance 从 NEUTRAL 切换无离开效果）
+                p.change_stance(bc, Stance.CALM)
+            elif rid == RelicId.PURE_WATER:
+                # wiki：At the start of each combat, add 1 [Retain] Miracle
+                # into your hand（观者开局遗物；MIRACLE 自带保留）
+                from sts.content.watcher_cards import MIRACLE
+
+                _temp_card_into_hand(bc, MIRACLE)
+            elif rid == RelicId.HOLY_WATER:
+                # wiki：At the start of each combat, add 3 Miracles into
+                # your hand（PURE_WATER 的 Boss 升级版）
+                from sts.content.watcher_cards import MIRACLE
+
+                for _ in range(3):
+                    _temp_card_into_hand(bc, MIRACLE)
+            elif rid == RelicId.NINJA_SCROLL:
+                # wiki：At the start each combat, add 3 Shivs into your hand
+                #（抽首手前入手；现行版为生成 Shiv，非旧版"+4 Shiv 伤害"）
+                from sts.content.silent_cards import SHIV
+
+                for _ in range(3):
+                    _temp_card_into_hand(bc, SHIV)
+            elif rid == RelicId.RUNIC_CAPACITOR:
+                # wiki：Start each combat with 3 additional Orb Slots
+                #（槽位上限 10）
+                p.orb_slots = min(10, p.orb_slots + 3)
+            elif rid == RelicId.FOSSILIZED_HELIX:
+                # wiki：Prevent the first time you would lose HP in combat
+                #（= 战斗开始 1 层 BUFFER；BUFFER 状态批次 F 已迁移）
+                p.statuses.add(PlayerStatus.BUFFER, 1)
+            elif rid == RelicId.INSERTER:
+                # wiki：Every 2 turns, gain 1 Orb slot。计数在回合开始递增
+                #（含首回合）→ 第 2/4/6… 回合 +1 槽；本钩子先 +1 计数补齐
+                # 首回合（本引擎 on_turn_start 首回合不调）
+                self.bump(RelicId.INSERTER)
             elif rid == RelicId.OMAMORI:
                 # L185-187：装载充能计数（setHasRelic(r.data)，原版 2 充能）。
                 # 抵消逻辑需要"获得诅咒"事件钩子（C++ 在生成诅咒的各效果处
@@ -425,9 +524,8 @@ class RelicContainer:
                 card = pool[bc.rngs.misc.int_inclusive(0, len(pool) - 1)]
                 _temp_card_into_hand(bc, card, cost_for_turn=0)
             else:
-                # 明确跳过（跨战斗/引擎位缺失，见类注释）：
-                # NEOWS_LAMENT / FOSSILIZED_HELIX / LIZARD_TAIL / INSERTER /
-                # SNECKO_EYE 自弃 CONFUSED 等
+                # 明确跳过（跨战斗/局外语义，见类注释）：NEOWS_LAMENT /
+                # OMAMORI 抵消逻辑（战斗内无诅咒获得来源，仅装载计数）等
                 pass
 
     def on_battle_start_extra_draw(self, bc: BattleContext) -> int:
@@ -438,8 +536,17 @@ class RelicContainer:
             # 张数，净手牌等价，仅与桶内其他效果的先后有分布级差异
             extra += 2
         if self.has(RelicId.SNECKO_EYE):
-            # init L63-65 cardDrawPerTurn += 2；CONFUSED 自弃未迁移（TODO）
+            # init L63-65 cardDrawPerTurn += 2（每回合 +2，非仅首回合——
+            # 第 2 回合起见 on_turn_start_post_draw；CONFUSED 见即时桶）
             extra += 2
+        if self.has(RelicId.RING_OF_THE_SNAKE):
+            # wiki：At the start of each combat, draw 2 additional cards
+            #（Silent 开局遗物，仅首回合）
+            extra += 2
+        if self.has(RelicId.RING_OF_THE_SERPENT):
+            # wiki：At the start of your turn, draw 1 additional card
+            #（Silent Boss；首回合经此桶，第 2 回合起见 on_turn_start_post_draw）
+            extra += 1
         return extra
 
     def on_battle_start_post_draw(self, bc: BattleContext) -> None:
@@ -486,12 +593,15 @@ class RelicContainer:
         p = bc.player
         # 每回合计数器重置：连击类对齐 attacks/skillsPlayedThisTurn
         # 每回合清零（BattleContext.cpp:2210-2211）；NECRONOMICON 每回合
-        # 一次标志对齐 haveUsedNecronomiconThisTurn（Player.cpp:555-557）。
-        # NUNCHAKU/INK_BOTTLE 为跨回合累计计数，不在此重置。
+        # 一次标志对齐 haveUsedNecronomiconThisTurn（Player.cpp:555-557）；
+        # HOVERING_KITE 每回合首次弃牌标志同批重置。NUNCHAKU/INK_BOTTLE 为
+        # 跨回合累计计数，不在此重置。
         for rid in (RelicId.KUNAI, RelicId.SHURIKEN, RelicId.ORNAMENTAL_FAN,
-                    RelicId.LETTER_OPENER, RelicId.NECRONOMICON):
+                    RelicId.LETTER_OPENER, RelicId.NECRONOMICON,
+                    RelicId.HOVERING_KITE):
             if rid in self.counters:
                 self.counters[rid] = 0
+        self._pellet_power_played = False  # ORANGE_PELLETS 回合内标志
         # Player.cpp:492-496（此时尚未重置，计数即上回合值）
         if self.has(RelicId.ART_OF_WAR):
             if p.attacks_played_last_turn == 0:
@@ -500,10 +610,30 @@ class RelicContainer:
         if self.has(RelicId.CAPTAINS_WHEEL):
             if bc.turn == 3:
                 bc.add_to_bot(Actions.gain_block(18))
-        # Player.cpp:513-516：MANTRA +1（无姿态体系，惰性；批次 1 修正：
-        # 原实现 +1 敏捷与 C++ 不符）
+        # Player.cpp:513-516：MANTRA +1（批次 1 修正：原 +1 敏捷与 C++
+        # 不符；审计批次改走 gain_mantra 统一入口——满 10 进 DIVINITY）
         if self.has(RelicId.DAMARU):
-            p.statuses.add(PlayerStatus.MANTRA, 1)
+            p.gain_mantra(bc, 1)
+        # EMOTION_CHIP（wiki：If you lost HP during the previous turn,
+        # trigger the passive ability of all Orbs at the start of your turn；
+        # lightspeed Player.cpp:299/518 两处 TODO 未实现，审计批次补）。
+        # hp_lost_last_turn 涵盖上回合任意 HP 损失（含敌方阶段承伤，对齐
+        # 原版 lostHPLastTurn）；结算后统一清零（无该遗物也清——玩家状态）。
+        # GOLD_PLATED_CABLES：全球触发后最右球再触发一次（wiki Gold-Plated
+        # Cables：With Emotion Chip, the rightmost slot triggers twice at
+        # the start of the next turn instead）。
+        if self.has(RelicId.EMOTION_CHIP) and p.hp_lost_last_turn:
+            for orb in list(p.orbs):
+                p.trigger_orb_passive_once(bc, orb)
+            if p.orbs and self.has(RelicId.GOLD_PLATED_CABLES):
+                p.trigger_orb_passive_once(bc, p.orbs[-1])
+        p.hp_lost_last_turn = False
+        # INSERTER（wiki：Every 2 turns, gain 1 Orb slot；计数含首回合，
+        # 见即时桶的补齐说明 → 第 2/4/6… 回合触发，槽位上限 10）
+        if self.has(RelicId.INSERTER):
+            if self.bump(RelicId.INSERTER) == 2:
+                self.set_counter(RelicId.INSERTER, 0)
+                p.orb_slots = min(10, p.orb_slots + 1)
         # Player.cpp:522-527
         if self.has(RelicId.HAPPY_FLOWER):
             if self.bump(RelicId.HAPPY_FLOWER) == 3:
@@ -523,8 +653,6 @@ class RelicContainer:
         # Player.cpp:551-553
         if self.has(RelicId.MERCURY_HOURGLASS):
             bc.add_to_bot(Actions.damage_all_enemy(3))
-        # EMOTION_CHIP：Player.cpp:518-520 lightspeed 未实现（两处 TODO），
-        # 效果无法从 C++ 核实，暂不硬凑（报告说明）
 
     def on_turn_start_post_draw(self, bc: BattleContext) -> None:
         """抽牌后回合开始桶（Player.cpp:661-672）。"""
@@ -534,6 +662,15 @@ class RelicContainer:
         if self.has(RelicId.POCKETWATCH):
             if p.cards_played_last_turn <= 3:
                 bc.add_to_bot(Actions.draw_cards(3))
+        # SNECKO_EYE：第 2 回合起每回合 +2 抽（wiki：At the start of your
+        # turn, draw 2 additional cards——lightspeed init L63-65 为永久
+        # cardDrawPerTurn += 2，本引擎首回合经 extra_draw 桶、后续回合在此
+        # 补抽，净手牌数等价）
+        if self.has(RelicId.SNECKO_EYE):
+            bc.add_to_bot(Actions.draw_cards(2))
+        # RING_OF_THE_SERPENT：第 2 回合起每回合 +1 抽（同上路径）
+        if self.has(RelicId.RING_OF_THE_SERPENT):
+            bc.add_to_bot(Actions.draw_cards(1))
         if self.has(RelicId.WARPED_TONGS):
             # Player.cpp:669-671：入队随机升级动作（排在 POCKETWATCH 抽牌
             # 之后弹出，顺序对齐 applyStartOfTurnPostDrawRelics）
@@ -592,6 +729,11 @@ class RelicContainer:
             extra += 1
         if self.has(RelicId.MARK_OF_PAIN):  # L112-115
             extra += 1
+        # SLAVERS_COLLAR（wiki：During Boss and Elite combats, gain 1 Energy
+        # at the start of your turn）——按遭遇注册表判定房间类型
+        if self.has(RelicId.SLAVERS_COLLAR):
+            if bc.encounter in ELITE_ENCOUNTERS or bc.encounter in BOSS_ENCOUNTERS:
+                extra += 1
         return extra
 
     def keeps_leftover_energy(self, bc: BattleContext) -> bool:
@@ -675,6 +817,12 @@ class RelicContainer:
             if self.bump(RelicId.NUNCHAKU) >= 10:
                 self.set_counter(RelicId.NUNCHAKU, 0)
                 bc.add_to_bot(Actions.gain_energy(1))
+        # DUALITY（wiki：Whenever you play an Attack, gain 1 temporary
+        # Dexterity——+1 敏捷 +1 LOSE_DEXTERITY，回合末结算扣回；观者遗物）
+        if self.has(RelicId.DUALITY):
+            p.statuses.add(PlayerStatus.DEXTERITY, 1)
+            p.statuses.add(PlayerStatus.LOSE_DEXTERITY, 1)
+        self._check_orange_pellets(bc)
 
     def on_use_skill_card(self, bc: BattleContext) -> None:
         # INK_BOTTLE：L1780-1786
@@ -691,6 +839,7 @@ class RelicContainer:
         # MUMMIFIED_HAND：onUseSkillCard L1802-1804 为 lightspeed 的 `// todo`
         # 死代码（技能侧不触发，仅能力牌触发，见 on_use_power_card）——
         # 批次 3 已核对，正确跳过
+        self._check_orange_pellets(bc)
 
     def on_use_power_card(self, bc: BattleContext) -> None:
         # BIRD_FACED_URN：L1854-1856（Player.heal → MAGIC_FLOWER 放大）
@@ -715,6 +864,10 @@ class RelicContainer:
             if eligible:
                 chosen = eligible[bc.rngs.misc.int_inclusive(0, len(eligible) - 1)]
                 chosen.cost_for_turn = 0
+        # ORANGE_PELLETS 的能力牌标志（攻击/技能位在另两钩子置位）
+        if self.has(RelicId.ORANGE_PELLETS):
+            self._pellet_power_played = True
+            self._check_orange_pellets(bc)
 
     def on_use_status_or_curse_card(self, bc: BattleContext) -> None:
         # INK_BOTTLE：L1927-1933（第四处计数点；本项目状态/诅咒卡多为
@@ -828,21 +981,19 @@ class RelicContainer:
             bc.add_to_bot(Actions.gain_energy(1))
             bc.add_to_bot(Actions.draw_cards(1))
         if self.has(RelicId.THE_SPECIMEN):
-            # L322-324：C++ 入队"选择敌人承接中毒"界面；die() 不清状态，
-            # 层数可读。单候选直接转移，多候选挂 CARD_SELECT 等外部选择。
+            # wiki：Whenever an enemy dies, transfer any Poison it has to a
+            # **random** enemy（Silent 稀有；原实现的"CARD_SELECT 选承接
+            # 敌人"交互与原版不符——审计批次改为 misc 流随机转移）。
+            # 经 debuff_enemy 落地：吃 ARTIFACT 抵消（wiki：落在带 ARTIFACT
+            # 的敌人身上则全部损失）并触发 SADISTIC 类"施 debuff"钩子；
+            # die() 不清状态，层数可读。
             n = m.statuses.get(MonsterStatus.POISON)
             if n > 0:
+                m.statuses.remove(MonsterStatus.POISON)
                 others = [o for o in bc.monsters.monsters if o.is_targetable() and o is not m]
                 if others:
-
-                    def _apply(bc2: BattleContext, chosen: list) -> None:
-                        if chosen:
-                            chosen[0].statuses.add(MonsterStatus.POISON, n)
-                            m.statuses.remove(MonsterStatus.POISON)
-
-                    bc.open_card_select(
-                        others, _apply, prompt="标本：选择承接中毒层数的敌人"
-                    )
+                    t = others[bc.rngs.misc.int_inclusive(0, len(others) - 1)]
+                    bc.add_to_bot(Actions.debuff_enemy(t.idx, MonsterStatus.POISON, n, False))
 
     def on_monster_spawned(self, bc: BattleContext, m: Monster) -> None:
         if self.has(RelicId.PHILOSOPHERS_STONE):
@@ -877,15 +1028,63 @@ class RelicContainer:
             if self.bump(RelicId.SUNDIAL) == 3:
                 self.set_counter(RelicId.SUNDIAL, 0)
                 bc.add_to_bot(Actions.gain_energy(2))
-        # MELANGE：SCRY 未迁移（批次 3+）
+        # MELANGE（wiki：Whenever you shuffle your draw pile, Scry 3——任务
+        # 清单原记"每回合 Scry 1"系误记）。入队而非直接开：动作在本次抽牌
+        # 全部完成后弹出（wiki：triggers after the cards causing the shuffle
+        # are fully drawn），open_scry 挂 SCRY 输入态由外部 choose_scry 恢复
+        # ——与观者 Foresight 的既有接线模式一致（content/watcher_cards.py
+        # 同为 Action(lambda bc: bc.open_scry(n))）。Golden Eye 才 +5，未迁移。
+        if self.has(RelicId.MELANGE):
+            bc.add_to_bot(Action(lambda bc2: bc2.open_scry(3)))
+
+    def on_monster_debuff_applied(self, bc: BattleContext, status, idx: int) -> None:
+        """对怪施加 debuff 落地后的触发（CHAMPION_BELT/SNECKO_SKULL）：
+        施加易伤 → 附带 1 层虚弱；施加中毒 → 层数 +1（wiki）。由
+        Actions.debuff_enemy/debuff_all_enemy 在落地段调用。"""
+        if status == MonsterStatus.VULNERABLE and self.has(RelicId.CHAMPION_BELT):
+            m = bc.monsters.monsters[idx]
+            if not m.is_dead_or_escaped():
+                # 附带虚弱直接加层（附带效果不单独吃 ARTIFACT——
+                # ARTIFACT 已在主 debuff 落地前消耗过一次）
+                m.statuses.add(MonsterStatus.WEAK, 1)
+        if status == MonsterStatus.POISON and self.has(RelicId.SNECKO_SKULL):
+            m = bc.monsters.monsters[idx]
+            if not m.is_dead_or_escaped():
+                m.statuses.add(MonsterStatus.POISON, 1)
+
+    def monster_weak_multiplier(self, bc: BattleContext) -> float:
+        """虚弱对怪伤害的乘区（PAPER_KRANE：0.75 → 0.6）。"""
+        return 0.6 if self.has(RelicId.PAPER_KRANE) else 0.75
+
+    def player_vulnerable_multiplier(self, bc: BattleContext) -> float:
+        """玩家易伤受伤乘区（ODD_MUSHROOM：1.5 → 1.25）。"""
+        return 1.25 if self.has(RelicId.ODD_MUSHROOM) else 1.5
+
+    def debuff_player_allowed(self, status) -> bool:
+        """玩家可施加状态拦截（GINGER：不可虚弱；TURNIP：不可脆弱）。"""
+        if self.has(RelicId.GINGER) and status.name == "WEAK":
+            return False
+        if self.has(RelicId.TURNIP) and status.name == "FRAIL":
+            return False
+        return True
 
     def on_manual_discard(self, bc: BattleContext, inst: CardInstance) -> None:
         """弃牌触发遗物（批次 A：Silent 弃牌族用）。TingSha/Tough Bandages
-        在 lightspeed 未实现（仅枚举），按 wiki 补：随机敌人 3 伤 / 得 3 格挡。"""
+        在 lightspeed 未实现（仅枚举），按 wiki 补：随机敌人 3 伤 / 得 3 格挡。
+        wiki 口径均为 "during your turn" 的主动弃牌——回合末整手弃置不走
+        本钩子（battle.discard_at_end_of_turn_helper），Scry 弃置同。"""
         if self.has(RelicId.TINGSHA):
             bc.add_to_bot(Actions.damage_random_enemy(3))
         if self.has(RelicId.TOUGH_BANDAGES):
             bc.add_to_bot(Actions.gain_block(3))
+        # HOVERING_KITE（wiki：The first time you discard a card each turn,
+        # gain 1 Energy；Silent Boss）。计数器作"本回合已触发"标志，
+        # on_turn_start 重置；卡牌效果/遗物弃牌（manual_discard 统一入口）
+        # 均触发。
+        if self.has(RelicId.HOVERING_KITE):
+            if self.counter(RelicId.HOVERING_KITE) == 0:
+                self.set_counter(RelicId.HOVERING_KITE, 1)
+                bc.add_to_bot(Actions.gain_energy(1))
 
     def on_card_exhausted(self, bc: BattleContext, inst: CardInstance) -> None:
         # CHARONS_ASHES：L2819-2821——3 伤 + addToTop（批次 1 修正：
@@ -938,10 +1137,68 @@ class RelicContainer:
     # ============================================================
     def on_victory(self, bc: BattleContext) -> None:
         p = bc.player
+        # 战斗胜利治疗走带 bc 的 Player.heal → MAGIC_FLOWER 放大。
+        # lightspeed exitBattle 用 g.playerHeal（局外路径，不吃 MAGIC_FLOWER），
+        # 与原版不符——wiki Magic Flower 页明确列出 BURNING_BLOOD（6→9）与
+        # MEAT_ON_THE_BONE（12→18）为战斗末结算且受其放大（审计批次修正）。
         # BURNING_BLOOD：L569-573
         if self.has(RelicId.BURNING_BLOOD):
-            p.heal(6)
+            self._heal(bc, 6)
         # MEAT_ON_THE_BONE：L581-585（curHp ≤ maxHp/2，整数除法等价 hp*2 ≤ max）
         if self.has(RelicId.MEAT_ON_THE_BONE):
             if p.hp * 2 <= p.max_hp:
-                p.heal(12)
+                self._heal(bc, 12)
+
+    # ============================================================
+    # 引擎查询/免死（entities.py 侧钩子；审计批次新增）
+    # ============================================================
+    def on_would_die(self, bc: BattleContext) -> int | None:
+        """将死时的 LIZARD_TAIL 查询（entities.Player._hp_was_lost 调用）：
+        返回回复后的 HP（max_hp 的一半），None 表示不救。
+
+        wiki：When you would die, heal to 50% of your Max HP instead.
+        Works once.（原版每局一次且遗物消耗；单场模拟映射为每场一次、
+        计数器置位即视为已消耗。）
+        """
+        if self.has(RelicId.LIZARD_TAIL) and self.counter(RelicId.LIZARD_TAIL) == 0:
+            self.set_counter(RelicId.LIZARD_TAIL, 1)
+            return bc.player.max_hp // 2
+        return None
+
+    def calm_exit_energy(self, bc: BattleContext) -> int:
+        """退出平静获得的能量（entities.Player.change_stance 调用）：
+        基础 2，VIOLET_LOTUS（wiki：Whenever you exit Calm, gain an
+        additional Energy）+1。"""
+        return 3 if self.has(RelicId.VIOLET_LOTUS) else 2
+
+    def has_gold_plated_cables(self, bc: BattleContext) -> bool:
+        """GOLD_PLATED_CABLES 查询（entities.Player.trigger_orb_passives
+        回合结束侧调用；wiki：Your rightmost Orb triggers its passive an
+        additional time）。"""
+        return self.has(RelicId.GOLD_PLATED_CABLES)
+
+    def _check_orange_pellets(self, bc: BattleContext) -> None:
+        """ORANGE_PELLETS（wiki：Whenever you play a Power, Attack, and Skill
+        in the same turn, remove all of your debuffs）——三类各≥1 即触发，
+        三张出牌钩子（攻击/技能/能力）收尾各查一次；触发后类型标志重置
+        （wiki：每多触发一次需重新集齐三类）。
+
+        "remove all of your debuffs" 的落地口径：清除已知玩家 debuff 状态
+        （WEAK/VULNERABLE/FRAIL/ENTANGLED/NO_BLOCK/NO_DRAW/CONFUSED——
+        wiki：Snecko Eye 的 Confused 会被移除并锁定已随机费用），并把
+        STRENGTH/DEXTERITY/FOCUS 的负值清零（wiki：只移除使属性整体为负
+        的 debuff 部分）。近似：未枚举的冷门 debuff（HEX 等）不在清单内。
+        """
+        if not self.has(RelicId.ORANGE_PELLETS):
+            return
+        p = bc.player
+        if p.attacks_played_this_turn > 0 and p.skills_played_this_turn > 0 and self._pellet_power_played:
+            self._pellet_power_played = False
+            s = p.statuses
+            for st in (PlayerStatus.WEAK, PlayerStatus.VULNERABLE, PlayerStatus.FRAIL,
+                       PlayerStatus.ENTANGLED, PlayerStatus.NO_BLOCK,
+                       PlayerStatus.NO_DRAW, PlayerStatus.CONFUSED):
+                s.remove(st)
+            for st in (PlayerStatus.STRENGTH, PlayerStatus.DEXTERITY, PlayerStatus.FOCUS):
+                if s.get(st) < 0:
+                    s.set(st, 0)
