@@ -379,12 +379,13 @@ def test_hex_adds_dazed_per_card_played():
     from sts.content.cards import DAZED
 
     bc = BattleContext(seed=227, deck=[STRIKE] * 20)
-    setup_hand(bc, STRIKE, STRIKE)
+    setup_hand(bc, STRIKE, DEFEND)
     dazed0 = sum(1 for c in bc.cards.draw_pile if c.card is DAZED)
     bc.player.statuses.add(PlayerStatus.HEX, 1)
-    bc.play_card(0)
-    dazed1 = sum(1 for c in bc.cards.draw_pile if c.card is DAZED)
-    assert dazed1 == dazed0 + 1  # 打 1 张 → +1 DAZED（洗入抽牌堆随机位）
+    bc.play_card(0)  # 攻击牌：不触发（本体 HexPower 仅非攻击牌）
+    assert sum(1 for c in bc.cards.draw_pile if c.card is DAZED) == dazed0
+    bc.play_card(0)  # 非攻击牌（Defend）：+1 DAZED
+    assert sum(1 for c in bc.cards.draw_pile if c.card is DAZED) == dazed0 + 1
     assert bc.player.hp == 80  # 不掉血（原实现错误已修）
 
 

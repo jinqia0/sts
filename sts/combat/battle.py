@@ -387,10 +387,10 @@ class BattleContext:
         if self.player.statuses.has(PlayerStatus.A_THOUSAND_CUTS):
             self.add_to_bot(
                 Actions.damage_all_enemy(self.player.statuses.get(PlayerStatus.A_THOUSAND_CUTS)))
-        # HEX（Chosen 巫咒）：每打出一张牌洗入 1 张 DAZED（对齐
-        # BattleContext.cpp:1765/1844/1907 三处 onUseXxx 之后的统一段）；
-        # 原"每抽 1 牌掉 1 HP"实现错误，已修正
-        if self.player.statuses.has(PlayerStatus.HEX):
+        # HEX（Chosen 巫咒）：每打出一张**非攻击**牌洗入 1 张 DAZED
+        #（本体 HexPower.onUseCard 的 useCard.type != ATTACK 判定；怪物审计
+        # 发现 lightspeed 的 onUseXxx 三处含攻击牌段系其偏差，按本体修正）
+        if self.player.statuses.has(PlayerStatus.HEX) and inst.card.ctype != "Attack":
             from sts.content.cards import DAZED
 
             self.add_to_bot(Actions.make_temp_card_in_draw_pile(DAZED, False, shuffle_into=True))

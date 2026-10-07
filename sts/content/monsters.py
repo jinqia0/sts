@@ -18,7 +18,11 @@ Act 2 全部新怪 15 种：Spheric Guardian、Chosen、Shelled Parasite、Byrd�
 Snake Plant、Snecko、Centurion、Mystic、Gremlin Leader、Book of Stabbing、
 Bronze Automaton、Bronze Orb、The Collector、Torch Head、The Champ（批次 B）。
 A0 数值直取（`ascN ? x : y` 的 y），但伤害/状态量的进阶分支保留
-（读 bc.ascension，A0 时自动落回非进阶值）。
+（读 bc.ascension，A0 时自动落回非进阶值）。2026-10 全量审计补齐了
+批次 1 漏移植的进阶档：A7 高位 HP（Cultist/Jaw Worm/虱子/小史莱姆/
+真菌兽）、A2 伤害档（Chomp/Tackle、虱子 Bite 6-8）与 hallwayIdx 三档
+能力值（Ritual/Grow/Bellow 力量、Curl Up A7/A17 档、Louse A17 出招约束、
+Acid Slime S A17 固定 Lick），逐项与 wiki/反编译本体核对。
 
 源码与任务描述/wiki 的出入（以 C++ 为准）：
 - Red Louse 的副招是 Grow（力量+3），不是 Spit Web；Green Louse 才是
@@ -43,14 +47,14 @@ A0 数值直取（`ascN ? x : y` 的 y），但伤害/状态量的进阶分支�
   "3 回合后逃跑"的印象应源自 StS2（Gremlin Merc / Thieving Hopper 的
   Escape Artist 力量）。
 
-批次 2 与本体/wiki 的出入（数值一律以 C++ 为准，行为差异按批次 1 的
-Red Slaver 先例择本体语义并逐处注明）：
-- Gremlin Nob A18 roll 分支逐行翻译后 Skull Bash 不可达（需同时
-  lastTwo=Skull Bash 且 lastTwo=Rush，互斥——lightspeed 疑似笔误），
-  按字面保留：A18 起恒 Rush。Rush 14/16 与 wiki 一致。
-- Lagavulin 自然醒：C++ 只 setMove 不移除 ASLEEP，残留的 ASLEEP 会让
-  唤醒后的首次漏格挡伤害误剥 8 层金属化；本体自然醒后 Asleep 消失且
-  金属化常驻（打醒才剥金属化是已知交互），故自然醒分支补移除 ASLEEP。
+批次 2 与本体/wiki 的出入（2026-10 全量审计后，以 wiki+反编译本体
+（aeubanks/sts）为最终裁决，lightspeed 误译处已按本体修正）：
+- Gremlin Nob A18：本体分支为 !lastMove(SKULL_BASH) && !lastMoveBefore
+  (SKULL_BASH) → Skull Bash；lightspeed 误译成 lastTwoMoves(SKULL_BASH)
+  （Skull Bash 不可达、恒 Rush），已按本体修正为 SB-R-R 循环。
+- Lagavulin 自然醒：本体 changeState("OPEN") 两条醒来路径（打醒/自然醒）
+  都会 ReducePowerAction(Metallicize, 8)；lightspeed 的 SLEEP 分支只
+  setMove（ASLEEP/METALLICIZE 均残留），已按本体补移除。
 - Hexaghost 的 Inferno 不塞 3 张升级灼伤、不升级已有灼伤（本体有此
   效果，lightspeed 未实现）；Sear 伤害恒 6、无进阶加成（同 lightspeed）。
 - 回合计数映射：C++ bc.turn 0 基（首回合=0），本项目 1 基（首回合=1），
@@ -81,19 +85,20 @@ Red Slaver 先例择本体语义并逐处注明）：
 - 静滞偷牌的稀有度偏好（C++ stasisHelper：RARE > UNCOMMON > COMMON
   组内随机，全 BASIC 才均匀）：CardDef 无 rarity 字段，改为整堆均匀
   随机（misc 流）。对起手牌组（全 BASIC）与 C++ 分布完全一致。
-- Chosen 的 HEX：本体为"每打出一张非攻击牌，洗 X 张眩晕进抽牌堆"，
-  引擎（battle.py 禁改）已实现为"每抽 1 张牌失去 1 HP"——沿用引擎
-  既有语义，分布级不同，见批次 B 报告。
+- Chosen 的 HEX：本体为"每打出一张非攻击牌，洗 X 张眩晕进抽牌堆"
+  （HexPower.onUseCard 的 card.type != ATTACK 判定）；引擎 use_card 对
+  任意牌触发（battle.py 禁改）——攻击牌也被计为巫咒触发，需引擎接线
+  （见审计报告）。
 - Bronze Orb 偷到的牌：本体死亡时回到手中，引擎 die() 归还进弃牌堆
   （引擎既有语义）。
-- Book of Stabbing A18 起的 ++stabCount 写在 return 之后（C++ 死代码，
-  不可达），不移植。
-- wiki 记载与 C++ 数值冲突处以 C++ 为准：Spheric Guardian Activate
-  格挡 A17 起 35（wiki 记 17）；Gremlin Leader Encourage 格挡 A3 起
-  即 10（wiki 记 A18）；Automaton Boost 格挡 A9 起 12（wiki 记 A4）；
-  Bronze Orb / Torch Head 高位 HP 从 A9 起（wiki 记 A8）；The Champ
-  Gloat 力量 {3,4,5}@A4/A19（wiki 记 {2,3,4}）；Collector Mega Debuff
-  恒 3 层（wiki 记 A19 起 5 层）。
+- Book of Stabbing A18：本体 ++stabCount 真实可达（选 Single Stab 也
+  +1）；lightspeed 误译到 return 之后成死代码，已按本体补回。
+- wiki 记载与 lightspeed 冲突处的裁决（反编译本体为准）：Spheric
+  Guardian Activate 格挡 A17 起 35（wiki 同）；Gremlin Leader Encourage
+  格挡 A18 起 10（lightspeed 误 asc3，已修）；Automaton Boost 格挡 A9 起
+  12（wiki 同）；Bronze Orb / Torch Head 高位 HP 从 A9 起（wiki 同）；
+  The Champ Gloat 力量 {2,3,4}@A4/A19（lightspeed 误 {3,4,5}，已修）；
+  Collector Mega Debuff A19 起 5 层（lightspeed 误恒 3，已修）。
 
 批次 D（Act 3 全部新怪 17 种 + Act 4 3 种）与本体/wiki/C++/引擎的出入
 （数值一律以 C++ 为准；引擎缺口以内容层钩子对齐，见各类 docstring）：
@@ -132,11 +137,18 @@ Red Slaver 先例择本体语义并逐处注明）：
   回满）不同——内容层以 unique_power0 存池 + apply_start_of_turn/
   on_hp_lost 回写 misc_info 对齐；非攻击 HP 损失（毒）引擎仍漏钳，
   见类注释。
-- Awakened One A9+ 一阶段 HP 为区间 300-320 抽样（wiki 记恒 320）；
-  二阶段 REBIRTH 固定 300/320 满血。阶段 1 死亡不判胜（C++ 分支先于
-  判胜检查，即使场上只剩 Boss）。
-- Time Eater Head Slam 塞 2 张 Slimed 恒为 A19 分支（wiki 记 A4 起）；
-  Haste 为"设为半血"而非"回复到半血"（C++ curHp = maxHp/2）。
+- Awakened One A9+ 一阶段 HP 恒 320（本体 setHp(320)；lightspeed 误为
+  300-320 区间抽样，已修）；二阶段 REBIRTH 固定 300/320 满血。阶段 1
+  死亡不判胜（C++ 分支先于判胜检查，即使场上只剩 Boss）。
+- Time Eater Head Slam 塞 2 张 Slimed 恒为 A19 分支（wiki 同）；Haste
+  为"设为半血"而非"回复到半血"（C++ curHp = maxHp/2；本体 HealAction
+  (maxHp/2 - curHp) 仅在半血以下触发，两者等价）。
+- Darkling Chomp 为两段攻击（本体两次 DamageAction；lightspeed 单发，
+  已修）；Nemesis 第二击 A18 起塞 5 张灼伤（lightspeed 误 asc3，已修）；
+  Writhing Mass 连枷的格挡 = 基础连枷伤害 15/16@A2（本体；lightspeed
+  误 16/18，已修）；Byrd Flying 飞行中受攻击伤害减半（本体 FlightPower
+  atDamageFinalReceive；引擎未接线该乘区，以 attacked 覆盖补）；Centurion
+  Protect 在秘术师死亡后给自身格挡（本体 GainBlockRandomMonsterAction）。
 - Exploder / Dagger 的自爆 = C++ SuicideAction(triggerRelics=true)：
   对自身施加全额非攻击伤害走 die() 结算；Transient 走引擎 FADING
   回合末逃跑（C++ 于自己回合内 suicideAction，时机等价：均在第 5/6
@@ -211,14 +223,16 @@ class Cultist(Monster):
     """邪教徒（Act 1 普通怪单怪遭遇）。
 
     数据来源 slaythespire.wiki.gg/wiki/Cultist：
-      HP 48-54；第 1 回合咒语（3 层仪式），此后每回合黑暗打击 6 伤。
-      出招完全确定。黑暗打击序列 6, 9, 12, …（Ritual 回合末 +3，
-      施加当轮 skipFirst 跳过——见 combat/entities.py 的衰减逻辑）。
+      HP 48-54（A7 起 50-56）；第 1 回合咒语（3 层仪式，A2 起 4、A17 起
+      5——wiki/Cultist.java/三档数组 {3,4,5}[hallwayIdx]），此后每回合
+      黑暗打击 6 伤。出招完全确定。黑暗打击序列 6, 9, 12, …（Ritual
+      回合末 +3，施加当轮 skipFirst 跳过——见 combat/entities.py 的衰减逻辑）。
     """
 
     name = "Cultist"
     zh = "邪教徒"
     hp_range = (48, 54)
+    hp_range_high = (50, 56)
 
     INCANTATION = MoveDef("Incantation", "咒语", "buff", intent_text="获得 3 层仪式")
     DARK_STRIKE = MoveDef("Dark Strike", "黑暗打击", "attack", base_damage=6)
@@ -228,7 +242,7 @@ class Cultist(Monster):
 
     @classmethod
     def create(cls, bc: BattleContext, idx: int) -> "Cultist":
-        hp = bc.rngs.monster_hp.int_inclusive(*cls.hp_range)
+        hp = _roll_hp(bc, cls)
         return cls(idx, hp, hp)
 
     def get_move_for_roll(self, bc: BattleContext, roll: int) -> MoveDef:
@@ -242,8 +256,9 @@ class Cultist(Monster):
         match move.name:
             case "Incantation":
                 # buff<RITUAL> 自带 justApplied（skipFirst）：见 entities.Monster.buff
-                self.buff(MonsterStatus.RITUAL, 3)
-                bc.log.append(f"{self.display_name} 使用 咒语(Incantation)，获得 3 层仪式。")
+                ritual = 5 if bc.ascension >= 17 else 4 if bc.ascension >= 2 else 3
+                self.buff(MonsterStatus.RITUAL, ritual)
+                bc.log.append(f"{self.display_name} 使用 咒语(Incantation)，获得 {ritual} 层仪式。")
             case "Dark Strike":
                 dmg = bc.calculate_monster_damage(self, 6)
                 bc.log.append(f"{self.display_name} 使用 黑暗打击(Dark Strike)。")
@@ -258,19 +273,23 @@ class Cultist(Monster):
 class JawWorm(Monster):
     """颚虫（Act 1 单怪遭遇，也可能是首个精英后的普通遭遇）。
 
-    wiki/C++ A0：HP 40-44。首回合固定 Chomp（11 伤）；之后 roll 分段：
+    wiki/C++ A0：HP 40-44（A7 起 42-46）。首回合固定 Chomp（11 伤，A2 起
+    12）；之后 roll 分段：
       roll < 25：上回合 Chomp → 内层 56.25% Bellow / 否则 Thrash；
                  否则 Chomp
       roll < 55：上上两回合都是 Thrash → 内层 35.7% Chomp / 否则 Bellow；
                  否则 Thrash
       roll ≥ 55：上回合 Bellow → 内层 41.6% Chomp / 否则 Thrash；
                  否则 Bellow
-    招式数值：Chomp 11 伤；Thrash 7 伤 + 5 格挡；Bellow 力量+3 + 6 格挡。
+    招式数值：Chomp 11 伤（A2 起 12）；Thrash 7 伤 + 5 格挡；Bellow
+    力量 +3（A2 起 4、A17 起 5——wiki/JawWorm.java 三档数组）+ 6 格挡
+    （A17 起 9）。
     """
 
     name = "Jaw Worm"
     zh = "颚虫"
     hp_range = (40, 44)
+    hp_range_high = (42, 46)
 
     CHOMP = MoveDef("Chomp", "重咬", "attack", base_damage=11)
     THRASH = MoveDef("Thrash", "抽打", "attack", base_damage=7)  # 另获 5 格挡
@@ -281,7 +300,7 @@ class JawWorm(Monster):
 
     @classmethod
     def create(cls, bc: BattleContext, idx: int) -> "JawWorm":
-        hp = bc.rngs.monster_hp.int_inclusive(*cls.hp_range)
+        hp = _roll_hp(bc, cls)
         return cls(idx, hp, hp)
 
     def get_move_for_roll(self, bc: BattleContext, roll: int) -> MoveDef:
@@ -306,7 +325,7 @@ class JawWorm(Monster):
         move = self.move_history[0]
         match move.name:
             case "Chomp":
-                dmg = bc.calculate_monster_damage(self, 11)
+                dmg = bc.calculate_monster_damage(self, 12 if bc.ascension >= 2 else 11)
                 bc.log.append(f"{self.display_name} 使用 重咬(Chomp)。")
                 bc.add_to_bot(Actions.attack_player(self.idx, dmg))
             case "Thrash":
@@ -316,9 +335,10 @@ class JawWorm(Monster):
                 bc.add_to_bot(Actions.monster_gain_block(self.idx, 5))
             case "Bellow":
                 # 力量立即结算（对齐 C++ buff<MS::STRENGTH>，不入队）；格挡入队
-                self.statuses.add(MonsterStatus.STRENGTH, 3)
-                bc.log.append(f"{self.display_name} 使用 咆哮(Bellow)，力量+3。")
-                bc.add_to_bot(Actions.monster_gain_block(self.idx, 6))
+                str_gain = 5 if bc.ascension >= 17 else 4 if bc.ascension >= 2 else 3
+                self.statuses.add(MonsterStatus.STRENGTH, str_gain)
+                bc.log.append(f"{self.display_name} 使用 咆哮(Bellow)，力量+{str_gain}。")
+                bc.add_to_bot(Actions.monster_gain_block(self.idx, 9 if bc.ascension >= 17 else 6))
             case _:
                 raise AssertionError(f"未知招式 {move}")
         bc.add_to_bot(Actions.roll_move(self.idx))
@@ -328,13 +348,15 @@ class JawWorm(Monster):
 class Louse(Monster):
     """虱子公共基类（红虱/绿虱共享的构造与 Bite）。
 
-    构造期 roll（对齐 C++ construct + preBattleAction，均走 monsterHpRng）：
-      1. HP（红虱 10-15 / 绿虱 11-17）
-      2. Bite 伤害 5-7（construct 的 miscInfo，战斗开始定死）
-      3. Curl Up 3-7（preBattleAction；首次受击获得等量格挡，
-         结算钩子在 entities.Monster.attacked 的 CURL_UP 分支）
-    出招约束：25% 副招 / 75% Bite，同一招不连续三回合（roll<25 时若
-    副招已连续两回合则改出 Bite；roll≥25 时若 Bite 已连续两回合则出副招）。
+    构造期 roll（对齐 C++ construct + preBattleAction 与本体 LouseNormal.java，
+    均走 monsterHpRng）：
+      1. HP（红虱 10-15 / 绿虱 11-17；A7 起红虱 11-16 / 绿虱 12-18）
+      2. Bite 伤害 5-7（A2 起 6-8；construct 的 miscInfo，战斗开始定死）
+      3. Curl Up 3-7（A7 起 4-8、A17 起 9-12；preBattleAction；首次受击
+         获得等量格挡，结算钩子在 entities.Monster.attacked 的 CURL_UP 分支）
+    出招约束：25% 副招 / 75% Bite，同一招不连续三回合（roll<25 时若副招
+    已连续两回合（A17 起上回合出过副招即算）则改出 Bite；roll≥25 时若
+    Bite 已连续两回合则出副招）。
     """
 
     name = "Louse"
@@ -350,9 +372,15 @@ class Louse(Monster):
 
     @classmethod
     def create(cls, bc: BattleContext, idx: int) -> "Louse":
-        hp = bc.rngs.monster_hp.int_inclusive(*cls.hp_range)
-        bite = bc.rngs.monster_hp.int_inclusive(5, 7)
-        curl = bc.rngs.monster_hp.int_inclusive(3, 7)
+        hp = _roll_hp(bc, cls)
+        bite = bc.rngs.monster_hp.int_inclusive(6, 8) if bc.ascension >= 2 \
+            else bc.rngs.monster_hp.int_inclusive(5, 7)
+        if bc.ascension >= 17:
+            curl = bc.rngs.monster_hp.int_inclusive(9, 12)
+        elif bc.ascension >= 7:
+            curl = bc.rngs.monster_hp.int_inclusive(4, 8)
+        else:
+            curl = bc.rngs.monster_hp.int_inclusive(3, 7)
         return cls(idx, hp, hp, f"{cls.zh}({cls.name})", bite, curl)
 
     def _bite_turn(self, bc: BattleContext) -> None:
@@ -366,7 +394,9 @@ class Louse(Monster):
     def get_move_for_roll(self, bc: BattleContext, roll: int) -> MoveDef:
         second = self._second_move()
         if roll < 25:
-            if _last_two(self, second.name):
+            # 对齐 C++/LouseNormal.java：lastMove(副招) 且（A17 或副招已连续
+            # 两回合）→ 改出 Bite（wiki：A17 起副招不连续两回合）
+            if _last(self, second.name) and (bc.ascension >= 17 or _last_two(self, second.name)):
                 return self.BITE
             return second
         if _last_two(self, "Bite"):
@@ -388,11 +418,13 @@ class Louse(Monster):
 
 
 class RedLouse(Louse):
-    """红虱：Bite 5-7 伤 / Grow 力量+3（A17 起为 +4）。HP 10-15。"""
+    """红虱：Bite 5-7 伤（A2 起 6-8）/ Grow 力量+3（A17 起为 +4）。
+    HP 10-15（A7 起 11-16）。"""
 
     name = "Red Louse"
     zh = "红虱"
     hp_range = (10, 15)
+    hp_range_high = (11, 16)
 
     GROW = MoveDef("Grow", "生长", "buff", intent_text="力量+3")
 
@@ -400,12 +432,14 @@ class RedLouse(Louse):
         return self.GROW
 
     def _second_move_turn(self, bc: BattleContext) -> None:
-        self.statuses.add(MonsterStatus.STRENGTH, 3)
-        bc.log.append(f"{self.display_name} 使用 生长(Grow)，力量+3。")
+        amt = 4 if bc.ascension >= 17 else 3
+        self.statuses.add(MonsterStatus.STRENGTH, amt)
+        bc.log.append(f"{self.display_name} 使用 生长(Grow)，力量+{amt}。")
 
 
 class GreenLouse(Louse):
-    """绿虱：Bite 5-7 伤 / Spit Web 施加 2 层虚弱。HP 11-17。
+    """绿虱：Bite 5-7 伤（A2 起 6-8）/ Spit Web 施加 2 层虚弱。
+    HP 11-17（A7 起 12-18）。
 
     虚弱为怪物施加（isSourceMonster=True）：justApplied 跳过首个回合末衰减
     （对齐 C++ DebuffPlayer<PS::WEAK>(2) 的默认参数）。
@@ -414,6 +448,7 @@ class GreenLouse(Louse):
     name = "Green Louse"
     zh = "绿虱"
     hp_range = (11, 17)
+    hp_range_high = (12, 18)
 
     SPIT_WEB = MoveDef("Spit Web", "吐丝", "debuff", intent_text="施加 2 层虚弱")
 
@@ -428,14 +463,16 @@ class GreenLouse(Louse):
 class AcidSlimeS(Monster):
     """酸液史莱姆（小）：Lick 1 层虚弱 / Tackle 3 伤。
 
-    wiki/C++ A0：HP 8-12。首回合 50/50 抽 Lick 或 Tackle（内层 aiRng
-    randomBoolean，roll 参数本身不用），此后两招严格交替——take_turn 直接
-    set_move 切换、不再消耗 ai 流（对齐 C++ ACID_SLIME_S 分支无 RollMove）。
+    wiki/C++ A0：HP 8-12（A7 起 9-13）。首回合 50/50 抽 Lick 或 Tackle
+    （内层 aiRng randomBoolean，roll 参数本身不用；A17 起固定 Lick——
+    AcidSlime_S.java 的 getMove A17 分支），此后两招严格交替——take_turn
+    直接 set_move 切换、不再消耗 ai 流（对齐 C++ ACID_SLIME_S 分支无 RollMove）。
     """
 
     name = "Acid Slime (S)"
     zh = "酸液史莱姆（小）"
     hp_range = (8, 12)
+    hp_range_high = (9, 13)
 
     LICK = MoveDef("Lick", "舔舐", "debuff", intent_text="施加 1 层虚弱")
     TACKLE = MoveDef("Tackle", "冲撞", "attack", base_damage=3)
@@ -445,11 +482,13 @@ class AcidSlimeS(Monster):
 
     @classmethod
     def create(cls, bc: BattleContext, idx: int) -> "AcidSlimeS":
-        hp = bc.rngs.monster_hp.int_inclusive(*cls.hp_range)
+        hp = _roll_hp(bc, cls)
         return cls(idx, hp, hp)
 
     def get_move_for_roll(self, bc: BattleContext, roll: int) -> MoveDef:
         # A17 起固定 Lick；A0 为 50/50。roll 参数不参与（对齐 C++）
+        if bc.ascension >= 17:
+            return self.LICK
         return self.TACKLE if _ai_boolean(bc, 0.5) else self.LICK
 
     def take_turn(self, bc: BattleContext) -> None:
@@ -460,7 +499,7 @@ class AcidSlimeS(Monster):
                 bc.add_to_bot(Actions.debuff_player(PlayerStatus.WEAK, 1, True))
                 self.set_move(self.TACKLE)  # 严格交替：下回合固定为另一招
             case "Tackle":
-                dmg = bc.calculate_monster_damage(self, 3)
+                dmg = bc.calculate_monster_damage(self, 4 if bc.ascension >= 2 else 3)
                 bc.log.append(f"{self.display_name} 使用 冲撞(Tackle)。")
                 bc.add_to_bot(Actions.attack_player(self.idx, dmg))
                 self.set_move(self.LICK)
@@ -472,14 +511,16 @@ class AcidSlimeS(Monster):
 class SpikeSlimeS(Monster):
     """尖刺史莱姆（小）：只有 Tackle 5 伤，确定性出招。
 
-    wiki/C++ A0：HP 10-14。getMoveForRoll 无条件返回 TACKLE（任务描述
-    中的 Lick 属于 M/L 型，小尖刺没有）。take_turn 不切招、不 roll，
-    仅入队 NoOpRollMove 占位（对齐 lightspeed 的 RNG 消耗语义）。
+    wiki/C++ A0：HP 10-14（A7 起 11-15）。getMoveForRoll 无条件返回 TACKLE
+    （任务描述中的 Lick 属于 M/L 型，小尖刺没有）。take_turn 不切招、不
+    roll，仅入队 NoOpRollMove 占位（对齐 lightspeed 的 RNG 消耗语义）。
+    Tackle 5 伤（A2 起 6）。
     """
 
     name = "Spike Slime (S)"
     zh = "尖刺史莱姆（小）"
     hp_range = (10, 14)
+    hp_range_high = (11, 15)
 
     TACKLE = MoveDef("Tackle", "冲撞", "attack", base_damage=5)
 
@@ -488,14 +529,14 @@ class SpikeSlimeS(Monster):
 
     @classmethod
     def create(cls, bc: BattleContext, idx: int) -> "SpikeSlimeS":
-        hp = bc.rngs.monster_hp.int_inclusive(*cls.hp_range)
+        hp = _roll_hp(bc, cls)
         return cls(idx, hp, hp)
 
     def get_move_for_roll(self, bc: BattleContext, roll: int) -> MoveDef:
         return self.TACKLE
 
     def take_turn(self, bc: BattleContext) -> None:
-        dmg = bc.calculate_monster_damage(self, 5)
+        dmg = bc.calculate_monster_damage(self, 6 if bc.ascension >= 2 else 5)
         bc.log.append(f"{self.display_name} 使用 冲撞(Tackle)。")
         bc.add_to_bot(Actions.attack_player(self.idx, dmg))
         bc.add_to_bot(Actions.no_op_roll_move())
@@ -505,9 +546,10 @@ class SpikeSlimeS(Monster):
 class FungiBeast(Monster):
     """真菌兽：Bite 6 伤 / Grow 力量+3；死亡时孢子云（2 层易伤）。
 
-    wiki/C++ A0：HP 22-28。roll 分段：
+    wiki/C++ A0：HP 22-28（A7 起 24-28）。roll 分段：
       roll < 60：Bite 已连续两回合 → Grow，否则 Bite
       roll ≥ 60：上回合 Grow → Bite，否则 Grow
+    Grow 力量 +3（A2 起 4、A17 起 5——wiki/FungiBeast.java 三档数组）。
     孢子云（对齐 C++ preBattleAction 的 buff<SPORE_CLOUD>(2) 与 die 的
     SPORE_CLOUD 分支）：死亡时给玩家 2 层易伤，结算钩子在
     entities.Monster.die；最后一只死亡时战斗已结束，不再施加。
@@ -516,6 +558,7 @@ class FungiBeast(Monster):
     name = "Fungi Beast"
     zh = "真菌兽"
     hp_range = (22, 28)
+    hp_range_high = (24, 28)
 
     BITE = MoveDef("Bite", "撕咬", "attack", base_damage=6)
     GROW = MoveDef("Grow", "生长", "buff", intent_text="力量+3")
@@ -527,7 +570,7 @@ class FungiBeast(Monster):
 
     @classmethod
     def create(cls, bc: BattleContext, idx: int) -> "FungiBeast":
-        hp = bc.rngs.monster_hp.int_inclusive(*cls.hp_range)
+        hp = _roll_hp(bc, cls)
         return cls(idx, hp, hp)
 
     def get_move_for_roll(self, bc: BattleContext, roll: int) -> MoveDef:
@@ -547,8 +590,9 @@ class FungiBeast(Monster):
                 bc.log.append(f"{self.display_name} 使用 撕咬(Bite)。")
                 bc.add_to_bot(Actions.attack_player(self.idx, dmg))
             case "Grow":
-                self.statuses.add(MonsterStatus.STRENGTH, 3)
-                bc.log.append(f"{self.display_name} 使用 生长(Grow)，力量+3。")
+                str_gain = 5 if bc.ascension >= 17 else 4 if bc.ascension >= 2 else 3
+                self.statuses.add(MonsterStatus.STRENGTH, str_gain)
+                bc.log.append(f"{self.display_name} 使用 生长(Grow)，力量+{str_gain}。")
             case _:
                 raise AssertionError(f"未知招式 {move}")
         bc.add_to_bot(Actions.roll_move(self.idx))
@@ -1111,10 +1155,13 @@ class GremlinNob(Monster):
       首回合（lastMove INVALID）固定 BELLOW（ENRAGE 2，A18 起 3，
       无格挡——玩家每打出技能牌 +ENRAGE 层力量，钩子在
       battle.on_use_skill_card）；
-      A18 起：!lastTwoMoves(SKULL_BASH) → RUSH；否则 lastTwoMoves(RUSH)
-      → SKULL_BASH、否则 RUSH——逐行翻译后 SKULL_BASH 不可达
-      （lastTwo 不可能同时为两招），即 A18 起恒 RUSH（lightspeed 疑似
-      笔误，按字面保留，见模块头注释）；
+      A18 起（本体 GremlinNob.java）：近两回合均非 Skull Bash →
+      SKULL_BASH；否则 Rush 已连续两回合 → SKULL_BASH，否则 RUSH。
+      净效果 = 颅骨猛击、冲锋、冲锋 循环（wiki：A18 第 2 回合出
+      Skull Bash、此后连续两次 Bull Rush 再循环）。lightspeed 把
+      `!lastMove(SKULL_BASH) && !lastMoveBefore(SKULL_BASH)` 误译为
+      `!lastTwoMoves(SKULL_BASH)`，使 Skull Bash 不可达（恒 Rush）——
+      按 wiki/本体修正；
       A0：roll < 33 或 Rush 已连续两回合 → SKULL_BASH，否则 RUSH。
     数值：Rush 14 伤（A3 起 16）；Skull Bash 6 伤 + 2 层易伤
     （A3 起 8 伤；易伤恒 2，isSourceMonster → justApplied）。
@@ -1143,9 +1190,12 @@ class GremlinNob(Monster):
         if not self.move_history:
             return self.BELLOW
         if bc.ascension >= 18:
-            # A18 分支逐行翻译（Skull Bash 不可达，见类注释）
-            if not _last_two(self, "Skull Bash"):
-                return self.RUSH
+            # A18（本体 GremlinNob.java getMove）：近两回合均非 Skull Bash
+            # → Skull Bash；否则 Rush×2 → Skull Bash，否则 Rush。
+            # lightspeed 误译（lastTwoMoves(SKULL_BASH) 使 Skull Bash 不可达），
+            # 按 wiki"SB,R,R 循环"修正，见类注释。
+            if not _last(self, "Skull Bash") and not _last_before(self, "Skull Bash"):
+                return self.SKULL_BASH
             if _last_two(self, "Rush"):
                 return self.SKULL_BASH
             return self.RUSH
@@ -1186,8 +1236,10 @@ class Lagavulin(Monster):
       （0 基回合计数，即第 3 回合末醒、第 4 回合攻击）。本项目回合从 1
       起，条件映射为 bc.turn == 3。打醒的回合 SLEEP 意图照常空转一回合
       （本体"stunned for one turn"），下一回合才攻击。
-    自然醒按本体语义补移除 ASLEEP（C++ 漏移除，残留会让唤醒后首次受击
-    误剥金属化；本体自然醒后金属化常驻——见模块头注释）。
+    自然醒按本体语义补移除 ASLEEP 并同减 8 层金属化（本体 Lagavulin.java
+    changeState("OPEN") 的 ReducePowerAction(Metallicize, 8)——打醒与自然
+    醒两条路都走该分支，金属化在任一醒来方式后都被移除；lightspeed 的
+    LAGAVULIN_SLEEP 分支只 setMove，漏掉金属化移除，见模块头注释）。
     醒后序列（对齐 C++ setMove 链）：攻-攻-汲取灵魂循环；攻击 18 伤
     （A3 起 20），汲取灵魂玩家力量与敏捷 -1（A18 起 -2，立即结算）。
     get_move_for_roll 仅首回合调用一次：睡 → SLEEP / 已醒 → SIPHON_SOUL。
@@ -1241,9 +1293,12 @@ class Lagavulin(Monster):
                 self.set_move(self.ATTACK)
             case "Sleep":
                 # 自然醒计时（bc.turn 映射见类注释）；被打醒（引擎已移除
-                # ASLEEP）同样切攻击。自然醒补移除 ASLEEP（本体语义）。
+                # ASLEEP 并减 8 金属化）同样切攻击。自然醒按本体 OPEN 分支
+                # 补移除 ASLEEP 与 8 层金属化（打醒路径引擎已处理，此处
+                # decrement 已归零的状态无害）。
                 if bc.turn == 3 or not self.statuses.has(MonsterStatus.ASLEEP):
                     self.statuses.remove(MonsterStatus.ASLEEP)
+                    self.statuses.decrement(MonsterStatus.METALLICIZE, 8)
                     self.set_move(self.ATTACK)
                     bc.log.append(f"{self.display_name} 醒了！")
                 else:
@@ -2290,6 +2345,15 @@ class Byrd(Monster):
         if self.statuses.has(MonsterStatus.FLIGHT):
             self.statuses.set(MonsterStatus.FLIGHT, 4 if bc.ascension >= 17 else 3)
 
+    def attacked(self, bc: BattleContext, damage: int) -> None:
+        # Flying 的伤害减半（本体 FlightPower.atDamageFinalReceive /
+        # lightspeed BattleContext.cpp:2733 的 ×0.5 乘区）：引擎
+        # calculate_card_damage 未接线该乘区，以 attacked 覆盖在格挡
+        # 吸收前折半等效（非攻击 HP 损失不吃减半——damage() 路径不覆盖）。
+        if damage > 0 and self.statuses.has(MonsterStatus.FLIGHT):
+            damage = damage // 2
+        super().attacked(bc, damage)
+
     def get_move_for_roll(self, bc: BattleContext, roll: int) -> MoveDef:
         if not self.move_history:
             return self.CAW if _ai_boolean(bc, 0.375) else self.PECK
@@ -2508,10 +2572,15 @@ class Centurion(Monster):
                 bc.add_to_bot(Actions.attack_player(self.idx, dmg))
             case "Defend":
                 bc.log.append(f"{self.display_name} 使用 防御(Defend)。")
-                if bc.monsters.alive_count > 1:
-                    mystic = bc.monsters.monsters[1]
-                    if not mystic.is_dead_or_escaped():
-                        mystic.block += 20 if bc.ascension >= 17 else 15  # C++ addBlock 立即结算
+                amount = 20 if bc.ascension >= 17 else 15
+                mystic = bc.monsters.monsters[1] if bc.monsters.monster_count > 1 else None
+                if mystic is not None and not mystic.is_dead_or_escaped():
+                    mystic.block += amount  # C++ addBlock 立即结算
+                else:
+                    # 本体 Centurion.java：Protect 走 GainBlockRandomMonsterAction
+                    # （排除自身的随机存活怪，无其余存活怪时给自身）——秘术师
+                    # 已死时百夫长给自己格挡；lightspeed 固定 arr[1] 死亡即不加。
+                    self.block += amount
             case "Fury":
                 dmg = bc.calculate_monster_damage(self, 7 if bc.ascension >= 2 else 6)
                 bc.log.append(f"{self.display_name} 使用 狂怒(Fury)，{dmg} 点伤害 ×3。")
@@ -2641,7 +2710,7 @@ class GremlinLeader(Monster):
       ≥2 只：roll < 66：上回合 Encourage → Stab，否则 Encourage；
              roll ≥ 66：上回合 Stab → Encourage，否则 Stab。
     招式：Encourage——存活小鬼（槽 0-2）力量 +3（A3 起 +4、A18 起 +5）
-    且格挡 +6（A3 起 +10，立即结算），自身力量同 +；Rally——召唤 2 只
+    且格挡 +6（A18 起 +10，立即结算），自身力量同 +；Rally——召唤 2 只
     随机小鬼进空槽；Stab——6 伤 ×3。
     """
 
@@ -2693,7 +2762,10 @@ class GremlinLeader(Monster):
         match move.name:
             case "Encourage":
                 str_gain = 5 if bc.ascension >= 18 else 4 if bc.ascension >= 3 else 3
-                block_gain = 10 if bc.ascension >= 3 else 6
+                # 格挡 6、A18 起 10（本体 GremlinLeader.java：A_18_BLOCK_AMT=10，
+                # 力量三档走 A3/A18 两档与格挡不同步；lightspeed 误用 asc3，
+                # wiki 记 A18 为准）
+                block_gain = 10 if bc.ascension >= 18 else 6
                 bc.log.append(f"{self.display_name} 使用 鼓动(Encourage)，小鬼们力量 +{str_gain}、格挡 +{block_gain}！")
                 for i in range(min(3, bc.monsters.monster_count)):
                     minion = bc.monsters.monsters[i]
@@ -2722,10 +2794,12 @@ class BookOfStabbing(Monster):
     PAINFUL_STABS 1（玩家每打出攻击牌受 1 伤，引擎 on_use_attack_card）
     + miscInfo 置 1（多段刺段数计数）。roll 分段：
       roll < 15：上回合 Single Stab → 计数 +1 出 Multi Stab；
-                 否则 Single Stab；
-      上两回合均 Multi Stab → Single Stab；
+                 否则 Single Stab（A18 起计数也 +1）；
+      上两回合均 Multi Stab → Single Stab（A18 起计数也 +1）；
       否则 → 计数 +1 出 Multi Stab。
-    （C++ A18 的 ++stabCount 写在 return 之后不可达，不移植。）
+    （本体 BookOfStabbing.java 的 A18 ++stabCount 真实可达——lightspeed
+    误译到 return 之后成死代码，此处按本体补回：A18 起每回合选择 Single
+    Stab 也 +1 计数，净效果同 wiki"段数随回合递增"。）
     数值：Single Stab 21 伤（A3 起 24）；Multi Stab 6 伤（A3 起 7）
     × 当前计数（首段从 2 起，之后每次选用 Multi Stab 计数 +1）。
     """
@@ -2755,8 +2829,13 @@ class BookOfStabbing(Monster):
             if _last(self, "Single Stab"):
                 self.misc_info += 1
                 return self.MULTI_STAB
+            # A18：选 Single Stab 时计数也 +1（本体可达分支，lightspeed 死代码）
+            if bc.ascension >= 18:
+                self.misc_info += 1
             return self.SINGLE_STAB
         if _last_two(self, "Multi Stab"):
+            if bc.ascension >= 18:
+                self.misc_info += 1
             return self.SINGLE_STAB
         self.misc_info += 1
         return self.MULTI_STAB
@@ -2997,8 +3076,8 @@ class TheCollector(Monster):
       上回合非 Buff → Buff；否则 Fireball。
     Buff：存活火把头（槽 0-1）与自身力量 +3（A4 起 +4、A19 起 +5），
     自身格挡 +15（A9 起 +18、A19 起 +23，立即结算）。
-    Mega Debuff：3 层虚弱/易伤/脆弱（恒 3，无进阶加成——wiki 记 A19 起
-    5 层，以 C++ 为准）。
+    Mega Debuff：3 层虚弱/易伤/脆弱（A19 起 5 层——本体 TheCollector.java
+    megaDebuffAmt 三档 {3,3,5}@A4/A19；lightspeed 恒 3 系漏译，wiki 为准）。
     """
 
     name = "The Collector"
@@ -3056,10 +3135,11 @@ class TheCollector(Monster):
                 self.statuses.add(MonsterStatus.STRENGTH, str_gain)
                 self.block += block_gain  # C++ addBlock 立即结算
             case "Mega Debuff":
+                n = 5 if bc.ascension >= 19 else 3
                 bc.log.append(f"{self.display_name} 使用 超级削弱(Mega Debuff)！")
-                bc.add_to_bot(Actions.debuff_player(PlayerStatus.WEAK, 3, True))
-                bc.add_to_bot(Actions.debuff_player(PlayerStatus.VULNERABLE, 3, True))
-                bc.add_to_bot(Actions.debuff_player(PlayerStatus.FRAIL, 3, True))
+                bc.add_to_bot(Actions.debuff_player(PlayerStatus.WEAK, n, True))
+                bc.add_to_bot(Actions.debuff_player(PlayerStatus.VULNERABLE, n, True))
+                bc.add_to_bot(Actions.debuff_player(PlayerStatus.FRAIL, n, True))
             case _:
                 raise AssertionError(f"未知招式 {move}")
         bc.add_to_bot(Actions.roll_move(self.idx))
@@ -3117,8 +3197,9 @@ class TheChamp(Monster):
       通用段：roll ≤ 15（A19 起 30）且上回合非 防御姿态 且已用 < 2 →
         防御姿态（格挡 +15、金属化 +5（A9 起 18/6、A19 起 20/7），
         立即结算），计数 +1；
-        roll ≤ 30 且上回合非 嘲讽/防御姿态 → 嘲讽（力量 +3（A4 起 +4、
-        A19 起 +5）——wiki 记 {2,3,4}，以 C++ 为准）；
+        roll ≤ 30 且上回合非 嘲讽/防御姿态 → 嘲讽（力量 +2（A4 起 +3、
+        A19 起 +4）——本体 Champ.java strAmt 三档 {2,3,4}；lightspeed 误为
+        {3,4,5}（bossDiffIdx），wiki 为准）；
         roll ≤ 55 且上回合非 掌掴 → 掌掴（12 伤（A4 起 14）+ 2 脆弱 +
         2 易伤）；上回合非 重斩 → 重斩（16 伤（A4 起 18））；否则 掌掴。
     Execute：10 伤 ×2（无进阶加成）。
@@ -3195,7 +3276,9 @@ class TheChamp(Monster):
                 bc.add_to_bot(Actions.debuff_player(PlayerStatus.FRAIL, 2, True))
                 bc.add_to_bot(Actions.debuff_player(PlayerStatus.VULNERABLE, 2, True))
             case "Gloat":
-                amt = 5 if bc.ascension >= 19 else 4 if bc.ascension >= 4 else 3
+                # 本体 Champ.java：strAmt 三档 {2,3,4}@A4/A19（Anger 用其 ×3）；
+                # lightspeed 误译为 {3,4,5}，wiki 为准
+                amt = 4 if bc.ascension >= 19 else 3 if bc.ascension >= 4 else 2
                 self.statuses.add(MonsterStatus.STRENGTH, amt)
                 bc.log.append(f"{self.display_name} 使用 得意(Gloat)，力量 +{amt}。")
             case "Taunt":
@@ -3302,7 +3385,8 @@ class Darkling(Monster):
       首回合 50/50：硬化（+12 格挡，A17 起另 +2 力量）/ 啃咬；
       假死中：Regrow（空转一回合）→ 下回合 Reincarnate（复活）；
       roll < 40：非上回合 Chomp 且 idx≠1（中位永不 Chomp）→ Chomp
-      （8/9 伤），否则重抽 40-99；
+      （8/9 伤 ×2——本体 Darkling.java 每个 Chomp 入队两次 DamageAction；
+      lightspeed 单发，wiki 记 ×2，按本体修正），否则重抽 40-99；
       roll < 70：上回合非硬化 → 硬化，否则啃咬；
       啃咬未连续两回合 → 啃咬，否则整段重抽。
     死亡（die 覆盖，对齐 Monster.cpp:283-325）：存活数先 -1，归零即
@@ -3317,7 +3401,7 @@ class Darkling(Monster):
     hp_range = (48, 56)
     hp_range_high = (50, 59)
 
-    CHOMP = MoveDef("Chomp", "撕咬", "attack", base_damage=8)
+    CHOMP = MoveDef("Chomp", "撕咬", "attack", base_damage=8)  # ×2 段（本体 Darkling.java 两次 DamageAction）
     HARDEN = MoveDef("Harden", "硬化", "defend", intent_text="获得 12 点格挡")
     NIP = MoveDef("Nip", "啃咬", "attack", base_damage=9)  # 基础值逐实例 roll，见 __init__
     REGROW = MoveDef("Regrow", "重生蓄力", "unknown", intent_text="（假死蓄力，下回合复活）")
@@ -3384,9 +3468,11 @@ class Darkling(Monster):
         move = self.move_history[0]
         match move.name:
             case "Chomp":
+                # 本体 Darkling.java：Chomp 入队两次 DamageAction（wiki"8×2 伤"）
                 dmg = bc.calculate_monster_damage(self, 9 if bc.ascension >= 2 else 8)
-                bc.log.append(f"{self.display_name} 使用 撕咬(Chomp)。")
-                bc.add_to_bot(Actions.attack_player(self.idx, dmg))
+                bc.log.append(f"{self.display_name} 使用 撕咬(Chomp)，{dmg} 点伤害 ×2。")
+                for _ in range(2):
+                    bc.add_to_bot(Actions.attack_player(self.idx, dmg))
                 bc.add_to_bot(Actions.roll_move(self.idx))
             case "Harden":
                 self.block += 12  # 对齐 C++ addBlock：立即结算
@@ -3845,7 +3931,7 @@ class WrithingMass(Monster):
     hp_range = (160, 160)
     hp_range_high = (175, 175)
 
-    FLAIL = MoveDef("Flail", "连枷", "attack", base_damage=15)  # 另获 16 格挡
+    FLAIL = MoveDef("Flail", "连枷", "attack", base_damage=15)  # 另获等同基础伤害的格挡（15/16@A2）
     IMPLANT = MoveDef("Implant", "植入", "debuff", intent_text="（一次性；本体另塞 2 张寄生物，未移植）")
     MULTI_STRIKE = MoveDef("Multi Strike", "多重打击", "attack", base_damage=7)  # ×3 段
     STRONG_STRIKE = MoveDef("Strong Strike", "强力攻击", "attack", base_damage=32)
@@ -3935,10 +4021,13 @@ class WrithingMass(Monster):
         move = self.move_history[0]
         match move.name:
             case "Flail":
-                dmg = bc.calculate_monster_damage(self, 16 if bc.ascension >= 2 else 15)
+                # 本体 WrithingMass.java：格挡 = 基础连枷伤害（damage.get(2).base，
+                # 15/16@A2，不含力量）；lightspeed 误为 16/18，wiki 记 16 系只看 A2
+                base = 16 if bc.ascension >= 2 else 15
+                dmg = bc.calculate_monster_damage(self, base)
                 bc.log.append(f"{self.display_name} 使用 连枷(Flail)。")
                 bc.add_to_bot(Actions.attack_player(self.idx, dmg))
-                bc.add_to_bot(Actions.monster_gain_block(self.idx, 18 if bc.ascension >= 2 else 16))
+                bc.add_to_bot(Actions.monster_gain_block(self.idx, base))
                 bc.add_to_bot(Actions.roll_move(self.idx))
             case "Implant":
                 self.misc_info = 1  # 一次性标记（对齐 C++ miscInfo = true）
@@ -4053,7 +4142,8 @@ class Nemesis(Monster):
     （引擎缺，apply_end_of_turn_triggers 覆盖补）——净效果为"隔回合
     无实体，覆盖 2 回合内的所有攻击"。
     首回合 50/50：攻击（6×3，A3 起 7×3）/ 第二击（塞 3 张灼伤进弃牌
-    堆，A3 起 5 张，立即结算）。此后 roll 分段（逐行对齐 C++）：
+    堆，A18 起 5 张——本体 Nemesis.java 的 A18 分支（lightspeed 误译为
+    asc3），立即结算）。此后 roll 分段（逐行对齐 C++）：
       < 30：近两回合无镰刀 → 镰刀（45）；否则 50/50：攻击未连续两回
       合 → 攻击，否则第二击；非上回合第二击 → 第二击，否则攻击；
       < 65：攻击未连续两回合 → 攻击；否则（50% 且近两回合无镰刀）→
@@ -4126,7 +4216,8 @@ class Nemesis(Monster):
                 if not self.statuses.has(MonsterStatus.INTANGIBLE):
                     bc.add_to_bot(Actions.buff_enemy(self.idx, MonsterStatus.INTANGIBLE, 2))
             case "Second Strike":
-                n = 5 if bc.ascension >= 3 else 3
+                # 本体 Nemesis.java：A18 起塞 5 张（lightspeed 误译为 asc3）
+                n = 5 if bc.ascension >= 18 else 3
                 bc.log.append(f"{self.display_name} 使用 第二击(Second Strike)，塞 {n} 张灼伤进弃牌堆。")
                 # 对齐 C++ actFunc：立即结算；rollMove 直调；无实体立即自加
                 for _ in range(n):
@@ -4292,8 +4383,9 @@ class AwakenedOne(Monster):
     """觉醒者（Act 3 Boss，awakened_one 遭遇槽 2，槽 0/1 为两只邪教徒）：
     half_dead 二阶段。
 
-    wiki/C++ A0：HP 300（A9 起区间 300-320 抽样——wiki 记恒 320，以
-    C++ 为准）；二阶段 REBIRTH 固定 maxHp = 320（A9）/300 满血。
+    wiki/C++ A0：HP 300（A9 起 320——本体 AwakenedOne.java setHp(320)
+    恒定值；lightspeed 误为区间 300-320 抽样，wiki 为准）；二阶段
+    REBIRTH 固定 maxHp = 320（A9）/300 满血。
     preBattle：A4 起力量 +2；CURIOSITY 1（A19 起 2；玩家每打出能力牌
     +层 力量，引擎 on_use_power_card）；REGEN 10（A19 起 15，回合末
     回血减层）。
@@ -4314,7 +4406,7 @@ class AwakenedOne(Monster):
     name = "Awakened One"
     zh = "觉醒者"
     hp_range = (300, 300)
-    hp_range_high = (300, 320)
+    hp_range_high = (320, 320)  # 本体 setHp(320) 恒定（lightspeed 误为 300-320 区间）
     hp_high_asc = 9
 
     SLASH = MoveDef("Slash", "挥砍", "attack", base_damage=20)

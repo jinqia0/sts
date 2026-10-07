@@ -1181,20 +1181,30 @@ def test_gremlin_nob_roll_segments():
     assert m.get_move_for_roll(bc, 33).name == "Rush"
 
 
-def test_gremlin_nob_a18_rush_only():
-    """A18 分支逐行翻译：Skull Bash 不可达（lightspeed 疑似笔误，按字面保留）。"""
+def test_gremlin_nob_a18_pattern():
+    """A18：本体 GremlinNob.java——近两回合无 Skull Bash → Skull Bash；
+    Rush 连续两回合 → Skull Bash，否则 Rush。净效果 SB-R-R 循环
+    （wiki：第 2 回合出 Skull Bash、此后两次 Bull Rush 再循环）。
+    lightspeed 误译为 lastTwoMoves(SKULL_BASH)（Skull Bash 不可达），
+    已按本体修正。"""
     bc, m = solo_battle(GremlinNob, ascension=18)
     assert m.current_move.name == "Bellow"
-    for history in (
-        (GremlinNob.RUSH,),
-        (GremlinNob.SKULL_BASH,),
-        (GremlinNob.RUSH, GremlinNob.RUSH),
-        (GremlinNob.SKULL_BASH, GremlinNob.SKULL_BASH),
-        (GremlinNob.RUSH, GremlinNob.SKULL_BASH),
-    ):
-        set_history(m, *history)
-        for roll in (0, 33, 50, 99):
-            assert m.get_move_for_roll(bc, roll).name == "Rush"
+    # 上回合 Bellow（近两回合无 SB）→ Skull Bash
+    set_history(m, GremlinNob.BELLOW)
+    for roll in (0, 33, 50, 99):
+        assert m.get_move_for_roll(bc, roll).name == "Skull Bash"
+    # 上回合 Skull Bash → Rush
+    set_history(m, GremlinNob.SKULL_BASH)
+    for roll in (0, 50, 99):
+        assert m.get_move_for_roll(bc, roll).name == "Rush"
+    # [Rush, SB]：上上回合是 SB → Rush
+    set_history(m, GremlinNob.SKULL_BASH, GremlinNob.RUSH)
+    for roll in (0, 50, 99):
+        assert m.get_move_for_roll(bc, roll).name == "Rush"
+    # Rush 连续两回合 → Skull Bash
+    set_history(m, GremlinNob.RUSH, GremlinNob.RUSH)
+    for roll in (0, 50, 99):
+        assert m.get_move_for_roll(bc, roll).name == "Skull Bash"
     # A18 的 Bellow 激怒为 3 层（重开一局走执行路径）
     bc, m = solo_battle(GremlinNob, ascension=18)
     bc.end_turn()
@@ -1205,7 +1215,10 @@ def test_gremlin_nob_a18_rush_only():
 
 
 def test_lagavulin_initial_state_and_natural_wake():
-    """开局沉睡（金属化 8 + 8 格挡）；3 回合自然醒，保留金属化。"""
+    """开局沉睡（金属化 8 + 8 格挡）；3 回合自然醒，醒来移除金属化
+    （本体 Lagavulin.java changeState("OPEN") 对打醒/自然醒统一
+    ReducePowerAction(Metallicize, 8)；lightspeed 的 SLEEP 分支漏移除，
+    已按本体修正）。"""
     bc, m = solo_battle(Lagavulin)
     assert 109 <= m.hp <= 111
     assert m.statuses.get(MonsterStatus.ASLEEP) == 1
@@ -1219,16 +1232,15 @@ def test_lagavulin_initial_state_and_natural_wake():
         assert bc.player.hp == PLAYER_MAX_HP
     bc.end_turn()  # 第 3 回合：自然醒 → 下一回合攻击
     assert m.current_move.name == "Attack"
-    # 本体语义：自然醒移除 Asleep 且金属化常驻（C++ 漏移除，见类注释）
+    # 本体语义：自然醒移除 Asleep 与金属化（两路醒来都走 OPEN 分支）
     assert not m.statuses.has(MonsterStatus.ASLEEP)
-    assert m.statuses.get(MonsterStatus.METALLICIZE) == 8
+    assert not m.statuses.has(MonsterStatus.METALLICIZE)
     bc.end_turn()  # 第 4 回合：攻击 18
     assert bc.player.hp == PLAYER_MAX_HP - 18
-    # 醒后受击：金属化 8 仍在（格挡吸收），不再被剥除
+    # 醒后受击不再有金属化格挡
     hp0 = m.hp
     play_strike(bc, target=0)
-    assert m.hp == hp0  # 6 伤全被金属化格挡吸收
-    assert m.statuses.get(MonsterStatus.METALLICIZE) == 8
+    assert m.hp == hp0 - 6
 
 
 def test_lagavulin_sequence_and_siphon_soul():
@@ -2171,9 +2183,15 @@ def test_chosen_opening_poke_then_hex():
 
     assert bc.player.hp == PLAYER_MAX_HP - 10
     assert not any(c.card is DAZED for c in bc.cards.draw_pile)
-    # 打 1 张牌 → +1 DAZED 洗入抽牌堆
+    # 打 1 张非攻击牌 → +1 DAZED 洗入抽牌堆（本体 HexPower 仅非攻击牌；
+    # 攻击牌不触发）
+    from sts.content.cards import DEFEND as DEFEND_C
+
     bc.cards.hand.clear()
     bc.cards.hand.append(bc.cards.instantiate(STRIKE))
+    bc.play_card(0)
+    assert sum(1 for c in bc.cards.draw_pile if c.card is DAZED) == 0
+    bc.cards.hand.append(bc.cards.instantiate(DEFEND_C))
     bc.play_card(0)
     assert sum(1 for c in bc.cards.draw_pile if c.card is DAZED) == 1
 
@@ -3074,12 +3092,13 @@ def test_champ_move_values():
     assert bc.player.statuses.get(PlayerStatus.VULNERABLE) == 2
     force_intent(m, TheChamp.GLOAT)
     bc.end_turn()
-    assert m.statuses.get(MonsterStatus.STRENGTH) == 3
+    # 本体 Champ.java strAmt {2,3,4}@A4/A19（lightspeed 误为 {3,4,5}，已修）
+    assert m.statuses.get(MonsterStatus.STRENGTH) == 2
     force_intent(m, TheChamp.EXECUTE)
     hp0 = bc.player.hp
     bc.end_turn()
-    # (10 + 得意 3 力量) × 1.5（掌掴的 2 层易伤仍在）× 2 段 = 19×2
-    assert bc.player.hp == hp0 - 38
+    # (10 + 得意 2 力量) × 1.5（掌掴的 2 层易伤仍在）× 2 段 = 18×2
+    assert bc.player.hp == hp0 - 36
     force_intent(m, TheChamp.TAUNT)
     bc.end_turn()
     assert bc.player.statuses.get(PlayerStatus.WEAK) == 2
@@ -3100,13 +3119,13 @@ def test_champ_ascension_branches():
     assert bc.player.hp == PLAYER_MAX_HP - 18 - 14
     force_intent(m, TheChamp.GLOAT)
     bc.end_turn()
-    assert m.statuses.get(MonsterStatus.STRENGTH) == 4  # A4：+4（wiki 记 +3，以 C++ 为准）
+    assert m.statuses.get(MonsterStatus.STRENGTH) == 3  # A4：Gloat +3（本体三档 {2,3,4}）
     m.hp = 100
     force_intent(m, TheChamp.ANGER)
     bc.end_turn()
-    assert m.statuses.get(MonsterStatus.STRENGTH) == 4 + 9  # 得意 4 + 愤怒 9
+    assert m.statuses.get(MonsterStatus.STRENGTH) == 3 + 9  # 得意 3 + 愤怒 9
 
-    # A9：防御姿态 18 格挡 + 6 金属化；A19：20/7、Gloat+5、Anger+12、阈值 30
+    # A9：防御姿态 18 格挡 + 6 金属化；A19：20/7、Gloat+4、Anger+12、阈值 30
     bc9, m9 = _fresh_champ(ascension=9)
     force_intent(m9, TheChamp.DEFENSIVE_STANCE)
     bc9.end_turn()
@@ -3123,11 +3142,11 @@ def test_champ_ascension_branches():
     m19.statuses.remove(MonsterStatus.METALLICIZE)
     force_intent(m19, TheChamp.GLOAT)
     bc19.end_turn()
-    assert m19.statuses.get(MonsterStatus.STRENGTH) == 5
+    assert m19.statuses.get(MonsterStatus.STRENGTH) == 4  # A19：Gloat +4
     m19.hp = 100
     force_intent(m19, TheChamp.ANGER)
     bc19.end_turn()
-    assert m19.statuses.get(MonsterStatus.STRENGTH) == 5 + 12
+    assert m19.statuses.get(MonsterStatus.STRENGTH) == 4 + 12
 
 
 # ====================================================================
@@ -3224,7 +3243,9 @@ def test_darkling_harden_chomp_nip_values():
     assert bc.player.hp == PLAYER_MAX_HP
     force_intent(m, Darkling.CHOMP)
     bc.end_turn()
-    assert bc.player.hp == PLAYER_MAX_HP - 8
+    # 本体 Darkling.java：Chomp 入队两次 DamageAction（wiki"8×2 伤"；
+    # lightspeed 单发系笔误，已修）
+    assert bc.player.hp == PLAYER_MAX_HP - 16
     force_intent(m, m.NIP)
     hp0 = bc.player.hp
     bc.end_turn()
@@ -3284,7 +3305,8 @@ def test_darkling_a2_values():
     bc.monsters.monsters[2].escape(bc)
     force_intent(m, Darkling.CHOMP)
     bc.end_turn()
-    assert bc.player.hp == PLAYER_MAX_HP - 9
+    # A2：Chomp 9×2（本体两段；lightspeed 单发笔误已修）
+    assert bc.player.hp == PLAYER_MAX_HP - 18
 
 
 # ---- Orb Walker ----
@@ -3604,13 +3626,14 @@ def test_writhing_mass_move_values():
     force_intent(bc.monsters.monsters[0], WrithingMass.MULTI_STRIKE)
     bc.end_turn()
     assert bc.player.hp == PLAYER_MAX_HP - 21
-    # 连枷：15 伤 + 16 格挡
+    # 连枷：15 伤 + 15 格挡（本体 WrithingMass.java：格挡 = 基础连枷伤害
+    # damage.get(2).base；lightspeed 误为 16/18，已修）
     bc = act3_battle("writhing_mass")
     m = bc.monsters.monsters[0]
     force_intent(m, WrithingMass.FLAIL)
     bc.end_turn()
     assert bc.player.hp == PLAYER_MAX_HP - 15
-    assert m.block == 16
+    assert m.block == 15
     # 枯萎：10 伤 + 2 虚弱 + 2 易伤
     bc = act3_battle("writhing_mass")
     force_intent(bc.monsters.monsters[0], WrithingMass.WITHER)
@@ -3931,7 +3954,7 @@ def test_awakened_one_a4_a9():
     assert bc4.monsters.monsters[2].statuses.get(MonsterStatus.STRENGTH) == 2
     bc9 = act3_battle("awakened_one", ascension=9)
     m9 = bc9.monsters.monsters[2]
-    assert 300 <= m9.hp <= 320  # C++ A9 区间 300-320（wiki 记 320）
+    assert m9.hp == 320  # 本体 setHp(320) 恒定（lightspeed 误为 300-320 区间，已修）
     m9.hp = 1
     play_strike(bc9, target=2)
     assert m9.half_dead
@@ -4297,7 +4320,9 @@ def test_jaw_worm_horde_layout():
         for m in bc.monsters.monsters:
             assert isinstance(m, JawWorm)
             assert m.statuses.get(MonsterStatus.STRENGTH) == 3
-            assert m.block == 5
+            # 本体 JawWorm.java：硬化变体 preBattle 格挡 = bellowBlock
+            # （6，A17 起 9；lightspeed 误 5，wiki 记 Block 6，已修）
+            assert m.block == 6
             # 占位意图跳过"首回合固定 Chomp"：三段 roll 均可能
             assert m.current_move.name in {"Chomp", "Thrash", "Bellow"}
         assert 40 <= m.hp <= 44
@@ -4308,3 +4333,193 @@ def test_jaw_worm_horde_a2():
     for m in bc.monsters.monsters:
         assert m.statuses.get(MonsterStatus.STRENGTH) == 4
         assert m.block == 6
+
+
+# ====================================================================
+# 2026-10 全量审计回归（wiki slaythespire.wiki.gg + 反编译本体
+# aeubanks/sts 裁决 lightspeed 误译；依据见各测试注释与类 docstring）
+# ====================================================================
+
+
+def test_audit_cultist_ascension_tiers():
+    """Cultist：Ritual 三档 {3,4,5}@A2/A17（本体 ritualAmount[hallwayIdx]）；
+    A7 HP 50-56（wiki AscHP）。"""
+    bc, m = solo_battle(Cultist)
+    bc.end_turn()
+    assert m.statuses.get(MonsterStatus.RITUAL) == 3
+    bc, m = solo_battle(Cultist, ascension=2)
+    bc.end_turn()
+    assert m.statuses.get(MonsterStatus.RITUAL) == 4
+    bc, m = solo_battle(Cultist, ascension=17)
+    bc.end_turn()
+    assert m.statuses.get(MonsterStatus.RITUAL) == 5
+    for seed in range(10):
+        bc, m = solo_battle(Cultist, seed=seed, ascension=7)
+        assert 50 <= m.hp <= 56
+
+
+def test_audit_jaw_worm_ascension_tiers():
+    """Jaw Worm：Chomp A2 起 12；Bellow 力量 {3,4,5}@A2/A17、格挡 {6,9}@A17；
+    A7 HP 42-46（wiki/JawWorm.java 三档数组，lightspeed 均缺失已补）。"""
+    bc, m = solo_battle(JawWorm, ascension=2)
+    force_intent(m, JawWorm.CHOMP)
+    bc.end_turn()
+    assert bc.player.hp == PLAYER_MAX_HP - 12
+    force_intent(m, JawWorm.BELLOW)
+    bc.end_turn()
+    assert m.statuses.get(MonsterStatus.STRENGTH) == 4
+    assert m.block == 6
+    bc, m = solo_battle(JawWorm, ascension=17)
+    force_intent(m, JawWorm.BELLOW)
+    bc.end_turn()
+    assert m.statuses.get(MonsterStatus.STRENGTH) == 5
+    assert m.block == 9
+    for seed in range(10):
+        bc, m = solo_battle(JawWorm, seed=seed, ascension=7)
+        assert 42 <= m.hp <= 46
+
+
+def test_audit_louse_ascension_tiers():
+    """虱子：Bite A2 起 6-8；Curl Up A7 起 4-8、A17 起 9-12；
+    A7 HP 红虱 11-16 / 绿虱 12-18；A17 副招不连续两回合
+    （本体 LouseNormal.java，lightspeed 均缺失已补）。"""
+    for seed in range(10):
+        bc, m = solo_battle(RedLouse, seed=seed, ascension=2)
+        assert 6 <= m.bite_dmg <= 8
+        bc, m = solo_battle(RedLouse, seed=seed, ascension=7)
+        assert 4 <= m.statuses.get(MonsterStatus.CURL_UP) <= 8
+        assert 11 <= m.hp <= 16
+        bc, m = solo_battle(GreenLouse, seed=seed, ascension=7)
+        assert 4 <= m.statuses.get(MonsterStatus.CURL_UP) <= 8
+        assert 12 <= m.hp <= 18
+        bc, m = solo_battle(RedLouse, seed=seed, ascension=17)
+        assert 9 <= m.statuses.get(MonsterStatus.CURL_UP) <= 12
+    # A17 出招约束：副招不连续两回合（上回合 Grow → roll<25 出 Bite）
+    bc, m = solo_battle(RedLouse, ascension=17)
+    set_history(m, RedLouse.GROW)
+    assert m.get_move_for_roll(bc, 10).name == "Bite"
+
+
+def test_audit_small_slimes_ascension_tiers():
+    """Acid/Spike Slime (S)：Tackle A2 起 4/6；A7 HP 9-13 / 11-15；
+    Acid A17 起固定 Lick（本体 AcidSlime_S.java A17 分支，已补）。"""
+    bc, m = solo_battle(AcidSlimeS, ascension=2)
+    force_intent(m, AcidSlimeS.TACKLE)
+    bc.end_turn()
+    assert bc.player.hp == PLAYER_MAX_HP - 4
+    bc, m = solo_battle(SpikeSlimeS, ascension=2)
+    force_intent(m, SpikeSlimeS.TACKLE)
+    bc.end_turn()
+    assert bc.player.hp == PLAYER_MAX_HP - 6
+    for seed in range(10):
+        _, m = solo_battle(AcidSlimeS, seed=seed, ascension=7)
+        assert 9 <= m.hp <= 13
+        _, m = solo_battle(SpikeSlimeS, seed=seed, ascension=7)
+        assert 11 <= m.hp <= 15
+    bc, m = solo_battle(AcidSlimeS, ascension=17)
+    for roll in (0, 25, 50, 99):
+        assert m.get_move_for_roll(bc, roll).name == "Lick"
+
+
+def test_audit_fungi_beast_ascension_tiers():
+    """Fungi Beast：Grow 力量 {3,4,5}@A2/A17；A7 HP 24-28
+    （本体 FungiBeast.java 三档数组，lightspeed 缺失已补）。"""
+    bc, m = solo_battle(FungiBeast, ascension=2)
+    force_intent(m, FungiBeast.GROW)
+    bc.end_turn()
+    assert m.statuses.get(MonsterStatus.STRENGTH) == 4
+    bc, m = solo_battle(FungiBeast, ascension=17)
+    force_intent(m, FungiBeast.GROW)
+    bc.end_turn()
+    assert m.statuses.get(MonsterStatus.STRENGTH) == 5
+    for seed in range(10):
+        _, m = solo_battle(FungiBeast, seed=seed, ascension=7)
+        assert 24 <= m.hp <= 28
+
+
+def test_audit_byrd_flight_halves_attack_damage():
+    """Flying：受攻击伤害减半（本体 FlightPower.atDamageFinalReceive；
+    引擎乘区未接线，以 Byrd.attacked 覆盖补——lightspeed 有该乘区）。"""
+    bc = act2_battle("three_byrds")
+    slay(bc, 1)
+    slay(bc, 2)
+    b = bc.monsters.monsters[0]
+    assert b.statuses.get(MonsterStatus.FLIGHT) == 3
+    hp0 = b.hp
+    b.attacked(bc, 10)
+    assert b.hp == hp0 - 5  # 10 伤飞行中折半
+    assert b.statuses.get(MonsterStatus.FLIGHT) == 2
+
+
+def test_audit_gremlin_leader_a18_encourage():
+    """Encourage：力量 {3,4,5}@A3/A18；格挡 {6,10}@A18（本体
+    GremlinLeader.java A_18_BLOCK_AMT=10；lightspeed 误 asc3，已修）。"""
+    bc = act2_battle("gremlin_leader", ascension=3)
+    leader = bc.monsters.monsters[3]
+    g1 = bc.monsters.monsters[1]
+    force_intent(leader, GremlinLeader.ENCOURAGE)
+    bc.end_turn()
+    assert g1.statuses.get(MonsterStatus.STRENGTH) == 4
+    assert g1.block == 6  # A3 力量升档、格挡仍 6
+    bc = act2_battle("gremlin_leader", ascension=18)
+    leader = bc.monsters.monsters[3]
+    g1 = bc.monsters.monsters[1]
+    force_intent(leader, GremlinLeader.ENCOURAGE)
+    bc.end_turn()
+    assert g1.statuses.get(MonsterStatus.STRENGTH) == 5
+    assert g1.block >= 10
+
+
+def test_audit_book_of_stabbing_a18_count():
+    """A18：选 Single Stab 时多段刺计数也 +1（本体 BookOfStabbing.java
+    可达分支；lightspeed 误译为 return 后死代码，已修）。"""
+    bc = act2_battle("book_of_stabbing", ascension=18)
+    m = bc.monsters.monsters[0]
+    m.misc_info = 1
+    set_history(m, BookOfStabbing.MULTI_STAB)  # 上回合非 Single Stab
+    assert m.get_move_for_roll(bc, 5).name == "Single Stab"
+    assert m.misc_info == 2  # A18：Single Stab 也计数
+    m.misc_info = 2
+    set_history(m, BookOfStabbing.MULTI_STAB, BookOfStabbing.MULTI_STAB)
+    assert m.get_move_for_roll(bc, 99).name == "Single Stab"
+    assert m.misc_info == 3
+    # A0：Single Stab 不计数
+    bc = act2_battle("book_of_stabbing")
+    m = bc.monsters.monsters[0]
+    m.misc_info = 1
+    set_history(m, BookOfStabbing.MULTI_STAB)
+    m.get_move_for_roll(bc, 5)
+    assert m.misc_info == 1
+
+
+def test_audit_collector_a19_mega_debuff():
+    """Mega Debuff A19 起 5 层（本体 TheCollector.java megaDebuffAmt 三档；
+    lightspeed 误恒 3，wiki 记 A19 起 5，已修）。"""
+    bc = act2_battle("collector", ascension=19)
+    collector = bc.monsters.monsters[2]
+    force_intent(collector, TheCollector.MEGA_DEBUFF)
+    bc.end_turn()
+    assert bc.player.statuses.get(PlayerStatus.WEAK) == 5
+    assert bc.player.statuses.get(PlayerStatus.VULNERABLE) == 5
+    assert bc.player.statuses.get(PlayerStatus.FRAIL) == 5
+
+
+def test_audit_nemesis_a18_burns():
+    """第二击 A18 起塞 5 张灼伤（本体 Nemesis.java A18 分支；
+    lightspeed 误译 asc3，wiki 记 A18，已修）。"""
+    bc, m = solo_battle(Nemesis, ascension=18)
+    force_intent(m, Nemesis.SECOND_STRIKE)
+    bc.end_turn()
+    burns = sum(1 for i in bc.cards.discard_pile if i.card is BURN)
+    assert burns == 5
+
+
+def test_audit_centurion_protect_self_when_mystic_dead():
+    """Protect：秘术师已死时给自己格挡（本体 Centurion.java 走
+    GainBlockRandomMonsterAction 的回退；lightspeed 死亡即不加，已修）。"""
+    bc = act2_battle("centurion_and_healer")
+    slay(bc, 1)
+    centurion = bc.monsters.monsters[0]
+    force_intent(centurion, Centurion.DEFEND)
+    bc.end_turn()
+    assert centurion.block == 15

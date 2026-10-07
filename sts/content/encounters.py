@@ -482,8 +482,11 @@ def _setup_jaw_worm_horde(bc: BattleContext) -> None:
     # 对齐 JAW_WORM_HORDE：颚虫 ×3 + 力量/格挡加成 + 非 INVALID 占位
     # 意图（跳过"首回合固定 Chomp"，此后走 roll 分段）
     _spawn(bc, JawWorm, JawWorm, JawWorm)
+    # 本体 JawWorm.java 硬化变体 preBattle：力量 = bellowStr（3/4/5），
+    # 格挡 = bellowBlock（6，A17 起 9——A0 与 A2 均为 6；lightspeed 误译
+    # 三档 5/6/9，wiki 记 Block 6 (A17:9)，已修）
     str_buff = 5 if bc.ascension >= 17 else 4 if bc.ascension >= 2 else 3
-    block_buff = 9 if bc.ascension >= 17 else 6 if bc.ascension >= 2 else 5
+    block_buff = 9 if bc.ascension >= 17 else 6
     for m in bc.monsters.monsters:
         m.statuses.add(MonsterStatus.STRENGTH, str_buff)
         m.block += block_buff
