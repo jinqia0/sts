@@ -581,7 +581,8 @@ class BattleContext:
         """
         s = self.player.statuses
         if s.has(PlayerStatus.FEEL_NO_PAIN):
-            self.add_to_bot(Actions.gain_block(3 * s.get(PlayerStatus.FEEL_NO_PAIN)))
+            base = self.player.special.get("fnp_base", 3)
+            self.add_to_bot(Actions.gain_block(base * s.get(PlayerStatus.FEEL_NO_PAIN)))
         if s.has(PlayerStatus.DARK_EMBRACE):
             self.add_to_bot(Actions.draw_cards(s.get(PlayerStatus.DARK_EMBRACE)))
         eff = getattr(inst.card, "on_exhaust_effect", None)
@@ -795,10 +796,12 @@ class BattleContext:
             if s.has(PlayerStatus.EVOLVE):
                 self.draw_cards(s.get(PlayerStatus.EVOLVE))
             if s.has(PlayerStatus.FIRE_BREATHING):
-                self.add_to_bot(Actions.damage_all_enemy(4 * s.get(PlayerStatus.FIRE_BREATHING)))
+                base = self.player.special.get("fire_breathing_base", 4)
+                self.add_to_bot(Actions.damage_all_enemy(base * s.get(PlayerStatus.FIRE_BREATHING)))
         elif inst.card.ctype == "Curse":
             if s.has(PlayerStatus.FIRE_BREATHING):
-                self.add_to_bot(Actions.damage_all_enemy(4 * s.get(PlayerStatus.FIRE_BREATHING)))
+                base = self.player.special.get("fire_breathing_base", 4)
+                self.add_to_bot(Actions.damage_all_enemy(base * s.get(PlayerStatus.FIRE_BREATHING)))
 
     def on_shuffle(self) -> None:
         self.relics.on_shuffle(self)

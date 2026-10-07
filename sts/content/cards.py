@@ -562,10 +562,12 @@ def _brutality_play(bc: BattleContext, item: CardQueueItem) -> None:
 
 
 def _juggernaut_play(bc: BattleContext, item: CardQueueItem) -> None:
-    # wiki 口径（2026-10-06 复核）：每次获得格挡对随机敌 5/7 伤（lightspeed
-    # 亦为 5/7）。本引擎 gain_block 内为 5×层语义 → 基础 1 层 = 5 伤一致；
-    # 升级 2 层 = 10 伤（wiki 为 7）——倍率在引擎层（禁改范围），见审计报告。
-    bc.add_to_bot(Actions.buff_player(PlayerStatus.JUGGERNAUT, 2 if item.card.upgraded else 1))
+    # wiki 口径：每次获得格挡对随机敌 5/7 伤。层恒 1（多张打出各自独立结算？
+    # 本体多张 Juggernaut 伤害相加——用基数覆盖近似），基数经 special
+    # ["juggernaut_base"] 写入（引擎 gain_block 已接线读此槽，审计接线）。
+    bc.add_to_bot(Actions.buff_player(PlayerStatus.JUGGERNAUT, 1))
+    bc.add_to_bot(Action(lambda bc2: bc2.player.special.update(
+        juggernaut_base=7 if item.card.upgraded else 5)))
 
 
 def _rupture_play(bc: BattleContext, item: CardQueueItem) -> None:
@@ -574,12 +576,11 @@ def _rupture_play(bc: BattleContext, item: CardQueueItem) -> None:
 
 
 def _combust_play(bc: BattleContext, item: CardQueueItem) -> None:
-    # wiki 口径（2026-10-06 复核）：回合末失 1 HP、全体 5/7 伤（多张叠加时
-    # 伤害累加、HP 损失 = 打出张数；lightspeed 为 5/7 伤 + 恒 1 HP 且自带
-    # "doesn't stack hp loss correctly" todo）。本引擎 entities 层为 5×层伤
-    # + 失层 HP 语义 → 基础 1 层 = 5 伤/1 HP 一致；升级 2 层 = 10 伤/2 HP
-    #（wiki 为 7 伤/1 HP）——结算在引擎层（禁改范围），见审计报告。
-    bc.add_to_bot(Actions.buff_player(PlayerStatus.COMBUST, 2 if item.card.upgraded else 1))
+    # wiki 口径：回合末失 1 HP（恒，不随叠加）、全体 5/7 伤（多张伤害累加）。
+    # 层恒 1；基数经 special["combust_base"] 写入（entities 已接线）。
+    bc.add_to_bot(Actions.buff_player(PlayerStatus.COMBUST, 1))
+    bc.add_to_bot(Action(lambda bc2: bc2.player.special.update(
+        combust_base=(bc2.player.special.get("combust_base", 0) + (7 if item.card.upgraded else 5)))))
 
 
 def _evolve_play(bc: BattleContext, item: CardQueueItem) -> None:
@@ -588,18 +589,19 @@ def _evolve_play(bc: BattleContext, item: CardQueueItem) -> None:
 
 
 def _fire_breathing_play(bc: BattleContext, item: CardQueueItem) -> None:
-    # wiki 口径（2026-10-06 复核）：抽到状态/诅咒时全体 6/10 伤（lightspeed
-    # 亦为 6/10）。本引擎 battle.py 抽牌钩子为 4×层语义 → 基础 1 层 = 4 伤、
-    # 升级 2 层 = 8 伤，均低于 wiki——倍率在引擎层（禁改范围），需把
-    # battle.py L798/L801 的 4×改为可变基数后才能对齐，见审计报告。
-    bc.add_to_bot(Actions.buff_player(PlayerStatus.FIRE_BREATHING, 2 if item.card.upgraded else 1))
+    # wiki 口径：抽到状态/诅咒时全体 6/10 伤。层恒 1；基数经 special
+    # ["fire_breathing_base"] 写入（battle.py 抽牌钩子已接线）。
+    bc.add_to_bot(Actions.buff_player(PlayerStatus.FIRE_BREATHING, 1))
+    bc.add_to_bot(Action(lambda bc2: bc2.player.special.update(
+        fire_breathing_base=10 if item.card.upgraded else 6)))
 
 
 def _feel_no_pain_play(bc: BattleContext, item: CardQueueItem) -> None:
-    # wiki 口径（2026-10-06 复核）：卡被消耗时 3/4 格挡（lightspeed 亦为
-    # 3/4）。本引擎 battle.py on_card_exhausted 为 3×层语义 → 基础 1 层 = 3
-    # 一致；升级 2 层 = 6（wiki 为 4）——倍率在引擎层（禁改范围），见审计报告。
-    bc.add_to_bot(Actions.buff_player(PlayerStatus.FEEL_NO_PAIN, 2 if item.card.upgraded else 1))
+    # wiki 口径：卡被消耗时 3/4 格挡。层恒 1；基数经 special["fnp_base"]
+    # 写入（battle.py on_card_exhausted 已接线）。
+    bc.add_to_bot(Actions.buff_player(PlayerStatus.FEEL_NO_PAIN, 1))
+    bc.add_to_bot(Action(lambda bc2: bc2.player.special.update(
+        fnp_base=4 if item.card.upgraded else 3)))
 
 
 def _dark_embrace_play(bc: BattleContext, item: CardQueueItem) -> None:

@@ -879,8 +879,8 @@ def test_juggernaut_card_damage_on_block():
     setup_hand_upgraded(bc2, JUGGERNAUT, DEFEND)
     bc2.play_card(0)
     bc2.play_card(0)
-    # 引擎 JUGGERNAUT=层数、5×层：升级 2 层 → 10 伤（lightspeed C++ 存值 7）
-    assert m2.hp == hp1 - 10
+    # wiki：升级基数 7（审计接线，层恒 1）
+    assert m2.hp == hp1 - 7
 
 
 def test_rupture_card_strength_on_self_hp_loss():
@@ -918,10 +918,10 @@ def test_combust_card_end_of_turn():
     hp1 = m2.hp
     setup_hand_upgraded(bc2, COMBUST)
     bc2.play_card(0)
-    assert bc2.player.statuses.get(PlayerStatus.COMBUST) == 2
+    assert bc2.player.statuses.get(PlayerStatus.COMBUST) == 1  # 层恒 1（wiki 口径）
     bc2.end_turn()
-    assert bc2.player.hp == 80 - 2
-    assert m2.hp == hp1 - 10
+    assert bc2.player.hp == 80 - 1  # wiki：HP 损失恒 1
+    assert m2.hp == hp1 - 7  # wiki：升级基数 7（审计接线）
 
 
 def test_evolve_card_draws_on_status_draw():
@@ -955,9 +955,9 @@ def test_fire_breathing_card_damage_on_status_draw():
     bc.cards.draw_pile.append(bc.cards.instantiate(WOUND))
     setup_hand(bc, FIRE_BREATHING)
     bc.play_card(0)
-    bc.draw_cards(1)  # 抽到伤口 → 全体 4 伤入队
+    bc.draw_cards(1)  # 抽到伤口 → 全体 6 伤入队（wiki 基数）
     run_queue(bc)
-    assert [m.hp for m in bc.monsters.monsters] == [hp0[0] - 4, hp0[1] - 4]
+    assert [m.hp for m in bc.monsters.monsters] == [hp0[0] - 6, hp0[1] - 6]
     bc2 = BattleContext(seed=79)
     add_cultist(bc2)
     hp1 = [m.hp for m in bc2.monsters.monsters]
@@ -967,8 +967,8 @@ def test_fire_breathing_card_damage_on_status_draw():
     bc2.play_card(0)
     bc2.draw_cards(1)
     run_queue(bc2)
-    # 升级 2 层 × 4 = 8（lightspeed C++ 直存 10，wiki 为 6）
-    assert [m.hp for m in bc2.monsters.monsters] == [hp1[0] - 8, hp1[1] - 8]
+        # wiki：升级基数 10（审计接线，层恒 1）
+    assert [m.hp for m in bc2.monsters.monsters] == [hp1[0] - 10, hp1[1] - 10]
 
 
 def test_feel_no_pain_card_block_on_exhaust():
@@ -984,7 +984,7 @@ def test_feel_no_pain_card_block_on_exhaust():
     setup_hand_upgraded(bc2, FEEL_NO_PAIN, SLIMED)
     bc2.play_card(0)
     bc2.play_card(0)
-    assert bc2.player.block == 6  # 引擎 3×2 层；lightspeed C++ 直存 4
+    assert bc2.player.block == 4  # wiki：升级基数 4（审计接线，层恒 1）
 
 
 def test_dark_embrace_card_draw_on_exhaust():

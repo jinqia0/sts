@@ -193,7 +193,8 @@ class Player(Combatant):
         self.block += amount
         if self.statuses.has(PlayerStatus.JUGGERNAUT):
             n = self.statuses.get(PlayerStatus.JUGGERNAUT)
-            bc.add_to_bot(Actions.damage_random_enemy(5 * n))
+            base = self.special.get("juggernaut_base", 5)
+            bc.add_to_bot(Actions.damage_random_enemy(base * n))
         # WAVE_OF_THE_HAND（观者手波，special 一次性标记）：本回合每次获得
         # 格挡对所有敌人施加 1×层 虚弱（wiki："Whenever you gain Block"）
         if bc.player.special.get("wave_of_the_hand"):
@@ -304,8 +305,9 @@ class Player(Combatant):
         s = self.statuses
         if s.has(PlayerStatus.COMBUST):
             n = s.get(PlayerStatus.COMBUST)
+            base = self.special.get("combust_base", 5)
             bc.add_to_bot(Actions.player_lose_hp(n, self_inflicted=True))
-            bc.add_to_bot(Actions.damage_all_enemy(5 * n))
+            bc.add_to_bot(Actions.damage_all_enemy(base * n))
         if s.has(PlayerStatus.METALLICIZE):
             bc.add_to_bot(Actions.gain_block(s.get(PlayerStatus.METALLICIZE)))
         if s.has(PlayerStatus.THE_BOMB):
@@ -336,6 +338,9 @@ class Player(Combatant):
             bc.add_to_bot(Actions.remove_player_status(PlayerStatus.ENTANGLED))
         if s.has(PlayerStatus.DOUBLE_TAP):
             bc.add_to_bot(Actions.remove_player_status(PlayerStatus.DOUBLE_TAP))
+        if s.has(PlayerStatus.RAGE):
+            # Rage 仅本回合有效（wiki "this turn"；Player.cpp RAGE 在回合末衰减族）
+            bc.add_to_bot(Actions.remove_player_status(PlayerStatus.RAGE))
         if s.has(PlayerStatus.PLATED_ARMOR):
             # PLATED_ARMOR（新状态追加结算）：回合末按层数获得格挡，层数保留
             #（BattleContext.cpp:2068-2070，位于 METALLICIZE 之后；本文件
