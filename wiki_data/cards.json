@@ -7,7 +7,8 @@
   "notation": "wiki 卡牌页描述采用 (基础值;升级值) 记法：text 为 wiki 原文（含该记法），text_base / text_upgraded 为分别取两侧展开后的文本",
   "zh_source": "中文卡名取自本项目 sts/content/cards/ 各 CardDef 的 zh 字段",
   "derived_fields": "damage / block / magic_number / target / keywords 为从 wiki 描述文本机械抽取/推导的便捷字段（详见各 notes），权威以 text 为准",
-  "coverage": "项目内容层枚举的全部 CardDef（铁甲/静默/故障/观者/无色/诅咒 + 状态卡）；Strike/Defend 按 class 拆分为独立 wiki 页"
+  "coverage": "项目内容层枚举的全部 CardDef（铁甲/静默/故障/观者/无色/诅咒 + 状态卡）；Strike/Defend 按 class 拆分为独立 wiki 页",
+  "manual_fixes": "2026-10-07 数值对照批（scripts/diff_wiki_numbers.py）：机械抽取未覆盖的句式补 23 处 null→值——(基础;升级) 记法漏抽 18 张（Berserk/Burning Pact/Disarm/Heavy Blade/Offering/Perfected Strike/Pummel/Rampage/Hand of Greed/Bandage Up/Chrysalis/Dark Shackles/Jack of All Trades/Metamorphosis/Panacea/Purity/Sadistic Nature/Violence）+ 常量句式 5 张（Burn/Decay 伤害、Doubt/Shame 层数、Dual Wield 'a copy'=1）。逐条与 text 原文核对，权威仍以 text 为准"
  },
  "cards": [
   {
@@ -144,8 +145,8 @@
    "damage_upgraded": null,
    "block": null,
    "block_upgraded": null,
-   "magic_number": null,
-   "magic_number_upgraded": null,
+   "magic_number": 2,
+   "magic_number_upgraded": 1,
    "page_title": "Berserk",
    "url": "https://slaythespire.wiki.gg/wiki/Berserk"
   },
@@ -287,8 +288,8 @@
    "damage_upgraded": null,
    "block": null,
    "block_upgraded": null,
-   "magic_number": null,
-   "magic_number_upgraded": null,
+   "magic_number": 2,
+   "magic_number_upgraded": 3,
    "page_title": "Burning Pact",
    "url": "https://slaythespire.wiki.gg/wiki/Burning_Pact",
    "notes": "Order（wiki 原文）: • Selecting a card to Exhaust happens before drawing, meaning a card that is already in hand when this card is played must be Exhausted. If there are no other cards in hand when this card is played, no card will be Exhausted."
@@ -527,8 +528,8 @@
    "damage_upgraded": null,
    "block": null,
    "block_upgraded": null,
-   "magic_number": null,
-   "magic_number_upgraded": null,
+   "magic_number": 2,
+   "magic_number_upgraded": 3,
    "page_title": "Disarm",
    "url": "https://slaythespire.wiki.gg/wiki/Disarm"
   },
@@ -597,8 +598,8 @@
    "damage_upgraded": null,
    "block": null,
    "block_upgraded": null,
-   "magic_number": null,
-   "magic_number_upgraded": null,
+   "magic_number": 1,
+   "magic_number_upgraded": 2,
    "page_title": "Dual Wield",
    "url": "https://slaythespire.wiki.gg/wiki/Dual_Wield"
   },
@@ -863,8 +864,8 @@
    "damage_upgraded": 25,
    "block": null,
    "block_upgraded": null,
-   "magic_number": null,
-   "magic_number_upgraded": null,
+   "magic_number": 20,
+   "magic_number_upgraded": 25,
    "page_title": "Hand of Greed",
    "url": "https://slaythespire.wiki.gg/wiki/Hand_of_Greed"
   },
@@ -936,8 +937,8 @@
    "damage_upgraded": 14,
    "block": null,
    "block_upgraded": null,
-   "magic_number": null,
-   "magic_number_upgraded": null,
+   "magic_number": 3,
+   "magic_number_upgraded": 5,
    "page_title": "Heavy Blade",
    "url": "https://slaythespire.wiki.gg/wiki/Heavy_Blade",
    "notes": "wiki 描述含多次结算 ×3"
@@ -1205,8 +1206,8 @@
    "damage_upgraded": null,
    "block": null,
    "block_upgraded": null,
-   "magic_number": null,
-   "magic_number_upgraded": null,
+   "magic_number": 3,
+   "magic_number_upgraded": 5,
    "page_title": "Offering",
    "url": "https://slaythespire.wiki.gg/wiki/Offering"
   },
@@ -1228,8 +1229,8 @@
    "damage_upgraded": 6,
    "block": null,
    "block_upgraded": null,
-   "magic_number": null,
-   "magic_number_upgraded": null,
+   "magic_number": 2,
+   "magic_number_upgraded": 3,
    "page_title": "Perfected Strike",
    "url": "https://slaythespire.wiki.gg/wiki/Perfected_Strike",
    "notes": "伤害含 additional damage 增量部分，以 text 为准"
@@ -1300,8 +1301,8 @@
    "damage_upgraded": 2,
    "block": null,
    "block_upgraded": null,
-   "magic_number": null,
-   "magic_number_upgraded": null,
+   "magic_number": 4,
+   "magic_number_upgraded": 5,
    "page_title": "Pummel",
    "url": "https://slaythespire.wiki.gg/wiki/Pummel",
    "notes": "wiki 描述含多次结算 ×4"
@@ -1324,8 +1325,8 @@
    "damage_upgraded": 8,
    "block": null,
    "block_upgraded": null,
-   "magic_number": null,
-   "magic_number_upgraded": null,
+   "magic_number": 5,
+   "magic_number_upgraded": 8,
    "page_title": "Rampage",
    "url": "https://slaythespire.wiki.gg/wiki/Rampage"
   },
@@ -7456,8 +7457,8 @@
    "damage_upgraded": null,
    "block": null,
    "block_upgraded": null,
-   "magic_number": null,
-   "magic_number_upgraded": null,
+   "magic_number": 4,
+   "magic_number_upgraded": 6,
    "page_title": "Bandage Up",
    "url": "https://slaythespire.wiki.gg/wiki/Bandage_Up"
   },
@@ -7504,8 +7505,8 @@
    "damage_upgraded": null,
    "block": null,
    "block_upgraded": null,
-   "magic_number": null,
-   "magic_number_upgraded": null,
+   "magic_number": 3,
+   "magic_number_upgraded": 5,
    "page_title": "Chrysalis",
    "url": "https://slaythespire.wiki.gg/wiki/Chrysalis",
    "notes": "wiki 描述含随机性（random）"
@@ -7530,8 +7531,8 @@
    "damage_upgraded": null,
    "block": null,
    "block_upgraded": null,
-   "magic_number": null,
-   "magic_number_upgraded": null,
+   "magic_number": 9,
+   "magic_number_upgraded": 15,
    "page_title": "Dark Shackles",
    "url": "https://slaythespire.wiki.gg/wiki/Dark_Shackles"
   },
@@ -7769,8 +7770,8 @@
    "damage_upgraded": null,
    "block": null,
    "block_upgraded": null,
-   "magic_number": null,
-   "magic_number_upgraded": null,
+   "magic_number": 1,
+   "magic_number_upgraded": 2,
    "page_title": "Jack of All Trades",
    "url": "https://slaythespire.wiki.gg/wiki/Jack_of_All_Trades",
    "notes": "wiki 描述含随机性（random）"
@@ -7894,8 +7895,8 @@
    "damage_upgraded": null,
    "block": null,
    "block_upgraded": null,
-   "magic_number": null,
-   "magic_number_upgraded": null,
+   "magic_number": 3,
+   "magic_number_upgraded": 5,
    "page_title": "Metamorphosis",
    "url": "https://slaythespire.wiki.gg/wiki/Metamorphosis",
    "notes": "wiki 描述含随机性（random）"
@@ -7945,8 +7946,8 @@
    "damage_upgraded": null,
    "block": null,
    "block_upgraded": null,
-   "magic_number": null,
-   "magic_number_upgraded": null,
+   "magic_number": 1,
+   "magic_number_upgraded": 2,
    "page_title": "Panacea",
    "url": "https://slaythespire.wiki.gg/wiki/Panacea"
   },
@@ -8018,8 +8019,8 @@
    "damage_upgraded": null,
    "block": null,
    "block_upgraded": null,
-   "magic_number": null,
-   "magic_number_upgraded": null,
+   "magic_number": 3,
+   "magic_number_upgraded": 5,
    "page_title": "Purity",
    "url": "https://slaythespire.wiki.gg/wiki/Purity"
   },
@@ -8041,8 +8042,8 @@
    "damage_upgraded": null,
    "block": null,
    "block_upgraded": null,
-   "magic_number": null,
-   "magic_number_upgraded": null,
+   "magic_number": 5,
+   "magic_number_upgraded": 7,
    "page_title": "Sadistic Nature",
    "url": "https://slaythespire.wiki.gg/wiki/Sadistic_Nature"
   },
@@ -8238,8 +8239,8 @@
    "damage_upgraded": null,
    "block": null,
    "block_upgraded": null,
-   "magic_number": null,
-   "magic_number_upgraded": null,
+   "magic_number": 3,
+   "magic_number_upgraded": 4,
    "page_title": "Violence",
    "url": "https://slaythespire.wiki.gg/wiki/Violence",
    "notes": "wiki 描述含随机性（random）"
@@ -8340,7 +8341,7 @@
    "keywords": [
     "Unplayable"
    ],
-   "damage": null,
+   "damage": 2,
    "damage_upgraded": null,
    "block": null,
    "block_upgraded": null,
@@ -8370,7 +8371,7 @@
    "damage_upgraded": null,
    "block": null,
    "block_upgraded": null,
-   "magic_number": null,
+   "magic_number": 1,
    "magic_number_upgraded": null,
    "page_title": "Doubt",
    "url": "https://slaythespire.wiki.gg/wiki/Doubt",
@@ -8579,7 +8580,7 @@
    "damage_upgraded": null,
    "block": null,
    "block_upgraded": null,
-   "magic_number": null,
+   "magic_number": 1,
    "magic_number_upgraded": null,
    "page_title": "Shame",
    "url": "https://slaythespire.wiki.gg/wiki/Shame",
@@ -8628,8 +8629,8 @@
    "keywords": [
     "Unplayable"
    ],
-   "damage": null,
-   "damage_upgraded": null,
+   "damage": 2,
+   "damage_upgraded": 4,
    "block": null,
    "block_upgraded": null,
    "magic_number": null,
