@@ -115,12 +115,15 @@ class _TrainLogCallback:
 
 
 class _PeriodicEvalCallback:
-    def __init__(self, every: int):
+    """周期评估——环境难度与训练一致（boss 退火轮教训：混合难度评估
+    掩盖了 Boss 专项指标塌缩）。"""
+
+    def __init__(self, every: int, difficulties):
         from stable_baselines3.common.callbacks import BaseCallback
 
         outer = self
         self.every = every
-        self.eval_env = StsSampledEnv()
+        self.eval_env = StsSampledEnv(difficulties)
         self.history: list[tuple[int, dict]] = []
 
         class _Cb(BaseCallback):
@@ -160,21 +163,45 @@ def parse_difficulties(s: str):
     if s == "all":
         return ("weak", "strong", "elite", "boss")
     diffs = tuple(s.split(","))
+    from sts.sampled_env import DIFFICULTY_SPECS
+
     for d in diffs:
-        if d not in ("weak", "strong", "elite", "boss"):
+        if d not in DIFFICULTY_SPECS:
             raise ValueError(f"未知难度 {d}")
     return diffs
 
 
-def make_model(net_arch: list[int], difficulties):
+def make_anneal_difficulty(hp: int):
+    """退火难度变体：Boss 参数 + 固定 HP（冷启动退火链用）。"""
+    import sts.sampled_env as SE
+
+    key = f"boss{hp}"
+    if key not in SE.DIFFICULTY_SPECS:
+        SE.DIFFICULTY_SPECS[key] = dict(SE.DIFFICULTY_SPECS["boss"], hp=(hp, hp))
+    return key
+
+
+def make_model(net_arch: list[int], difficulties, anneal_from: str | None = None, arch: str = "mlp"):
     from sb3_contrib import MaskablePPO
     from stable_baselines3.common.monitor import Monitor
 
     env = Monitor(StsSampledEnv(difficulties))
+    policy_kwargs: dict = {"net_arch": dict(pi=list(net_arch), vf=list(net_arch))}
+    if arch == "structured":
+        # 结构化提取器（sts/features.py）：词表段共享嵌入 + 段级池化，
+        # 52K 参数输出 1626 维结构化特征 → 小 MLP head
+        from sts.features import StsFeaturesExtractor
+
+        policy_kwargs["features_extractor_class"] = StsFeaturesExtractor
+    if anneal_from:
+        # 退火：加载 checkpoint 继续训（学习率降半——微调语义）
+        m = MaskablePPO.load(anneal_from, env=env)
+        m.learning_rate = m.learning_rate * 0.5
+        return m
     return MaskablePPO(
         "MlpPolicy",
         env,
-        policy_kwargs={"net_arch": dict(pi=list(net_arch), vf=list(net_arch))},
+        policy_kwargs=policy_kwargs,
         learning_rate=1e-4,  # 大负尾巴奖励（Boss ×5 → ±3.5 级）下 3e-4 塌缩
         n_steps=1024,
         batch_size=512,
@@ -194,11 +221,14 @@ def main() -> None:
     parser.add_argument("--eval-every", type=int, default=100_000)
     parser.add_argument("--log-every", type=int, default=20_000)
     parser.add_argument("--net", type=parse_net, default=DEFAULT_NET)
+    parser.add_argument("--arch", default="mlp", choices=["mlp", "structured"], help="mlp=平铺 MLP；structured=词表共享嵌入提取器")
     parser.add_argument("--difficulties", type=parse_difficulties, default="all")
     parser.add_argument("--out", default=None)
+    parser.add_argument("--anneal-from", default=None, help="退火起点 checkpoint（.zip）")
+    parser.add_argument("--anneal-hp", type=int, default=None, help="退火固定 HP（如 400）")
     parser.add_argument("--eval-only", type=str, default=None)
     args = parser.parse_args()
-    out = args.out or f"sampled_{'_'.join(args.difficulties)}_v1"
+    out = args.out or f"sampled_{'_'.join(args.difficulties)}_{'struct' if args.arch == 'structured' else 'mlp'}_v1"
 
     if args.eval_only:
         print(f"==== 评估 {args.eval_only}（种子 70..99）====")
@@ -219,14 +249,20 @@ def main() -> None:
     from scripts.train_run import _ProgressWatchdog as _Wd
 
     watchdog = _Wd()
-    model = make_model(args.net, args.difficulties)
+    if args.anneal_hp is not None and args.difficulties == ("boss",):
+        # 退火链：把 boss 换成 boss{hp} 固定血量变体
+        key = make_anneal_difficulty(args.anneal_hp)
+        args.difficulties = (key,)
+        if args.out is None:
+            args.out = f"sampled_boss_anneal_{args.anneal_hp}"
+    model = make_model(args.net, args.difficulties, anneal_from=args.anneal_from, arch=args.arch)
     n_params = sum(p.numel() for p in model.policy.parameters())
     print(f"开始采样式训练：网络 {args.net}（{n_params / 1e6:.1f}M 参数），难度 {args.difficulties}")
     print(f"{args.steps} 步（训练种子 {TRAIN_SEED}，γ=0.99）")
     from stable_baselines3.common.callbacks import CallbackList
 
     train_log = _TrainLogCallback(args.log_every, watchdog)
-    periodic = _PeriodicEvalCallback(args.eval_every)
+    periodic = _PeriodicEvalCallback(args.eval_every, args.difficulties)
     model.learn(
         total_timesteps=args.steps, callback=CallbackList([train_log.cb, periodic.cb])
     )

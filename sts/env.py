@@ -85,7 +85,7 @@ from sts.vocab import (
 
 __all__ = [
     "N_ACTIONS", "ACTION_END_TURN", "HAND_SLOT_BASE", "TARGETED_BASE",
-    "N_HAND_SLOTS", "N_TARGET_SLOTS", "TURN_LIMIT", "WEAK_POOL",
+    "N_HAND_SLOTS", "N_TARGET_SLOTS", "TURN_LIMIT", "ACTION_LIMIT", "WEAK_POOL",
     "OBSERVATION_MAXIMUMS", "OBS_DIM", "StsBattleEnv",
     "MONSTER_INDEX", "MONSTER_VOCAB_SIZE",  # test_scenarios 等旧引用面
 ]
@@ -112,6 +112,13 @@ N_SELECT_WINDOW = 10  # 选卡候选窗口（DESIGN.md §5.2：超窗截断为�
 # 重播路线）——收紧到 25（真实玩家的宽松上界），配合截断=死亡级定价
 # 把僵局窗口压到不值得（上层 curriculum 可自行包装 TimeLimit 再调）
 TURN_LIMIT = 25
+
+# 回合内动作预算保险丝（2026-10-08）：TURN_LIMIT 按回合计，挡不住
+# 「合法但零进度」的回合内死循环——实测强怪档塌缩策略锁死在
+# CARD_SELECT 的 toggle 语义上（SELECT(1) 选/取消往复 296 次，回合
+# 永不推进，回合上限失效的吸收态）。正常战斗一局 ≤ ~250 步（25 回合
+# × 手牌+药水），预算 300 只切病理区不伤正常轨迹；截断同死亡级定价
+ACTION_LIMIT = 300
 
 # 弱怪池：encounter="random" 时每局从中均匀抽一种（单场随机遭遇，
 # 各怪被采样次数相同——比连打序列的样本分布更干净）
@@ -349,6 +356,7 @@ class StsBattleEnv(gym.Env):
         self._select_window: list = []  # 排序截断后的候选（窗口序）
         self._select_engine_idx: list[int] = []  # 窗口位 → 引擎候选下标
         self._select_chosen: list[int] = []  # 已选窗口位（选卡先后序）
+        self._n_steps = 0  # 回合内动作预算计数（ACTION_LIMIT 保险丝）
         self.action_space = spaces.Discrete(N_ACTIONS)
         self.observation_space = spaces.Box(
             low=OBSERVATION_MINIMUMS.copy(),
@@ -429,11 +437,12 @@ class StsBattleEnv(gym.Env):
             deck=self.deck,
             relic_counters=self.relic_counters,
         )
-        # 新战斗：清空上一局的选卡自回归状态
+        # 新战斗：清空上一局的选卡自回归状态与动作预算计数
         self._select_info = None
         self._select_window = []
         self._select_engine_idx = []
         self._select_chosen = []
+        self._n_steps = 0
         # 职业最大生命近似（引擎固定 Player(80)，构造后修正——BattleContext
         # 构造期间无 HP 变动，webapp 同款路径）：观测的 max_hp/HP 比例才真实
         max_hp = CHARACTER_MAX_HP[self.character]
@@ -489,7 +498,10 @@ class StsBattleEnv(gym.Env):
             warnings.warn(f"mask 合法的动作 {action} 被引擎拒绝（{e}），兜底推进")
             self._engine_fallback(bc)
         terminated = bc.over
-        truncated = (not terminated) and bc.turn > TURN_LIMIT
+        self._n_steps += 1
+        # 双保险丝：回合数超限（跨回合拖延）或总动作数超预算（回合内
+        # 零进度死循环——SELECT toggle / 0 费 X 牌重放等吸收态）
+        truncated = (not terminated) and (bc.turn > TURN_LIMIT or self._n_steps > ACTION_LIMIT)
         # 奖励口径由场景配置决定（scenarios.py，可被构造参数覆盖）：
         # - damage（默认，2026-10-05 用户决策：战损为唯一目标）：
         #   终局 = 剩余 HP / max_hp（胜）/ 0（败）；进行中恒 0。

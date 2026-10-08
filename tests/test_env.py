@@ -286,6 +286,34 @@ def test_truncation_at_turn_limit():
     assert reward == 0.0
 
 
+def test_truncation_at_action_limit_select_toggle_deadlock():
+    """回合内动作预算保险丝：CARD_SELECT toggle 死循环（SELECT(1)
+    选/取消往复、回合永不推进）在 ACTION_LIMIT 步处截断。
+
+    2026-10-08 强怪档塌缩实录：确定性策略锁死该吸收态 296+ 步，
+    TURN_LIMIT 按回合计对此失效——本测试钉住回归。
+    """
+    from sts.combat.types import InputState
+    from sts.env import ACTION_LIMIT, SELECT_BASE
+
+    env = StsBattleEnv()
+    env.reset(seed=1)
+    bc = env.bc
+    strike, bash = (bc.cards.instantiate(c) for c in (STRIKE, BASH))
+    bc.open_card_select([bash, strike], lambda _bc, chosen: None)
+    assert bc.input_state == InputState.CARD_SELECT
+
+    # 全程在选卡态 toggle 同一槽：动作永远合法，回合不推进
+    for i in range(ACTION_LIMIT + 1):
+        assert bc.input_state == InputState.CARD_SELECT
+        obs, r, terminated, truncated, info = env.step(SELECT_BASE + 1)
+        if terminated or truncated:
+            break
+    assert truncated and not terminated
+    assert env._n_steps == ACTION_LIMIT + 1
+    assert bc.turn <= TURN_LIMIT  # 截断源是动作预算不是回合上限
+
+
 # ---- 随机遭遇模式（encounter="random"）----
 
 
