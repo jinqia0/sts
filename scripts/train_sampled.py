@@ -171,13 +171,25 @@ def parse_difficulties(s: str):
     return diffs
 
 
-def make_anneal_difficulty(hp: int):
-    """退火难度变体：Boss 参数 + 固定 HP（冷启动退火链用）。"""
+def make_anneal_difficulty(hp):
+    """退火难度变体：Boss 参数 + 固定或区间 HP（冷启动退火链用）。
+
+    hp 接受 int（固定血量）或 "lo:hi"（区间均匀）——末级用区间直接
+    收缩到部署分布（boss 正常态 25-70），避免「末级 80 固定 vs 部署
+    25-70」的训练/验收分布脱节（2026-10-08 退火断崖：固定级 400→87%、
+    160→20%、部署分布 0%）。
+    """
     import sts.sampled_env as SE
 
-    key = f"boss{hp}"
+    if isinstance(hp, str):
+        lo_s, hi_s = hp.split(":")
+        rng = (int(lo_s), int(hi_s))
+        key = f"boss{lo_s}_{hi_s}"
+    else:
+        rng = (hp, hp)
+        key = f"boss{hp}"
     if key not in SE.DIFFICULTY_SPECS:
-        SE.DIFFICULTY_SPECS[key] = dict(SE.DIFFICULTY_SPECS["boss"], hp=(hp, hp))
+        SE.DIFFICULTY_SPECS[key] = dict(SE.DIFFICULTY_SPECS["boss"], hp=rng)
     return key
 
 
@@ -225,7 +237,7 @@ def main() -> None:
     parser.add_argument("--difficulties", type=parse_difficulties, default="all")
     parser.add_argument("--out", default=None)
     parser.add_argument("--anneal-from", default=None, help="退火起点 checkpoint（.zip）")
-    parser.add_argument("--anneal-hp", type=int, default=None, help="退火固定 HP（如 400）")
+    parser.add_argument("--anneal-hp", type=str, default=None, help="退火 HP：固定值（400）或区间（90:160）")
     parser.add_argument("--eval-only", type=str, default=None)
     args = parser.parse_args()
     out = args.out or f"sampled_{'_'.join(args.difficulties)}_{'struct' if args.arch == 'structured' else 'mlp'}_v1"
@@ -250,11 +262,9 @@ def main() -> None:
 
     watchdog = _Wd()
     if args.anneal_hp is not None and args.difficulties == ("boss",):
-        # 退火链：把 boss 换成 boss{hp} 固定血量变体
+        # 退火链：把 boss 换成低血量变体（固定值或区间）
         key = make_anneal_difficulty(args.anneal_hp)
         args.difficulties = (key,)
-        if args.out is None:
-            args.out = f"sampled_boss_anneal_{args.anneal_hp}"
     model = make_model(args.net, args.difficulties, anneal_from=args.anneal_from, arch=args.arch)
     n_params = sum(p.numel() for p in model.policy.parameters())
     print(f"开始采样式训练：网络 {args.net}（{n_params / 1e6:.1f}M 参数），难度 {args.difficulties}")
