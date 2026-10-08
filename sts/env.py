@@ -295,6 +295,7 @@ class StsBattleEnv(gym.Env):
         relics: list[RelicId] | None = None,
         potions: list | None = None,
         deck: list | None = None,
+        relic_counters: dict | None = None,
     ) -> None:
         """构造环境。
 
@@ -333,6 +334,9 @@ class StsBattleEnv(gym.Env):
         self.relics = list(relics or [])
         self.potions = list(potions or [])
         self.deck = list(deck) if deck is not None else None
+        # 局外遗物计数器透传（如 ANCIENT_TEA_SET counter=-2 表休息过——
+        # 必须在 BattleContext 构造时预置，首回合回能前生效）
+        self.relic_counters = dict(relic_counters) if relic_counters else None
         # 消融模式：种类 ID → 乱序 ID 的局内映射（reset 时重洗）
         self._species_map: dict[str, int] | None = None
         # ---- CARD_SELECT 自回归状态（批次 5b）----
@@ -421,6 +425,7 @@ class StsBattleEnv(gym.Env):
             relics=self.relics or None,
             potions=self.potions or None,
             deck=self.deck,
+            relic_counters=self.relic_counters,
         )
         # 新战斗：清空上一局的选卡自回归状态
         self._select_info = None

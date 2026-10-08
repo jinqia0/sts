@@ -80,10 +80,10 @@
 
 设计已定稿（2026-10-07，详见 DESIGN.md §8）：**受限深度搜索 + 学习型 run-value 网络 V̂**。价值函数 P(通关) + α·E[终局HP]；选牌不采样未来 draft；商店局部搜索。局外模拟器不依赖 oracle，可在 Phase 2 期间开工。落地前待定项清单见 DESIGN.md §8.6（run 状态规格/动作域/地图生成/随机源/事件/局外遗物/V̂ 训练细节等 10 项）。
 
-- [ ] 局外模拟器骨架：run 状态 + 快照/回滚 API + 地图生成（**已定稿忠实移植**，算法全文见 docs/MAP_GENERATION.md）
-- [ ] 随机源规格提取：卡牌奖励稀有度/野房内容分布/事件概率/商店库存/遗物掉落（反编译源已有）
-- [ ] Act 1 事件全量（~30 个）+ 局外遗物效果桶补齐
-- [ ] 3a 纯启发式 + oracle 跑通完整 Act 1（选牌用启发式）——**兼作 V̂ 的自对弈数据源**
+- [x] 局外模拟器骨架（2026-10-08，`sts/overworld/` 全套 11 模块 + `sts/content/events.py`）：RunState（含 clone/restore 快照）/ 忠实移植地图生成（map_gen.py + docs/MAP_GENERATION.md）/ RunSimulator 完整 Act 1 房间循环（战斗/精英/？房/宝箱/火堆/商店/Boss→Boss宝箱）/ RunPolicy 协议 + 随机/简单启发式两策略。引擎小扩展：deck 条目 (CardDef, upgraded) 元组 + env 透传 relic_counters（古茶具/壶铃计数器）；RelicId 扩至 180。完整随机 rollout 多种子终局 + 确定性轨迹测试全绿（1547 测试）。已知省略：Neow、A1+、Sozu 领取拦截、DARKSTONE_PERIAPT 战斗面
+- [x] 随机源规格落地（2026-10-08）：card_rewards.py（稀有度 3/37/60 + pity + 房间阈值 + 槽内去重 + 棱镜碎片全职业池）/ drops.py（金币/精英遗物/药水 40%+blizzard+65/25/10 拒绝采样/宝箱同 roll 怪癖 + 套娃）/ shop.py（5+2 卡/遗物 3 槽尾取/价格公式/打折卡/Courier 补货）/ event_roll.py（？房型斜坡 + 25% shrine 分流 + 池过滤抽后移除）/ relic_pools.py（铁甲五池 33/31/28/15/22 + 头尾取 + 降级链）/ card_pools.py（职业稀有度池 + 无色池 + 诅咒池）
+- [x] Act 1 事件全量 + 局外遗物效果桶（2026-10-08）：events.py 24 事件（11 普通 + 6 神龛 + 7 一次性，NoteForYourself 跳过）；战斗事件直连引擎（冒险者尸体精英三选一/蘑菇巢穴）；局外遗物效果 relic_effects.py（拾取效果/蛋类/营地三件套/商店折扣/？房干预/羽翼之靴旁路/套娃）
+- [ ] 3a 纯启发式 + oracle 跑通完整 Act 1（模拟器已就绪，待 oracle：当前 RandomPolicy+启发式战斗 50 种子 0 通关——启发式战斗策略对 Boss 0/20，3a 强度依赖战斗侧）——**兼作 V̂ 的自对弈数据源**
 - [ ] 3b 受限深度 expectimax/MCTS 规划器（战斗转移多次 rollout 取期望，禁固定种子；HP 分位点分布传递；oracle 结果缓存）
 - [ ] V̂ run-value 网络 + 自对弈数据管线：(run 状态, 真实结局) 监督，无手工奖励，闭环迭代
 - [ ] α=0 vs α>0 对照实验（P(通关) 与终局 HP 双指标）

@@ -101,8 +101,14 @@ class CardManager:
         self.next_unique_card_id += 1
         return inst
 
-    def create_deck_card_in_draw_pile(self, card: CardDef) -> None:
-        self.draw_pile.append(self.instantiate(card))
+    def create_deck_card_in_draw_pile(self, card: "CardDef | tuple[CardDef, bool]") -> None:
+        """deck 覆盖条目：CardDef 或 (CardDef, upgraded)——局外卡组带升级位。"""
+        if isinstance(card, tuple):
+            inst = self.instantiate(card[0])
+            inst.upgraded = card[1]
+        else:
+            inst = self.instantiate(card)
+        self.draw_pile.append(inst)
 
     def pop_from_draw_pile(self) -> CardInstance:
         return self.draw_pile.pop()

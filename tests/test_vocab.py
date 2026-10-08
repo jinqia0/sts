@@ -121,9 +121,15 @@ def test_potion_vocab_locked_to_content():
 
 
 def test_relic_enum_stable():
-    """RelicId 是观测编码直接使用的稳定 IntEnum（0..128 连续）。"""
+    """RelicId 是观测编码直接使用的稳定 IntEnum：值连续无重复、且
+    历史 0..128 段不被重排（Phase 3a 局外遗物按 129+ 追加——追加合法，
+    重排/插位非法：旧 checkpoint 的观测语义漂移）。"""
     values = sorted(r.value for r in RelicId)
-    assert values == list(range(129))
+    assert values == list(range(len(values)))  # 连续无空洞
+    assert len(set(values)) == len(values)  # 无重复
+    # 首批 129 个战斗遗物的值域仍在 0..128（追加不重排）
+    historical = [v for v in values if v <= 128]
+    assert historical == list(range(129))
 
 
 def test_characters():

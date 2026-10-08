@@ -494,8 +494,18 @@ def random_potion(bc: BattleContext) -> PotionDef:
     return ALL_POTIONS[bc.rngs.misc.int_inclusive(0, len(ALL_POTIONS) - 1)]
 
 
+def random_run_potion(rng, character: str = "ironclad") -> PotionDef:
+    """局外随机药水（PotionHelper.getRandomPotion：职业池 33 均匀抽）。
+
+    TinyHouse/Cauldron/WomanInBlue 等局外获得路径用（非稀有度分层——
+    那是战斗掉落 drops.py 的拒绝采样路径）。rng 为局外流（potion/misc）。
+    """
+    pool = IRONCLAD_POTION_POOL if character == "ironclad" else ALL_POTIONS
+    return pool[rng.int_inclusive(0, len(pool) - 1)]
+
+
 __all__ = [
-    "PotionDef", "ALL_POTIONS", "IRONCLAD_POTION_POOL", "random_potion",
+    "PotionDef", "ALL_POTIONS", "IRONCLAD_POTION_POOL", "random_potion", "random_run_potion",
     "BLOCK_POTION", "DEXTERITY_POTION", "ENERGY_POTION", "EXPLOSIVE_POTION",
     "FIRE_POTION", "STRENGTH_POTION", "SWIFT_POTION", "WEAK_POTION",
     "FEAR_POTION", "ATTACK_POTION", "SKILL_POTION", "POWER_POTION",

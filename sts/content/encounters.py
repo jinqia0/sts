@@ -304,6 +304,16 @@ def _setup_looter(bc: BattleContext) -> None:
     _spawn(bc, Looter)
 
 
+def _setup_blue_slaver(bc: BattleContext) -> None:
+    # 对齐 BLUE_SLAVER（Act 1 强怪池：单只蓝奴役者，Exordium.java:120）
+    _spawn(bc, BlueSlaver)
+
+
+def _setup_red_slaver(bc: BattleContext) -> None:
+    # 对齐 RED_SLAVER（Act 1 强怪池：单只红奴役者，Exordium.java:129）
+    _spawn(bc, RedSlaver)
+
+
 def _setup_exordium_thugs(bc: BattleContext) -> None:
     # 对齐 EXORDIUM_THUGS = createWeakWildlife + createStrongHumanoid：
     # 弱位三选一（虱（红绿 misc 布尔）/ 尖 M / 酸 M），
@@ -622,6 +632,8 @@ ENCOUNTERS = {
     "large_slime": _setup_large_slime,
     "slime_boss": _setup_slime_boss,
     "looter": _setup_looter,
+    "blue_slaver": _setup_blue_slaver,
+    "red_slaver": _setup_red_slaver,
     "exordium_thugs": _setup_exordium_thugs,
     "lots_of_slimes": _setup_lots_of_slimes,
     # ---- Act 2（批次 B）----

@@ -287,6 +287,60 @@ class RelicId(IntEnum):
     SACRED_BARK = 126  # 药水效力翻倍（potency ×2，AbstractPotion.getPotency L45-49）
     TOY_ORNITHOPTER = 127  # 每次使用药水回复 5 HP（ToyOrnithopter.onUsePotion）
     POTION_BELT = 128  # 药水槽 +2（构造期修正 player.potion_slots）
+    # ---- Phase 3a 局外遗物（2026-10-08，对照本体反编译源码；tier 见 overworld/relic_pools.py）----
+    # 效果分两类：局外面在 sts/overworld/relic_effects.py 实现；纯战斗面未接线者注释标明（头/尾枚举追加，value 永不重排）
+    CERAMIC_FISH = 129  # 局外：每次往卡组加牌 +9 金（CeramicFish.onObtainCard）
+    DREAM_CATCHER = 130  # 局外：休息后可加 1 张随机牌（DreamCatcher）
+    JUZU_BRACELET = 131  # 局外：？房不再出常规战斗（EventHelper.java:149-153 MONSTER→EVENT）
+    MAW_BANK = 132  # 局外：每爬一层 +12 金；商店花金币即失效（MawBank.java:30,53）
+    MEAL_TICKET = 133  # 局外：进商店房回 15 HP（MealTicket.java:16,32）
+    REGAL_PILLOW = 134  # 局外：休息额外回 15 HP（RegalPillow.java:13）
+    SMILING_MASK = 135  # 局外：删牌服务恒 50 金（SmilingMask.java:15）
+    STRAWBERRY = 136  # 局外：拾取 +7 最大生命（Strawberry.java:26）
+    TINY_CHEST = 137  # 局外：每 4 个 ？房强制宝箱（TinyChest counter）
+    WAR_PAINT = 138  # 局外：拾取随机升级 2 张技能牌（WarPaint.java）
+    WHETSTONE = 139  # 局外：拾取随机升级 2 张攻击牌（Whetstone.java）
+    DISCERNING_MONOCLE = 140  # 局外：商店全场 8 折（DiscerningMonocle）
+    ETERNAL_FEATHER = 141  # 局外：进休息处回 deck/5×3 HP（EternalFeather.java:32-34）
+    FROZEN_EGG = 142  # 局外：获得技能牌时自动升级（FrozenEgg2.java，Java 类名带历史后缀 2）
+    MATRYOSHKA = 143  # 局外：接下来 2 个宝箱（非 Boss）双遗物，75% common（Matryoshka.java:31）
+    MOLTEN_EGG = 144  # 局外：获得攻击牌时自动升级（MoltenEgg2.java）
+    PAPER_FROG = 145  # 战斗：易伤伤害 +75% 而非 +50%（PaperFrog；伤害管线接线见 battle.py）
+    PEAR = 146  # 局外：拾取 +10 最大生命（Pear.java:26）
+    QUESTION_CARD = 147  # 局外：卡牌奖励可选张数 +1（QuestionCard.java:30-32）
+    SINGING_BOWL = 148  # 局外：卡牌奖励可换 +2 最大生命（SingingBowl）
+    THE_COURIER = 149  # 局外：商店 8 折 + 购后补货（Courier）
+    TOXIC_EGG = 150  # 局外：获得能力牌时自动升级（ToxicEgg2.java）
+    WHITE_BEAST_STATUE = 151  # 局外：战斗后必掉药水（WhiteBeast.java，掉率置 100）
+    MANGO = 152  # 局外：拾取 +14 最大生命（Mango.java:26）
+    OLD_COIN = 153  # 局外：拾取 +300 金（OldCoin.java:29）
+    PRAYER_WHEEL = 154  # 局外：普通战斗多一组卡牌奖励（PrayerWheel）
+    WINGED_GREAVES = 155  # 局外：选下层房间可 3 次无视路线（WingBoots，counter 3）
+    SHOVEL = 156  # 局外：火堆可挖掘随机遗物（Shovel；canSpawn 要求营地遗物 <2）
+    PEACE_PIPE = 157  # 局外：火堆可抽烟删 1 牌（PeacePipe）
+    CAULDRON = 158  # 局外：拾取获得 5 瓶随机药水（Cauldron）
+    DOLLYS_MIRROR = 159  # 局外：拾取复制 1 张牌（DollysMirror）
+    FROZEN_EYE = 160  # 信息：抽牌堆按顺序可见（观测侧不实现——POMDP 白名单不变，注释占位）
+    MEMBERSHIP_CARD = 161  # 局外：商店全场 5 折（MembershipCard）
+    ORRERY = 162  # 局外：拾取加 5 张牌（Orrery，5 组卡牌奖励）
+    PRISMATIC_SHARD = 163  # 局外：卡牌奖励含全职业池（PrismaticShard）
+    ASTROLABE = 164  # 局外：拾取变化 3 张牌并升级（Astrolabe）
+    BLACK_STAR = 165  # 局外：精英多掉 1 件遗物（BlackStar）
+    CALLING_BELL = 166  # 局外：拾取得 1 诅咒 + 3 件遗物（CallingBell）
+    EMPTY_CAGE = 167  # 局外：拾取移除 2 张牌（EmptyCage）
+    PANDORAS_BOX = 168  # 局外：拾取变化全部打击/防御（PandorasBox）
+    TINY_HOUSE = 169  # 局外：拾取 +5 maxHP/+50 金/1 药水/升级 1 张/加 1 张（TinyHouse.java:20-21,55-70）
+    GOLDEN_IDOL = 170  # 事件遗物（金神像事件）
+    BLOODY_IDOL = 171  # 事件遗物（金神像→鲜血神像转化链）
+    SPIRIT_POOP = 172  # 事件遗物（篝火精灵献祭诅咒）
+    SSSERPENT_HEAD = 173  # 事件遗物（换脸商）
+    FACE_OF_CLERIC = 174  # 事件遗物（换脸商）
+    GREMLIN_MASK = 175  # 事件遗物（换脸商）
+    CULTIST_MASK = 176  # 事件遗物（换脸商）
+    NLOTHS_MASK = 177  # 事件遗物（换脸商）
+    CIRCLET = 178  # 池空兜底遗物（Circlet，可叠加）
+    RED_CIRCLET = 179  # Boss 池空兜底（RedCirclet）
+    DARKSTONE_PERIAPT = 180  # 战斗内效果未接线（战斗中每次失去 HP +3 maxHP——需跨场上限同步，Phase 3a 标注近似；池归属 uncommon）
 
 
 class RelicContainer:
@@ -1003,8 +1057,13 @@ class RelicContainer:
         return d
 
     def vulnerable_multiplier(self, bc: BattleContext) -> float:
-        """易伤乘算倍率（L2721-2727：PAPER_PHROG 1.5 → 1.75）。"""
-        return 1.75 if self.has(RelicId.PAPER_PHROG) else 1.5
+        """易伤乘算倍率（L2721-2727：PAPER_PHROG 1.5 → 1.75）。
+
+        PAPER_FROG（红皮 uncommon，PaperFrog.java）效果与 PAPER_PHROG 同文：
+        易伤敌人受伤 +75% 而非 +50%，二者同持不叠加（同为 1.75）。"""
+        if self.has(RelicId.PAPER_PHROG) or self.has(RelicId.PAPER_FROG):
+            return 1.75
+        return 1.5
 
     # ============================================================
     # 受击/HP 类（Player.attacked / hpWasLost 调用）
@@ -1431,3 +1490,59 @@ RELIC_ZH: dict[RelicId, str] = {
     RelicId.TOY_ORNITHOPTER: "玩具扑翼飞机",
     RelicId.POTION_BELT: "药水腰带",
 }
+
+# ---- Phase 3a 局外遗物中文名（zhs/relics.json，2026-10-08）----
+RELIC_ZH.update({
+    RelicId.CERAMIC_FISH: "陶瓷小鱼",
+    RelicId.DREAM_CATCHER: "捕梦网",
+    RelicId.JUZU_BRACELET: "佛珠手链",
+    RelicId.MAW_BANK: "巨口储蓄罐",
+    RelicId.MEAL_TICKET: "餐券",
+    RelicId.REGAL_PILLOW: "皇家枕头",
+    RelicId.SMILING_MASK: "微笑面具",
+    RelicId.STRAWBERRY: "草莓",
+    RelicId.TINY_CHEST: "小宝箱",
+    RelicId.WAR_PAINT: "战纹涂料",
+    RelicId.WHETSTONE: "磨刀石",
+    RelicId.DISCERNING_MONOCLE: "鉴识单片眼镜",
+    RelicId.ETERNAL_FEATHER: "永恒羽毛",
+    RelicId.FROZEN_EGG: "冻结之蛋",
+    RelicId.MATRYOSHKA: "套娃",
+    RelicId.MOLTEN_EGG: "熔火之蛋",
+    RelicId.PAPER_FROG: "纸蛙",
+    RelicId.PEAR: "梨子",
+    RelicId.QUESTION_CARD: "问号牌",
+    RelicId.SINGING_BOWL: "颂钵",
+    RelicId.THE_COURIER: "送货员",
+    RelicId.TOXIC_EGG: "毒素之蛋",
+    RelicId.WHITE_BEAST_STATUE: "白兽雕像",
+    RelicId.MANGO: "芒果",
+    RelicId.OLD_COIN: "古钱币",
+    RelicId.PRAYER_WHEEL: "转经轮",
+    RelicId.WINGED_GREAVES: "羽翼之靴",
+    RelicId.SHOVEL: "铲子",
+    RelicId.PEACE_PIPE: "宁静烟斗",
+    RelicId.CAULDRON: "大锅",
+    RelicId.DOLLYS_MIRROR: "多利之镜",
+    RelicId.FROZEN_EYE: "冻结之眼",
+    RelicId.MEMBERSHIP_CARD: "会员卡",
+    RelicId.ORRERY: "星系仪",
+    RelicId.PRISMATIC_SHARD: "棱镜碎片",
+    RelicId.ASTROLABE: "星盘",
+    RelicId.BLACK_STAR: "黑星",
+    RelicId.CALLING_BELL: "召唤铃铛",
+    RelicId.EMPTY_CAGE: "空鸟笼",
+    RelicId.PANDORAS_BOX: "潘多拉的魔盒",
+    RelicId.TINY_HOUSE: "小屋子",
+    RelicId.GOLDEN_IDOL: "金神像",
+    RelicId.BLOODY_IDOL: "鲜血神像",
+    RelicId.SPIRIT_POOP: "精灵便便",
+    RelicId.SSSERPENT_HEAD: "蛇的头",
+    RelicId.FACE_OF_CLERIC: "牧师的脸",
+    RelicId.GREMLIN_MASK: "地精容貌",
+    RelicId.CULTIST_MASK: "邪教徒头套",
+    RelicId.NLOTHS_MASK: "恩洛斯的饥饿的脸",
+    RelicId.CIRCLET: "头环",
+    RelicId.RED_CIRCLET: "红头环",
+    RelicId.DARKSTONE_PERIAPT: "黑暗石护符",
+})
