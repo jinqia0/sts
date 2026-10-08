@@ -178,7 +178,8 @@ def test_settle_reward_value():
         if m.alive:
             m.die(bc)
     r = env._settle_battle()
-    assert abs(r - (40 + 6) / 80) < 1e-9  # 燃烧之血 +6 后结算
+    # v2 等权战损：(46 - 80)/80 + 1/8 = -0.3（34 点战损 > 存活信用）
+    assert abs(r - ((40 + 6 - 80) / 80 + 0.125)) < 1e-9
     assert not env.run_over  # 第 1 场胜 → run 继续
     assert env.battle_no == 1
 
@@ -205,7 +206,8 @@ def test_run_terminates_on_boss_victory():
     bc.check_combat()
     r = env._settle_battle()
     assert env.run_over and env.run_won
-    assert 0 < r <= 1
+    # v2：(hp - entry)/80 + 1/8 + 1（hp=80 满血时 = 1.125）
+    assert abs(r - ((bc.player.hp - env._hp_at_battle_start) / 80 + 0.125 + 1.0)) < 1e-9
 
 
 def test_terminated_false_between_battles():
@@ -274,7 +276,8 @@ def test_random_rollout_completes():
                 break
             if steps > 3000:
                 pytest.fail(f"seed {seed}: 超长局")
-        assert 0 <= total <= 8.0
+        # v2 值域：败 ∈ [-1, -0.125]，胜 = 终局HP/80+1 ∈ [1.01, 2]
+        assert -1.0 <= total <= 2.0
         assert info["battle_no"] <= 7
 
 
@@ -344,8 +347,8 @@ def test_reward_decoupled_from_max_hp_growth():
         if m.alive:
             m.die(bc)
     r = env._settle_battle()
-    # 90/80 = 1.125（不是 90/90 = 1）：增长 +10 体现在奖励里，不稀释
-    assert abs(r - 90 / 80) < 1e-9
+    # v2：(90-80)/80 + 1/8 = 0.25：增长 +10 全额体现在战损项，不稀释
+    assert abs(r - ((90 - 80) / 80 + 0.125)) < 1e-9
     # 上限增长同步回 run 并进入下一场
     assert env.max_hp == 90
     assert env._battle.bc.player.max_hp == 90
@@ -360,3 +363,96 @@ def test_campfire_heals_by_current_max_hp():
     env.hp = 10
     env._start_battle()
     assert env.hp == 37  # 10 + 90*0.3 = 37
+
+
+# ---- 奖励口径 v2：结构性质（2026-10-08 用户决策）----
+
+
+def test_reward_v2_death_progress_monotonic():
+    """死于第 k 场（0 起）总回报 = -1 + k/8，严格单调——死亡越晚越好，
+    火堆回血不重复计损（收到即入账的信用抵消）。"""
+    from sts.combat.types import Outcome
+
+    for k in range(8):
+        env = StsRunEnv()
+        env.reset(seed=0)
+        total = 0.0
+        # 快进前 k 场（满血通关式：delta=0，只攒存活信用与火堆信用）
+        for j in range(k):
+            bc = env._battle.bc
+            bc.player.hp = 80
+            bc.outcome = Outcome.PLAYER_VICTORY
+            bc.check_combat()
+            total += env._settle_battle()
+        # 第 k 场死亡
+        bc = env._battle.bc
+        bc.outcome = Outcome.PLAYER_LOSS
+        bc.check_combat()
+        total += env._settle_battle()
+        assert env.run_over and not env.run_won
+        # 累计恒等式：-1 + k/8（信用 k 份，死亡场 -hp_start/80=满血 -1）
+        assert abs(total - (-1.0 + k / 8)) < 1e-9, f"k={k}: {total}"
+
+
+def test_reward_v2_win_loss_separation():
+    """任何通关 > 任何失败：胜 ≥ 1+1/80 > 败 ≤ -1/8。构造极端对照：
+    满血通关（上限 2.0）vs 满血死于第 1 场（-1.0）。"""
+    from sts.combat.types import Outcome
+
+    env = StsRunEnv()
+    env.reset(seed=0)
+    total = 0.0
+    for k in range(8):
+        bc = env._battle.bc
+        bc.player.hp = 80
+        bc.outcome = Outcome.PLAYER_VICTORY
+        bc.check_combat()
+        total += env._settle_battle()
+    assert env.run_won
+    # 通关累计恒等式：终局HP/80 + 1（满血通关 = 2.0）
+    assert abs(total - (80 / 80 + 1.0)) < 1e-9
+
+
+def test_reward_v2_campfire_not_double_counted():
+    """火堆后死 ≥ 火堆前死：第 3 场（火堆后）死亡回报 -1+2/8 = -0.75 ≥
+    第 2 场死亡 -1+1/8 = -0.875（v1 朴素战损口径此处会倒挂）。"""
+    from sts.combat.types import Outcome
+
+    results = {}
+    for k in (2, 3):
+        env = StsRunEnv()
+        env.reset(seed=0)
+        total = 0.0
+        for j in range(k):
+            bc = env._battle.bc
+            bc.player.hp = 80
+            bc.outcome = Outcome.PLAYER_VICTORY
+            bc.check_combat()
+            total += env._settle_battle()
+        bc = env._battle.bc
+        bc.outcome = Outcome.PLAYER_LOSS
+        bc.check_combat()
+        total += env._settle_battle()
+        results[k] = total
+    assert results[3] >= results[2], f"火堆重复计损倒挂：{results}"
+
+
+def test_reward_v2_truncation_is_death_equivalent():
+    """截断（TURN_LIMIT 挂机）与死亡等价：拖延不付战损的套利封死
+    （2026-10-08 v2 重训实测踩出：ep_len 1643、ep_rew 锁死的挂机策略）。"""
+    from sts.env import ACTION_END_TURN, TURN_LIMIT
+
+    from sts.run_env import PROGRESS_CREDIT, REWARD_HP_BASE
+
+    env = StsRunEnv()
+    env.reset(seed=0)
+    hp_start = env._hp_at_battle_start
+    env._battle.bc.turn = TURN_LIMIT + 1
+    obs, r, term, trunc, info = env.step(ACTION_END_TURN)
+    assert term  # run 终止
+    assert env.run_over and not env.run_won
+    # 负信用版：(结算HP - 入场HP)/80 - 1/8（end_turn 含敌方回合掉血，
+    # 战损项非零；负信用 −1/8 恒在——拖延严格劣于真打胜利）
+    expected = (env._battle.bc.player.hp - hp_start) / REWARD_HP_BASE - PROGRESS_CREDIT
+    assert abs(r - expected) < 1e-9
+    assert r < 0  # 无信用正号的拖延回报

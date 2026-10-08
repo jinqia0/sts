@@ -107,9 +107,11 @@ SCRY_BASE = 112  # 112 + k：Scry 保留堆顶 k 张（k=0..SCRY_KEEP_MAX）
 SCRY_KEEP_MAX = 7
 N_SELECT_WINDOW = 10  # 选卡候选窗口（DESIGN.md §5.2：超窗截断为已记录近似）
 
-# 回合上限保险丝：超过即 truncated（正常 Cultist 战 10~15 回合，
-# 上层 curriculum 若要更短上限可自行包装 TimeLimit）
-TURN_LIMIT = 100
+# 回合上限保险丝：超过即 truncated（正常战斗 5~15 回合）。v2 战损奖励
+# 下 100 回合是拖延强吸引子（2026-10-08 实测：ep_len 锁死 1035 的防御
+# 重播路线）——收紧到 25（真实玩家的宽松上界），配合截断=死亡级定价
+# 把僵局窗口压到不值得（上层 curriculum 可自行包装 TimeLimit 再调）
+TURN_LIMIT = 25
 
 # 弱怪池：encounter="random" 时每局从中均匀抽一种（单场随机遭遇，
 # 各怪被采样次数相同——比连打序列的样本分布更干净）
@@ -666,7 +668,9 @@ class StsBattleEnv(gym.Env):
             ctype = {"Attack": _S_ATTACK, "Skill": _S_SKILL, "Power": _S_POWER}.get(inst.card.ctype)
             if ctype is not None:
                 obs[b + ctype] = 1
-            obs[b + _S_COST] = min(inst.cost, CAP_ENERGY)
+            # X 费模板 cost=-1（"全能量"）：钳 0 编码（X 语义由 x_cost
+            # 决定，费用维不承载它；Box 下界 0）
+            obs[b + _S_COST] = min(max(inst.cost, 0), CAP_ENERGY)
             obs[b + _S_TARGET] = 1 if inst.card.needs_target else 0
             obs[b + _S_UPGRADED] = 1 if inst.upgraded else 0
             obs[b + _S_UNPLAYABLE] = 1 if inst.card.unplayable else 0
@@ -763,7 +767,7 @@ class StsBattleEnv(gym.Env):
             }.get(inst.card.ctype)
             if ctype is not None:
                 obs[f + ctype] = 1
-            obs[f + _PS_COST] = min(inst.cost, CAP_ENERGY)
+            obs[f + _PS_COST] = min(max(inst.cost, 0), CAP_ENERGY)
             obs[f + _PS_UPGRADED] = 1 if inst.upgraded else 0
         # 自回归选中态（仅 CARD_SELECT 有意义；选中位 = 窗口位）
         for w in self._select_chosen:

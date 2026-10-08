@@ -17,11 +17,19 @@
 from __future__ import annotations
 
 import argparse
+import faulthandler
+import os
+import signal
 import sys
+import threading
+import time
 from collections import defaultdict
 from pathlib import Path
 
 import numpy as np
+
+# 可按需发 SIGUSR1 转储全部线程 Python 栈到 stderr（诊断卡死）
+faulthandler.register(signal.SIGUSR1, all_threads=True)
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -36,6 +44,12 @@ LOG_DIR = MODEL_DIR / "logs"
 
 # 网络结构（大幅扩容，模块头说明）
 NET_ARCH = dict(pi=[1024, 512], vf=[1024, 512])
+
+
+def parse_net(s: str) -> dict:
+    """CLI "--net 1024,512" → SB3 net_arch dict（pi/vf 同构）。"""
+    layers = [int(x) for x in s.split(",")]
+    return dict(pi=layers, vf=list(layers))
 
 
 def run_episode(env: StsRunEnv, policy, seed: int, max_steps: int = 4000) -> dict:
@@ -78,16 +92,47 @@ def evaluate(policy, seeds, verbose_name: str | None = None) -> dict:
     return out
 
 
+class _ProgressWatchdog:
+    """心跳看门狗（2026-10-08）：run_v1 曾在 ~340k 步卡死 48 分钟
+    （CPU 满载、零日志——sample 显示 libomp barrier 特征，疑似
+    torch/OpenMP 线程活锁）。机制：每步回调喂狗；独立线程每 10s 检查，
+    超过 grace 秒无心跳 → faulthandler 转储全线程栈到 stderr 并
+    os._exit(1)（fail fast：链式脚本继续跑后续实验，日志留现场）。
+    """
+
+    def __init__(self, grace: float = 120.0):
+        self._last = time.monotonic()
+        self._grace = grace
+        self._stop = threading.Event()
+
+        def _watch() -> None:
+            while not self._stop.wait(10.0):
+                if time.monotonic() - self._last > self._grace:
+                    print(
+                        f"\n[看门狗] {self._grace:.0f}s 无心跳，转储线程栈后退出",
+                        file=sys.stderr,
+                        flush=True,
+                    )
+                    faulthandler.dump_traceback(file=sys.stderr, all_threads=True)
+                    os._exit(1)
+
+        threading.Thread(target=_watch, daemon=True, name="watchdog").start()
+
+    def feed(self) -> None:
+        self._last = time.monotonic()
+
+
 class _TrainLogCallback:
     """训练过程日志：每 log_every 步打一行 SB3 logger 的训练指标
     （ep_rew_mean / ep_len / loss / entropy / approx_kl / explained_variance）。
     2026-10-08 用户要求：20k 步一次，看得到训练进程而非只有周期评估。"""
 
-    def __init__(self, every: int):
+    def __init__(self, every: int, watchdog: "_ProgressWatchdog"):
         from stable_baselines3.common.callbacks import BaseCallback
 
         outer = self
         self.every = every
+        self.watchdog = watchdog
         self.history: list[tuple[int, dict]] = []
 
         class _Cb(BaseCallback):
@@ -96,6 +141,7 @@ class _TrainLogCallback:
                 self._next = every
 
             def _on_step(self) -> bool:
+                outer.watchdog.feed()
                 if self.num_timesteps >= self._next:
                     v = self.model.logger.name_to_value
                     # rollout 指标直接读 Monitor 的回合缓冲（verbose=0 时
@@ -114,7 +160,7 @@ class _TrainLogCallback:
                     }
                     outer.history.append(dict(rec))
                     print(
-                        f"    [训练] {rec['t']:>9d} 步  ep_rew={rec['ep_rew']:.2f}  "
+                        f"    [训练] {rec['t']:>9d} 步 {time.strftime('%H:%M:%S')}  ep_rew={rec['ep_rew']:.2f}  "
                         f"ep_len={rec['ep_len']:.0f}  loss={rec['loss']:.4f}  "
                         f"H={rec['entropy']:.3f}  kl={rec['kl']:.4f}  ev={rec['ev']:.2f}",
                         flush=True,
@@ -167,7 +213,7 @@ class _PeriodicEvalCallback:
         self.cb = _Cb()
 
 
-def make_model() -> "MaskablePPO":
+def make_model(net_arch: dict | None = None) -> "MaskablePPO":
     from sb3_contrib import MaskablePPO
     from stable_baselines3.common.monitor import Monitor
 
@@ -177,13 +223,13 @@ def make_model() -> "MaskablePPO":
     return MaskablePPO(
         "MlpPolicy",
         env,
-        policy_kwargs={"net_arch": NET_ARCH},
-        learning_rate=3e-4,
+        policy_kwargs={"net_arch": net_arch or NET_ARCH},
+        learning_rate=1e-4,  # v2 奖励大负尾巴下 3e-4 诱发早期策略塌缩（H→0）
         n_steps=2048,
         batch_size=512,
         gamma=0.995,  # 迷你局 episode 数百步，跨场 credit
         gae_lambda=0.95,
-        ent_coef=0.01,
+        ent_coef=0.02,  # v2 死亡惩罚尺度下的熵支撑（0.01 曾塌缩到 H≈0）
         n_epochs=10,
         verbose=0,
         seed=TRAIN_SEED,
@@ -195,6 +241,7 @@ def main() -> None:
     parser.add_argument("--steps", type=int, default=2_000_000)
     parser.add_argument("--eval-every", type=int, default=100_000)
     parser.add_argument("--log-every", type=int, default=20_000, help="训练日志间隔（步）")
+    parser.add_argument("--net", type=parse_net, default=None, help='网络隐藏层，如 "1024,512"（默认 [1024,512]）')
     parser.add_argument("--out", default="run_v1")
     parser.add_argument("--eval-only", type=str, default=None)
     args = parser.parse_args()
@@ -216,12 +263,14 @@ def main() -> None:
 
     MODEL_DIR.mkdir(exist_ok=True)
     LOG_DIR.mkdir(exist_ok=True)
-    model = make_model()
+    model = make_model(args.net)
     n_params = sum(p.numel() for p in model.policy.parameters())
-    print(f"开始迷你局训练：网络 {NET_ARCH}（{n_params / 1e6:.1f}M 参数）")
+    net = args.net or NET_ARCH
+    print(f"开始迷你局训练：网络 {net}（{n_params / 1e6:.1f}M 参数）")
     print(f"{args.steps} 步（训练种子 {TRAIN_SEED}，周期评估种子 70..79，γ=0.995）")
+    watchdog = _ProgressWatchdog()
     periodic = _PeriodicEvalCallback(args.eval_every)
-    train_log = _TrainLogCallback(args.log_every)
+    train_log = _TrainLogCallback(args.log_every, watchdog)
     from stable_baselines3.common.callbacks import CallbackList
 
     model.learn(

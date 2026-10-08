@@ -100,6 +100,7 @@ class BattleContext:
                 break
             self.player.potions[i] = pd
         self._loop_count = 0
+        self._evolve_pending = 0  # EVOLVE 连抽计数（draw_cards 循环消化，防递归）
 
         self._init_content()
         self._start_player_turn(first=True)
@@ -870,18 +871,31 @@ class BattleContext:
                 m.apply_end_of_round_powers(self)
 
     # ---- 抽牌（对齐 BattleContext::drawCards）----
-    def draw_cards(self, count: int) -> None:
+    def draw_cards(self, n: int) -> None:
+        """抽 n 张牌。EVOLVE 的「抽到状态牌再抽」不能递归（run_v1 扫描
+        实测：EVOLVE 多层 + 状态牌连抽时 draw_cards→on_card_drawn→
+        draw_cards 递归爆栈）——改为待抽计数累加，本方法内循环消化；
+        on_card_drawn 的 EVOLVE 分支只加计数不再直接调 draw_cards。"""
         # DRAW_REDUCTION：每回合抽牌 -层（巫妖形态变体等；无自动衰减）
-        count -= self.player.statuses.get(PlayerStatus.DRAW_REDUCTION)
-        if count <= 0 or self.player.statuses.has(PlayerStatus.NO_DRAW):
+        n -= self.player.statuses.get(PlayerStatus.DRAW_REDUCTION)
+        if n <= 0 or self.player.statuses.has(PlayerStatus.NO_DRAW):
             return  # NO_DRAW（Battle Trance）：本回合禁止抽牌
-        for _ in range(count):
-            if not self.cards.draw_pile:
-                if not self.cards.discard_pile:
-                    break  # 两堆皆空
+        self._evolve_pending = 0
+        pending = n  # 待抽总数（含 EVOLVE 追加）
+        while pending + self._evolve_pending > 0:
+            # 手满即终止（对齐本体 DrawCardAction 的 isDone 短路——
+            # 否则满手溢出的 WOUND 洗回后会与 EVOLVE 追加构成抽牌永动机）
+            if len(self.cards.hand) >= 10:
+                break
+            # 堆耗尽先洗牌（不消耗待抽计数）；两堆皆空才终止
+            while not self.cards.draw_pile and self.cards.discard_pile:
                 self.on_shuffle()  # 弃牌堆洗回
             if not self.cards.draw_pile:
                 break
+            if self._evolve_pending > 0:
+                self._evolve_pending -= 1
+            else:
+                pending -= 1
             inst = self.cards.pop_from_draw_pile()
             if len(self.cards.hand) < 10:
                 self.cards.move_to_hand(inst)
@@ -893,7 +907,8 @@ class BattleContext:
 
     def on_card_drawn(self, inst) -> None:
         """抽牌触发：Void 扣能 / HEX 掉血 / CONFUSED 改费 / EVOLVE /
-        FIRE_BREATHING（对齐 CardManager::draw 钩子 + Player.cpp HEX 段）。"""
+        FIRE_BREATHING（对齐 CardManager::draw 钩子 + Player.cpp HEX 段）。
+        EVOLVE 分支见 draw_cards 注释：计数在 _evolve_pending。"""
         s = self.player.statuses
         if inst.card.lose_energy_when_drawn > 0:
             self.player.energy = max(0, self.player.energy - inst.card.lose_energy_when_drawn)
@@ -905,7 +920,11 @@ class BattleContext:
             inst.cost_for_turn = self.rngs.misc.int_inclusive(0, 3)
         if inst.card.ctype == "Status":
             if s.has(PlayerStatus.EVOLVE):
-                self.draw_cards(s.get(PlayerStatus.EVOLVE))
+                # 状态牌 × EVOLVE：追加抽牌计数（draw_cards 循环消化；
+                # 非本体入队路径，但「再抽发生在本次抽牌序列内」语义一致）。
+                # 手满不追加：对齐本体 DrawCardAction 入队后 isDone 短路
+                if len(self.cards.hand) < 10:
+                    self._evolve_pending += s.get(PlayerStatus.EVOLVE)
             if s.has(PlayerStatus.FIRE_BREATHING):
                 base = self.player.special.get("fire_breathing_base", 4)
                 self.add_to_bot(Actions.damage_all_enemy(base * s.get(PlayerStatus.FIRE_BREATHING)))

@@ -83,6 +83,15 @@ REWARD_HP_BASE = 80
 # ---- 迷你局结构（8 场：3 弱 → 精英 → 2 强 → 精英 → Boss）----
 RUN_STRUCTURE = ("weak", "weak", "weak", "elite", "strong", "strong", "elite", "boss")
 
+# ---- 奖励口径 v2（2026-10-08 用户决策：等权战损 + 进度信用）----
+# 逐场结算：胜场 = 净HP变化/80 + 每场存活信用；死亡场 = -入场HP/80；
+# 火堆转换 = +heal/80（收到即入账——否则「火堆后死」重复计损、死亡时序
+# 倒挂）；通关 +1。每点战损全程等价（v1 逐场剩血求和的复利计权使后期
+# 战斗占比萎缩——用户纠错）。恒等式：通关总回报 = 终局HP/80 + 1 ∈
+# [1.01, 2]；死于第 k 场（0 起）= -1 + (k+1)*信用... 见 tests。
+PROGRESS_CREDIT = 1.0 / len(RUN_STRUCTURE)  # 每场存活信用（1/8）
+WIN_BONUS = 1.0  # 通关（Boss 胜）终端奖励
+
 # Act 1 池（encounters.py 文档标注分类；强怪 = Act 1 普通房高难度组合）
 WEAK_POOL = ("cultist", "jaw_worm", "louses", "slimes_s", "fungi_beast",
              "two_fungi_beasts", "three_louse", "small_slimes", "looter")
@@ -242,6 +251,7 @@ class StsRunEnv(gym.Env):
         self.run_over = False
         self.run_won = False
         self._run_log = []
+        self._hp_at_battle_start = 80
         self._start_battle()
         return self._get_obs(), self._get_info()
 
@@ -288,14 +298,21 @@ class StsRunEnv(gym.Env):
         }[kind]
         return pool[rng.int_inclusive(0, len(pool) - 1)]
 
-    def _start_battle(self) -> None:
-        """按 run 结构构造当前场战斗（含火堆回血）。"""
+    def _start_battle(self) -> float:
+        """按 run 结构构造当前场战斗（含火堆回血）。返回火堆信用
+        （heal/80，奖励口径 v2：收到即入账，防死亡路径重复计损）——
+        由 _settle_battle 并入上一场的结算步回报。"""
         kind = RUN_STRUCTURE[self.battle_no]
+        campfire_credit = 0.0
         if self.battle_no in CAMPFIRE_BEFORE:
             heal = self.max_hp * CAMPFIRE_HEAL_FRACTION // 100
+            hp_before = self.hp
             self.hp = min(self.max_hp, self.hp + heal)
+            # 信用按实际回复量（满血时被上限钳制为 0——名义 24 不记，
+            # 否则通关恒等式 final/80+1 被虚增）
+            campfire_credit = (self.hp - hp_before) / REWARD_HP_BASE
             self._run_log.append(
-                f"火堆：回复 {heal} HP（{self.hp}/{self.max_hp}）"
+                f"火堆：回复 {self.hp - hp_before} HP（{self.hp}/{self.max_hp}）"
             )
         encounter = self._sample_encounter(kind)
         # 战斗种子独立于局外流（np_random 派生 → 同 reset seed 可复现）
@@ -313,14 +330,25 @@ class StsRunEnv(gym.Env):
         bc.player.max_hp = self.max_hp
         bc.player.hp = min(self.hp, self.max_hp)
         self._battle_settled = False  # 新一场：结算位复位
+        self._hp_at_battle_start = self.hp  # 战损基数（v2：净HP变化相对此值）
         self._current_kind = kind
         self._current_encounter = encounter
+        return campfire_credit
 
     def _settle_battle(self) -> float:
         """战斗结束结算：奖励 + 掉落 + 选牌 + 推进或终止 run。
 
-        返回本场奖励（实际 HP / run 起始上限 80，败/截断 0——归一化
-        基数固定，与实时 max_hp 解耦，见模块头奖励口径）。
+        奖励口径 v2（等权战损 + 进度信用，2026-10-08 用户决策）：
+        - 胜场 = (结算HP - 入场HP)/80 + PROGRESS_CREDIT（每点战损全程
+          等价；存活信用保证「死亡越晚回报越高」）
+        - 死亡场 = -入场HP/80（输掉全部剩余，无信用）
+        - 截断（TURN_LIMIT 保险丝）= 实际战损 − 1/8（负信用）——拖延
+          对任何真打胜利严格劣 1/4，僵局生态位（弱伤遭遇无损拖满）
+          无利可图
+        - Boss 胜 = 上式 + WIN_BONUS
+        - 火堆转换的 +heal/80 信用并入本场结算步（_start_battle 返回）
+        恒等式：通关总回报 = 终局HP/80 + 1；死于第 k 场（0 起）=
+        -1 + k/8 单调递增；胜败区间分离（胜 ≥1.01 > 败 ≤-0.125）。
         """
         bc = self._battle.bc
         assert bc is not None
@@ -329,10 +357,20 @@ class StsRunEnv(gym.Env):
         self._battle_settled = True
         # 上限增长同步回 run（Feed/果汁；下一场带增长后的上限进战）
         self.max_hp = bc.player.max_hp
+        hp_start = self._hp_at_battle_start
         if bc.won:
-            reward = bc.player.hp / REWARD_HP_BASE
-        else:
-            reward = 0.0
+            reward = (bc.player.hp - hp_start) / REWARD_HP_BASE + PROGRESS_CREDIT
+            if self.battle_no == len(RUN_STRUCTURE) - 1:
+                reward += WIN_BONUS
+        elif bc.outcome == Outcome.PLAYER_LOSS:
+            reward = -hp_start / REWARD_HP_BASE
+        else:  # 截断（TURN_LIMIT 保险丝）：负信用（2026-10-08 终版）。
+            # 拖延的完整病理（实测三轮）：①100 回合窗口下挂机拿满信用套利
+            # ②25 回合窗口下 slimes 类弱伤遭遇仍可无损拖满。死亡级定价
+            # （-1）过钝——把「拖过弱怪」和「死于精英」同价。负信用版：
+            # 实际战损 - 1/8，对任何真打胜利（战损 + 1/8）严格劣 1/4，
+            # 排序恒正且保留战损梯度（拖得越久磨的血越多越亏）
+            reward = (bc.player.hp - hp_start) / REWARD_HP_BASE - PROGRESS_CREDIT
         # 跨场 HP 更新（败局无意义但保持口径）
         self.hp = max(0, bc.player.hp)
         self._run_log.append(
@@ -349,7 +387,8 @@ class StsRunEnv(gym.Env):
         self._roll_potion_drop()
         self._card_reward()
         self.battle_no += 1
-        self._start_battle()
+        # 火堆信用（若下一场前有火堆）并入本场结算步的回报流
+        reward += self._start_battle()
         return reward
 
     def _drop_relic(self) -> None:

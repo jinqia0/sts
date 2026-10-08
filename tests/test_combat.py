@@ -308,3 +308,28 @@ def test_rng_streams_independent():
     # 额外消耗 shuffle 流（模拟未来改抽牌逻辑）
     bc2.rngs.shuffle.int_inclusive(0, 2**31)
     assert bc1.monsters.monsters[0].hp == bc2.monsters.monsters[0].hp
+
+
+def test_evolve_chain_draw_no_recursion():
+    """EVOLVE 连抽回归（2026-10-08）：多层 EVOLVE + 状态牌连抽不得
+    递归爆栈（run_v1 扫描实测踩出）；且洗牌重排后计数语义正确
+    （每张状态牌追加 EVOLVE 层数的抽牌，总数守恒）。"""
+    import sys
+
+    from sts.combat.battle import BattleContext
+    from sts.combat.types import PlayerStatus
+    from sts.content.cards import STRIKE
+    from sts.content.cards.status import WOUND
+
+    sys.setrecursionlimit(200)  # 压低阈值放大递归 bug（正常实现远低于此）
+    try:
+        bc = BattleContext(seed=99)
+        # 牌堆：交替 WOUND/Strike 共 30 张（WOUND 抽到即触发 EVOLVE 再抽）
+        for i in range(30):
+            bc.cards.draw_pile.append(bc.cards.instantiate(WOUND if i % 2 else STRIKE))
+        bc.cards.hand.clear()
+        bc.player.statuses.add(PlayerStatus.EVOLVE, 3)  # 3 层：每状态牌追加抽 3
+        bc.draw_cards(5)  # 旧实现此处递归爆栈
+        assert len(bc.cards.hand) == 10  # 抽满手（上限 10，溢出弃置）
+    finally:
+        sys.setrecursionlimit(1000)
