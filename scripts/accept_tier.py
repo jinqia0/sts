@@ -40,7 +40,7 @@ def main() -> None:
             a, _ = m.predict(obs, deterministic=True, action_masks=env.action_masks())
             obs, r, term, trunc, info = env.step(int(a))
             steps += 1
-            if steps >= ACTION_LIMIT + 5:
+            if steps >= ACTION_LIMIT:
                 hit_fuse = True
             if term or trunc or steps >= 800:
                 break

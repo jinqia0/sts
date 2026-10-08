@@ -100,7 +100,7 @@ N_TARGET_SLOTS = 5
 POTION_BASE = 61  # 61 + s*6 + j：药水槽 s × (j=0 自身/单怪自动, j=1..5 目标 j-1)
 POTION_STANCE_BASE = 91  # 91 + s*2 + c：姿态药水槽 s × (c=0 愤怒, 1 平静)
 STANCE_CHOICES = ("wrath", "calm")
-SELECT_BASE = 101  # 101 + i：选卡窗口槽 i（再选同槽 = 取消选择）
+SELECT_BASE = 101  # 101 + i：选卡窗口槽 i（单调选择：已选槽不可再选）
 SELECT_CONFIRM = 111  # 提交当前选择
 SCRY_BASE = 112  # 112 + k：Scry 保留堆顶 k 张（k=0..SCRY_KEEP_MAX）
 # Scry 上界：内容最大 scry 5（观者卡）+ 金眼遗物 +2 = 7；留 1 位余量
@@ -468,12 +468,8 @@ class StsBattleEnv(gym.Env):
                 if action == SELECT_CONFIRM:
                     # 选中态按选卡先后序映射回引擎候选下标提交
                     bc.choose_cards([self._select_engine_idx[w] for w in self._select_chosen])
-                else:  # SELECT_BASE + i：再选同槽 = 取消选择
-                    i = action - SELECT_BASE
-                    if i in self._select_chosen:
-                        self._select_chosen.remove(i)
-                    else:
-                        self._select_chosen.append(i)
+                else:  # SELECT_BASE + i：单调追加（mask 已挡已选槽，无 toggle）
+                    self._select_chosen.append(action - SELECT_BASE)
             elif bc.input_state == InputState.SCRY:
                 bc.choose_scry(action - SCRY_BASE)
             elif action == ACTION_END_TURN:
@@ -591,9 +587,12 @@ class StsBattleEnv(gym.Env):
                 len(self._select_window) if info.can_pick_any_number else info.pick_count
             )
             for i in range(len(self._select_window)):
-                if i in self._select_chosen:
-                    mask[SELECT_BASE + i] = True  # 取消选择恒合法
-                elif len(self._select_chosen) < capacity:
+                # 单调选择（2026-10-08）：已选槽不可再选——toggle 取消
+                # 语义会被确定性策略锁成 SELECT 往复死循环（Boss 退火
+                # (50,100) 级 21/30 卡死实录）。选卡子 MDP 保持 DAG，
+                # 结构上排除吸收态；代价 = 不可反悔（近似，记录于
+                # DESIGN.md §5.4）
+                if i not in self._select_chosen and len(self._select_chosen) < capacity:
                     mask[SELECT_BASE + i] = True
             n = len(self._select_chosen)
             if n == 0:

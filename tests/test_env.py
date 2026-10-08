@@ -287,14 +287,16 @@ def test_truncation_at_turn_limit():
 
 
 def test_truncation_at_action_limit_select_toggle_deadlock():
-    """回合内动作预算保险丝：CARD_SELECT toggle 死循环（SELECT(1)
-    选/取消往复、回合永不推进）在 ACTION_LIMIT 步处截断。
+    """回合内动作预算保险丝 + 选卡单调性（DAG 无吸收态）。
 
-    2026-10-08 强怪档塌缩实录：确定性策略锁死该吸收态 296+ 步，
-    TURN_LIMIT 按回合计对此失效——本测试钉住回归。
+    2026-10-08 两段修复史：先由 ACTION_LIMIT 截断 SELECT toggle 死循环
+    （选/取消往复、回合不推进、TURN_LIMIT 失效）；后把 SELECT 改为
+    单调选择——已选槽 mask 关闭，选卡子 MDP 无环，死循环结构上不可
+    能。本测试钉死两点：1) 重复选同槽非法；2) 动作预算对任意残余
+    循环兜底截断。
     """
     from sts.combat.types import InputState
-    from sts.env import ACTION_LIMIT, SELECT_BASE
+    from sts.env import ACTION_LIMIT, SELECT_BASE, SELECT_CONFIRM
 
     env = StsBattleEnv()
     env.reset(seed=1)
@@ -303,15 +305,18 @@ def test_truncation_at_action_limit_select_toggle_deadlock():
     bc.open_card_select([bash, strike], lambda _bc, chosen: None)
     assert bc.input_state == InputState.CARD_SELECT
 
-    # 全程在选卡态 toggle 同一槽：动作永远合法，回合不推进
-    for i in range(ACTION_LIMIT + 1):
-        assert bc.input_state == InputState.CARD_SELECT
-        obs, r, terminated, truncated, info = env.step(SELECT_BASE + 1)
-        if terminated or truncated:
-            break
+    # 1) 单调性：选过槽 1 后，再选槽 1 被 mask 挡下（非法动作断言）
+    env.step(SELECT_BASE + 1)
+    assert not env.action_masks()[SELECT_BASE + 1]
+    assert env.action_masks()[SELECT_CONFIRM]
+    env.step(SELECT_CONFIRM)  # 唯一路径 = 前进
+    assert bc.input_state != InputState.CARD_SELECT
+
+    # 2) 动作预算兜底：直接拨满计数器，下一步必截断
+    env.reset(seed=2)
+    env._n_steps = ACTION_LIMIT
+    obs, r, terminated, truncated, info = env.step(0)
     assert truncated and not terminated
-    assert env._n_steps == ACTION_LIMIT + 1
-    assert bc.turn <= TURN_LIMIT  # 截断源是动作预算不是回合上限
 
 
 # ---- 随机遭遇模式（encounter="random"）----
@@ -733,8 +738,10 @@ def test_card_select_autoregressive_flow():
     assert obs[O_PRESENT_SEL + 2] == 1
     mask = env.action_masks()
     assert mask[SELECT_CONFIRM]
-    assert not mask[SELECT_BASE + 0] and not mask[SELECT_BASE + 1]  # 容量 1 已满
-    assert mask[SELECT_BASE + 2]  # 已选槽可再选（取消）
+    # 单调选择：容量满后全部 SELECT 关闭（含已选槽——toggle 取消语义
+    # 已移除，2026-10-08 死循环修复），只剩 CONFIRM——结构上无吸收态
+    assert not mask[SELECT_BASE + 0] and not mask[SELECT_BASE + 1]
+    assert not mask[SELECT_BASE + 2]
 
     env.step(SELECT_CONFIRM)
     assert log == [bash]
