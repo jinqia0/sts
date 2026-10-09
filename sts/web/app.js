@@ -12,6 +12,9 @@ const S = {
   targeting: null,       // {kind: 'card'|'potion', index|slot, choice}
   selectSel: new Set(),  // CARD_SELECT 已选候选下标
   scryKeep: [],          // SCRY 每张 true=保留 / false=弃置（必须是前缀结构）
+  aiPlaying: false,      // 自动播放中
+  aiBusy: false,         // 单飞守卫（上一步请求未返回）
+  savedRecord: false,    // 本场录制已保存
 };
 
 /* ---------------- 通用 ---------------- */
@@ -124,7 +127,49 @@ function setupInit() {
   bindSearch($("#monster-search"), $("#monster-search-results"), searchMonsters, renderMonsterResult);
   renderDeck(); renderRelics(); renderCustomMonsters();
 
+  // ---- 策略演示 / 录制 ----
+  $("#env-mode").addEventListener("change", () => {
+    $("#env-mode-box").classList.toggle("hidden", !$("#env-mode").checked);
+    if (!$("#env-mode").checked) $("#record-toggle").checked = false;
+    $("#eval-box").classList.toggle("hidden", !$("#record-toggle").checked);
+  });
+  $("#record-toggle").addEventListener("change", () => {
+    $("#eval-box").classList.toggle("hidden", !$("#record-toggle").checked);
+  });
+
+  const modelSel = $("#model-select");
+  modelSel.appendChild(new Option("自动匹配（按遭遇难度）", ""));
+  for (const m of META.models) {
+    const tag = m.default_for ? ` · ${m.default_for}档默认` : "";
+    modelSel.appendChild(new Option(`${m.name}（${m.size_mb}MB${tag}）`, m.name));
+  }
+
+  const evalSel = $("#eval-select");
+  evalSel.appendChild(new Option("（无 · 自由配置）", ""));
+  for (const [name, entries] of Object.entries(META.eval_sets)) {
+    for (const e of entries) {
+      evalSel.appendChild(new Option(
+        `${name} #${e.i + 1}：${e.tier}·${e.encounter}（种子 ${e.seed}）`,
+        `${name}:${e.i}`));
+    }
+  }
+  evalSel.addEventListener("change", () => {
+    const v = evalSel.value;
+    if (!v) return;
+    const [name, i] = [v.slice(0, v.lastIndexOf(":")), Number(v.slice(v.lastIndexOf(":") + 1))];
+    const e = META.eval_sets[name][i];
+    // 评测集 = 基础铁甲（初始牌组）打指定遭遇 + 固定种子
+    const radio = $('input[name="char"][value="ironclad"]');
+    if (radio && !radio.checked) { radio.checked = true; radio.dispatchEvent(new Event("change")); }
+    const encRadio = $('input[name="monster-mode"][value="encounter"]');
+    if (encRadio && !encRadio.checked) { encRadio.checked = true; encRadio.dispatchEvent(new Event("change")); }
+    $("#encounter-select").value = e.encounter;
+    $("#seed-input").value = e.seed;
+  });
+
   $("#start-btn").addEventListener("click", startBattle);
+  $("#show-records").addEventListener("click", () => showRecordsView());
+  $("#random-gen-btn").addEventListener("click", generateRandomConfig);
 
   // 恢复上次配置
   const saved = localStorage.getItem("sts-web-cfg");
@@ -286,6 +331,14 @@ function renderCustomMonsters() {
 
 function currentCfg() {
   const customMode = $('input[name="monster-mode"]:checked').value === "custom";
+  const envMode = $("#env-mode").checked;
+  const record = envMode && $("#record-toggle").checked;
+  let evalSet = null, evalIndex = null;
+  if (record && $("#eval-select").value) {
+    const v = $("#eval-select").value;
+    evalSet = v.slice(0, v.lastIndexOf(":"));
+    evalIndex = Number(v.slice(v.lastIndexOf(":") + 1));
+  }
   return {
     character: $('input[name="char"]:checked').value,
     deck: S.deck,
@@ -295,6 +348,11 @@ function currentCfg() {
     encounter: $("#encounter-select").value,
     seed: $("#seed-input").value === "" ? null : Number($("#seed-input").value),
     ascension: Number($("#ascension-input").value || 0),
+    env_mode: envMode,
+    record,
+    model: envMode ? ($("#model-select").value || null) : null,
+    eval_set: evalSet,
+    eval_index: evalIndex,
   };
 }
 
@@ -319,7 +377,189 @@ function restoreCfg(cfg) {
     r.dispatchEvent(new Event("change"));
   }
   $$("#potion-slots select").forEach((sel, i) => { sel.value = S.potions[i] || ""; });
+  // 策略演示 / 录制开关
+  $("#env-mode").checked = !!cfg.env_mode;
+  $("#env-mode").dispatchEvent(new Event("change"));
+  $("#record-toggle").checked = !!cfg.record;
+  $("#record-toggle").dispatchEvent(new Event("change"));
+  if (cfg.model) $("#model-select").value = cfg.model;
+  if (cfg.eval_set && cfg.eval_index !== null) {
+    $("#eval-select").value = `${cfg.eval_set}:${cfg.eval_index}`;
+  }
   renderDeck(); renderRelics(); renderCustomMonsters();
+}
+
+/* ---------------- AI 演示（策略动作模式） ---------------- */
+
+function resetAiState() {
+  S.aiPlaying = false;
+  S.aiBusy = false;
+  S.savedRecord = false;
+  $("#ai-last").textContent = "";
+  $("#ai-probs").innerHTML = "";
+  $("#record-save-line").classList.add("hidden");
+  const envMode = !!S.cfg?.env_mode;
+  $("#ai-bar").classList.toggle("hidden", !envMode);
+  $("#ai-panel").classList.toggle("hidden", !envMode);
+  $("#rec-indicator").classList.toggle("hidden", !(envMode && S.cfg?.record));
+  if (envMode) {
+    $("#model-badge").textContent = S.cfg.model || "模型：自动匹配";
+    // 战斗内模型选择镜像配置页选项（可中途换模型对比）
+    const sel = $("#ai-model-select");
+    const cur = sel.value;
+    sel.innerHTML = "";
+    sel.appendChild(new Option("自动匹配", ""));
+    for (const m of META.models) sel.appendChild(new Option(m.name, m.name));
+    sel.value = cur || (S.cfg.model || "");
+  }
+  updateAiButtons();
+}
+
+function updateAiButtons() {
+  const active = !!S.cfg?.env_mode && S.battleId && S.state && !S.state.over;
+  $("#ai-step-btn").disabled = !active;
+  $("#ai-auto-btn").disabled = !active && !S.aiPlaying;
+  $("#ai-auto-btn").textContent = S.aiPlaying ? "⏸ 暂停" : "▶ 自动";
+}
+
+async function aiStepOnce() {
+  if (S.aiBusy || !S.battleId || !S.state || S.state.over) return false;
+  S.aiBusy = true;
+  try {
+    const model = $("#ai-model-select").value || null;
+    const res = await post("/api/battle/ai_step", { id: S.battleId, model });
+    if (res.error && res.state === undefined) { showError(res.error, true); return false; }
+    absorb(res);
+    if (!res.ok && res.error) {
+      showError(res.error, res.error.includes("异常"));
+      return false;
+    }
+    if (res.ai) renderAiInfo(res.ai);
+    return true;
+  } finally {
+    S.aiBusy = false;
+  }
+}
+
+async function aiLoop() {
+  const delay = Number($("#ai-speed").value);
+  while (S.aiPlaying && S.battleId) {
+    const ok = await aiStepOnce();
+    if (!ok || !S.state || S.state.over) break;
+    if (delay > 0) await new Promise((r) => setTimeout(r, delay));
+  }
+  S.aiPlaying = false;
+  updateAiButtons();
+}
+
+function renderAiInfo(ai) {
+  $("#ai-last").textContent = `【${ai.model}】${ai.label}`;
+  const box = $("#ai-probs");
+  box.innerHTML = "";
+  if (!ai.probs) {
+    box.appendChild(el("div", "hint", "（该模型未提供概率分布）"));
+    return;
+  }
+  for (const p of ai.probs) {
+    const row = el("div", "prob-row");
+    const bar = el("span", "prob-bar");
+    bar.style.width = `${Math.round(p.p * 100)}%`;
+    row.appendChild(bar);
+    row.appendChild(el("span", "prob-text",
+      `${(p.p * 100).toFixed(1)}%　${p.label || `动作 ${p.action}`}`));
+    box.appendChild(row);
+  }
+}
+
+function bindAiControls() {
+  $("#ai-auto-btn").addEventListener("click", () => {
+    S.aiPlaying = !S.aiPlaying;
+    updateAiButtons();
+    if (S.aiPlaying) aiLoop();
+  });
+  $("#ai-step-btn").addEventListener("click", () => aiStepOnce());
+  $("#result-save-record").addEventListener("click", saveRecord);
+}
+
+async function saveRecord() {
+  if (!S.battleId || S.savedRecord) return;
+  const res = await post("/api/battle/record_save", { id: S.battleId });
+  const line = $("#record-save-line");
+  if (res.ok) {
+    S.savedRecord = true;
+    line.textContent = `已保存：${res.path}（${res.n_steps} 步 · 来源 ${res.source}）`;
+    $("#result-save-record").disabled = true;
+    $("#result-save-record").textContent = "已保存";
+  } else {
+    line.textContent = `保存失败：${res.error}`;
+  }
+  line.classList.remove("hidden");
+}
+
+/* ---------------- 录制记录视图 ---------------- */
+
+async function showRecordsView() {
+  $("#setup-view").classList.add("hidden");
+  $("#battle-view").classList.add("hidden");
+  $("#records-view").classList.remove("hidden");
+  await refreshRecords();
+}
+
+async function refreshRecords() {
+  const res = await fetch("/api/records").then((r) => r.json());
+  const tbody = $("#records-tbody");
+  tbody.innerHTML = "";
+  for (const r of res.records || []) {
+    const tr = document.createElement("tr");
+    const enc = r.config?.monsters?.length
+      ? `自定义×${r.config.monsters.length}` : (r.config?.encounter || "");
+    const cells = [
+      r.recorded_at || "", r.source || "", r.model || "（自动匹配）",
+      enc, r.config?.seed ?? "随机",
+      r.outcome === "PLAYER_VICTORY" ? "胜" : r.outcome === "PLAYER_LOSS" ? "负" : (r.outcome || ""),
+      `${r.final_hp ?? "?"}/${r.config?.character === "ironclad" || !r.config?.character ? 80 : ""}`,
+      r.turns ?? "", r.n_steps ?? "",
+      r.eval ? `${r.eval.set} #${r.eval.index + 1}` : "",
+    ];
+    for (const c of cells) tr.appendChild(el("td", null, String(c)));
+    tbody.appendChild(tr);
+  }
+  if (!res.records || !res.records.length) {
+    tbody.appendChild(el("tr", null, "")).appendChild(el("td", null, "（暂无录制）"));
+  }
+}
+
+/* ---------------- 随机配置生成 ---------------- */
+
+async function generateRandomConfig() {
+  const body = {
+    character: $('input[name="char"]:checked').value,
+    strikes: Number($("#rc-strikes").value || 5),
+    defends: Number($("#rc-defends").value || 4),
+    deck_size: Number($("#rc-deck-size").value || 10),
+    relics: Number($("#rc-relics").value || 0),
+    upgrade_pct: Number($("#rc-upgrade").value || 0),
+    encounter_pool: $("#rc-encounter").value,
+    seed: $("#rc-seed").value === "" ? null : Number($("#rc-seed").value),
+  };
+  const res = await post("/api/random_config", body);
+  if (!res.ok) { showError(res.error, true); return; }
+  // 生成结果填入现有配置 UI（卡组/遗物/遭遇），可继续手工微调
+  S.deck = res.deck;
+  S.relics = res.relics;
+  if (res.encounter) {
+    const encRadio = $('input[name="monster-mode"][value="encounter"]');
+    if (!encRadio.checked) { encRadio.checked = true; encRadio.dispatchEvent(new Event("change")); }
+    $("#encounter-select").value = res.encounter;
+  }
+  renderDeck(); renderRelics();
+  const nCards = res.deck.reduce((a, e) => a + e.count, 0);
+  const nUpg = res.deck.reduce((a, e) => a + e.upgraded, 0);
+  let msg = `已生成：${nCards} 张卡（${nUpg} 张升级）`;
+  if (res.relics.length) msg += ` · ${res.relics.length} 个遗物`;
+  if (res.encounter) msg += ` · 遭遇 ${res.encounter}`;
+  msg += "（可直接开打或继续手改）";
+  showError(msg, false);
 }
 
 /* ---------------- 战斗流程 ---------------- */
@@ -334,6 +574,7 @@ async function startBattle() {
   $("#battle-view").classList.remove("hidden");
   $("#log").innerHTML = "";
   S.battleId = res.id;
+  resetAiState();
   absorb(res);
 }
 
@@ -346,6 +587,7 @@ async function restart(sameSeed) {
   S.battleId = res.id;
   $("#log").innerHTML = "";
   hideOverlays();
+  resetAiState();
   absorb(res);
 }
 
@@ -390,6 +632,7 @@ function renderBattle(state) {
 
   const canAct = state.input_state === "PLAYER_NORMAL" && !state.over;
   $("#end-turn-btn").disabled = !canAct;
+  updateAiButtons();
 
   if (state.card_select) openCardSelectModal(state.card_select);
   else if (state.scry) openScryModal(state.scry);
@@ -584,6 +827,16 @@ function openCardSelectModal(info) {
   };
   info.candidates.forEach((c, i) => {
     const d = cardEl(c);
+    // 策略动作模式：候选必须在选卡窗口（词表位稳定序前 10）内才能
+    // 以训练动作表达——超窗置灰（DESIGN.md §5.2 窗口近似）
+    if (S.cfg?.env_mode && c.in_window === false) {
+      d.classList.add("out-window");
+      d.title = "超出策略选卡窗口（10），策略动作模式无法表达该选择";
+      d.addEventListener("click", () =>
+        showError(d.title));
+      box.appendChild(d);
+      return;
+    }
     d.addEventListener("click", () => {
       if (S.selectSel.has(i)) S.selectSel.delete(i);
       else if (S.selectSel.size < info.pick_count || info.can_pick_any_number) S.selectSel.add(i);
@@ -663,6 +916,15 @@ function showResult(state) {
   const p = state.player;
   $("#result-detail").textContent =
     `${state.turn} 回合 · 剩余 HP ${p.hp}/${p.max_hp}` + (isWin ? " · 铁甲开局遗物（若有）的回复已结算" : "");
+  // 录制局：提供保存入口（保存后可回放 / 导出 BC 数据）
+  const saveBtn = $("#result-save-record");
+  const saveLine = $("#record-save-line");
+  const wantSave = !!S.cfg?.record;
+  saveBtn.classList.toggle("hidden", !wantSave);
+  saveBtn.disabled = S.savedRecord;
+  saveBtn.textContent = S.savedRecord ? "已保存" : "保存录制";
+  saveLine.classList.toggle("hidden", !S.savedRecord && !wantSave);
+  if (!S.savedRecord) saveLine.textContent = "";
   $("#result-overlay").classList.remove("hidden");
 }
 
@@ -693,6 +955,7 @@ function bindBattleControls() {
   $("#restart-same").addEventListener("click", () => restart(true));
   $("#restart-new").addEventListener("click", () => restart(false));
   $("#back-to-setup").addEventListener("click", () => {
+    S.aiPlaying = false;
     hideOverlays();
     $("#battle-view").classList.add("hidden");
     $("#setup-view").classList.remove("hidden");
@@ -700,6 +963,12 @@ function bindBattleControls() {
   });
   $("#result-close").addEventListener("click", () => $("#result-overlay").classList.add("hidden"));
   $("#result-restart").addEventListener("click", () => restart(true));
+  $("#records-back").addEventListener("click", () => {
+    $("#records-view").classList.add("hidden");
+    $("#setup-view").classList.remove("hidden");
+  });
+  $("#records-refresh").addEventListener("click", refreshRecords);
+  bindAiControls();
 }
 
 async function boot() {

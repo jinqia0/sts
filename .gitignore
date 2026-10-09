@@ -5,6 +5,7 @@ __pycache__/
 
 # 参考仓库（外部克隆，不纳入本项目）
 sts_lightspeed/
+slay-the-model/
 
 # 工具
 .pytest_cache/
@@ -16,3 +17,7 @@ sts_game_data/
 
 # 训练产物（模型 checkpoint 与训练日志，可重新训练，不入库）
 models/
+
+# 手操录制与导出的 BC 数据（本地数据集，不入库）
+records/
+data/

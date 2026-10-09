@@ -13,6 +13,7 @@
   <header class="topbar">
     <h1>杀戮尖塔 · 战斗调试器</h1>
     <p class="sub">自定义角色 / 卡组 / 遗物 / 药水 / 怪物 → 手动打一场，校验结算</p>
+    <div class="battle-actions"><button id="show-records">录制记录</button></div>
   </header>
 
   <section class="panel">
@@ -32,6 +33,31 @@
       <tbody id="deck-tbody"></tbody>
     </table>
     <p class="hint">抽到的牌费用变动、虚无 / 固有等关键字都会在战斗界面如实显示。</p>
+  </section>
+
+  <section class="panel">
+    <h2>随机配置</h2>
+    <p class="hint">按当前所选职业随机生成卡组 / 遗物 / 遭遇，填入上方配置后可继续手工微调。新增卡从职业奖励池按真实稀有度分布（3/37/60 + 保底）抽取。</p>
+    <div class="random-controls">
+      <label>打击 <input id="rc-strikes" type="number" value="5" min="0" max="20"></label>
+      <label>防御 <input id="rc-defends" type="number" value="4" min="0" max="20"></label>
+      <label>卡组目标 <input id="rc-deck-size" type="number" value="10" min="1" max="60"></label>
+      <label>遗物数 <input id="rc-relics" type="number" value="0" min="0" max="10"></label>
+      <label>升级概率% <input id="rc-upgrade" type="number" value="30" min="0" max="100"></label>
+      <label>遭遇池
+        <select id="rc-encounter">
+          <option value="">手选（不随机）</option>
+          <option value="weak">弱怪池</option>
+          <option value="strong">强怪池</option>
+          <option value="elite">精英池</option>
+          <option value="boss">Boss 池</option>
+        </select>
+      </label>
+      <label>种子 <input id="rc-seed" type="number" placeholder="留空 = 每次不同" min="0"></label>
+    </div>
+    <div class="start-row">
+      <button id="random-gen-btn">🎲 随机生成</button>
+    </div>
   </section>
 
   <section class="panel">
@@ -75,9 +101,58 @@
     </div>
   </section>
 
+  <section class="panel">
+    <h2>策略演示 / 录制</h2>
+    <label class="check-line">
+      <input type="checkbox" id="env-mode">
+      启用策略动作模式（观测/动作与训练完全同构，人操与 AI 可随时互换）
+    </label>
+    <div id="env-mode-box" class="hidden">
+      <div class="inline-controls">
+        <label>演示模型
+          <select id="model-select"></select>
+        </label>
+      </div>
+      <p class="hint">默认按遭遇难度自动匹配（弱怪→weak 档 · 强怪→strong · 精英→elite · Boss→boss；自定义组怪需手选）。模型较大，首次出牌会花几秒加载。</p>
+      <label class="check-line">
+        <input type="checkbox" id="record-toggle">
+        录制本局（战斗结束后可保存，供回放分析与 BC 导出）
+      </label>
+      <div id="eval-box" class="hidden">
+        <div class="inline-controls">
+          <label>固定评测集
+            <select id="eval-select"></select>
+          </label>
+        </div>
+        <p class="hint">选定后人 / AI 打同一遭遇同一种子，结果直接对比（种子与训练、评估种子均不相交）。</p>
+      </div>
+    </div>
+  </section>
+
   <div class="start-row">
     <button id="start-btn" class="primary big">开始战斗</button>
   </div>
+</div>
+
+<!-- ============ 录制记录视图 ============ -->
+<div id="records-view" class="hidden">
+  <header class="topbar">
+    <h1>录制记录</h1>
+    <div class="battle-actions">
+      <button id="records-refresh">刷新</button>
+      <button id="records-back" class="primary">返回</button>
+    </div>
+  </header>
+  <section class="panel">
+    <table class="records-table" id="records-table">
+      <thead><tr>
+        <th>时间</th><th>来源</th><th>模型</th><th>遭遇</th><th>种子</th>
+        <th>结果</th><th>剩余 HP</th><th>回合</th><th>步数</th><th>评测集</th>
+      </tr></thead>
+      <tbody id="records-tbody"></tbody>
+    </table>
+    <p class="hint" id="records-hint">导出 BC 训练数据：uv run python scripts/export_records.py（重放生成 obs/action/mask npz）。</p>
+  </section>
 </div>
 
 <!-- ============ 战斗界面 ============ -->
@@ -91,6 +166,22 @@
       <button id="back-to-setup">调整配置</button>
     </div>
   </header>
+
+  <!-- AI 控制条（策略动作模式） -->
+  <div id="ai-bar" class="ai-bar hidden">
+    <span id="rec-indicator" class="rec hidden">● REC</span>
+    <span id="model-badge" class="badge"></span>
+    <select id="ai-model-select" title="切换演示模型"></select>
+    <button id="ai-auto-btn">▶ 自动</button>
+    <button id="ai-step-btn">单步</button>
+    <select id="ai-speed" title="自动播放间隔">
+      <option value="1200">1.2s/步</option>
+      <option value="600" selected>0.6s/步</option>
+      <option value="250">0.25s/步</option>
+      <option value="0">全速</option>
+    </select>
+    <span class="hint">随时手动出牌 = 接管；AI 与人操可混打。</span>
+  </div>
 
   <div id="targeting-banner" class="banner hidden">
     选择目标：点击上方敌人 <button id="cancel-targeting">取消</button>
@@ -120,6 +211,11 @@
     </div>
 
     <aside class="log-area">
+      <div id="ai-panel" class="ai-panel hidden">
+        <h3>AI 决策</h3>
+        <div id="ai-last" class="ai-last"></div>
+        <div id="ai-probs" class="ai-probs"></div>
+      </div>
       <h3>战斗日志</h3>
       <div id="log" class="log"></div>
     </aside>
@@ -143,9 +239,11 @@
     <div class="modal">
       <h3 id="result-title"></h3>
       <p id="result-detail" class="hint"></p>
+      <p id="record-save-line" class="hint hidden"></p>
       <div class="modal-controls">
         <button id="result-close">查看战场</button>
         <button id="result-restart" class="primary">再来一场（同配置）</button>
+        <button id="result-save-record" class="primary hidden">保存录制</button>
       </div>
     </div>
   </div>

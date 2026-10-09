@@ -234,3 +234,128 @@ input:focus, select:focus { outline: none; border-color: var(--accent); }
 .modal-cards .card.kept { outline: 2px solid var(--skill); }
 .modal-cards .card.discarded { opacity: .4; }
 .modal-controls { display: flex; gap: 10px; justify-content: flex-end; }
+
+/* ============ 策略演示 / 录制 ============ */
+
+.check-line {
+  display: block;
+  margin: 6px 0;
+  cursor: pointer;
+}
+
+.ai-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 8px 14px;
+  margin: 0 14px 10px;
+  border: 1px solid var(--border, #444);
+  border-radius: 8px;
+  background: rgba(90, 120, 200, 0.12);
+}
+
+.ai-bar .badge {
+  font-size: 12px;
+}
+
+.ai-bar button {
+  padding: 4px 12px;
+}
+
+.rec {
+  color: #e05555;
+  font-weight: bold;
+  font-size: 13px;
+  animation: rec-blink 1.4s ease-in-out infinite;
+}
+
+@keyframes rec-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+.ai-panel {
+  border: 1px solid var(--border, #444);
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin-bottom: 10px;
+  background: rgba(90, 120, 200, 0.08);
+}
+
+.ai-last {
+  font-weight: bold;
+  margin-bottom: 6px;
+}
+
+.prob-row {
+  position: relative;
+  margin: 3px 0;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.prob-bar {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  background: rgba(111, 208, 138, 0.22);
+  border-radius: 3px;
+}
+
+.prob-text {
+  position: relative;
+  padding-left: 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
+}
+
+.card.out-window {
+  opacity: 0.35;
+  filter: grayscale(0.8);
+  cursor: not-allowed;
+}
+
+.records-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.records-table th,
+.records-table td {
+  border: 1px solid var(--border, #444);
+  padding: 4px 8px;
+  text-align: left;
+}
+
+.records-table th {
+  background: rgba(128, 128, 128, 0.15);
+}
+
+/* ============ 随机配置 ============ */
+
+.random-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 18px;
+  margin: 8px 0;
+}
+
+.random-controls label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.random-controls input[type="number"] {
+  width: 5em;
+}
+
+.random-controls .start-row {
+  margin-top: 4px;
+}
