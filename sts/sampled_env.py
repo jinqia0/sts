@@ -24,12 +24,13 @@
 - 新增卡从铁甲奖励池（20 common / 36 uncommon / 17 rare）按 3/37/60
   + 保底计数器 roll——run_env 的 _card_reward 同款口径
 
-奖励（2026-10-09 用户决策，纯战损口径）：胜 = −战损 × 难度权重
-（终局HP − 入场HP，每点血恒定计价，与验收阈值同口径——旧 HP/80 口径
-内含入场 HP 加分项，战损敏感度被淹没）；败/截断 = −(入场HP + 怪物
-剩余总血量) × 权重——剩余血量 ≥1 保证任何胜局严格优于任何败局，
-濒死败局与惨胜在胜负边界连续，且败局侧有梯度（差 1 点血输 vs
-开局暴毙）。单场 episode 无跨场项，γ=0.99 短视野即够。
+奖励（2026-10-09 用户决策，纯战损口径 + 势函数塑形）：终局 = 胜
+−战损 × 权重 / 败截断 −(入场HP + 怪物剩余总血量) × 权重；每步叠加
+r' = γΦ(s') − Φ(s)（Φ = 玩家HP − ε·怪物总HP，Ng et al. 1999 势函数
+塑形不改变最优策略）——信用分配从「终局一次总算账」改为每步就地
+结算，攻「终局方差淹没单步信号」的精细度瓶颈（实测 44% 格挡溢出
++ 51% 来袭漏防）。已知近似：怪物分裂使总 HP 突增产生小幅塑形噪声。
+单场 episode 无跨场项，γ=0.99 短视野即够。
 """
 
 from __future__ import annotations
@@ -111,6 +112,14 @@ DIFFICULTY_SPECS["random"] = {
 
 UPGRADE_CHANCE = 30  # 每张新增卡 30% 升级版（用户设定，四难度同）
 
+# ---- 势函数塑形常量（2026-10-09 用户决策）----
+# r' = r_terminal + γΦ(s') − Φ(s)；Φ = 玩家HP − ε·怪物总HP。γ 与
+# 训练 γ 一致（train_sampled.py gamma=0.99）。ε=0.1：一次 12 点
+# 攻击 ≈ +1.2 塑形分——给「打怪推进」就地信用，量级低于玩家侧
+# （HP 1:1 计价）保持战损主导。
+SHAPING_GAMMA = 0.99
+SHAPING_MONSTER_EPS = 0.1
+
 # 卡牌稀有度 roll 常量（run_env 同款源码口径）
 _RARE = CARD_RARE
 _UNCOMMON_TOTAL = CARD_RARE + 37
@@ -181,15 +190,28 @@ class StsSampledEnv(gym.Env):
         return self._get_obs(), self._get_info()
 
     def step(self, action):
-        obs, _r, terminated, truncated, _info = self._battle.step(action)
         bc = self._battle.bc
         assert bc is not None
+        # 势函数快照（塑形前 HP 状态）
+        phi_before = self._potential(bc)
+        obs, _r, terminated, truncated, _info = self._battle.step(action)
         weight = DIFFICULTY_SPECS[self.difficulty]["weight"]
-        if not (terminated or truncated):
-            reward = 0.0
-        else:
-            reward = self._terminal_reward(bc, weight)
+        # 势函数塑形（2026-10-09 用户决策）：r' = r_terminal +
+        # γΦ(s') − Φ(s)，Φ = 玩家HP − ε·怪物总HP（Ng et al. 1999
+        # 不改变最优策略）。信用分配从终局总算账改为每步就地结算
+        # ——格挡挡掉多少、攻击打掉多少，GAE 当步可见。
+        reward = SHAPING_GAMMA * self._potential(bc) - phi_before
+        if terminated or truncated:
+            reward += self._terminal_reward(bc, weight)
         return obs, reward, terminated, truncated, self._get_info()
+
+    def _potential(self, bc) -> float:
+        """Φ(s) = 玩家HP − ε·存活怪物总HP。玩家掉血降势、打怪升势。
+        怪物中途分裂（Slime 类）会使总 HP 突增产生小幅负向噪声——
+        已知近似，记录于模块头。"""
+        return bc.player.hp - SHAPING_MONSTER_EPS * sum(
+            m.hp for m in bc.monsters.monsters if m.hp > 0
+        )
 
     def _terminal_reward(self, bc, weight: float) -> float:
         """纯战损奖励（2026-10-09 用户决策，模块头）。抽出成方法供
