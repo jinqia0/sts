@@ -932,3 +932,39 @@ def test_info_leak_audit_suspended_states():
             bc.rngs.misc.int_inclusive(0, 2**20)
         assert np.array_equal(obs_a, env._get_obs())
         env.step(SCRY_BASE + 0)  # 全弃，回到玩家阶段
+
+
+def test_hand_slot_card_identity():
+    """槽级卡牌身份（2026-10-09 修复）：手牌槽含词表 one-hot
+    （2k 基础/2k+1 升级），同费同类型不同牌在槽间可辨——原仅聚合
+    特征时 Strike 与 Twin Strike 逐位相同。"""
+    from sts.env import _N_SLOT_FEAT, _S_ONEHOT
+    from sts.content.cards import BASH, STRIKE
+    from sts.content.cards.ironclad import TWIN_STRIKE
+    from sts.vocab import CARD_VOCAB_SIZE
+
+    env = StsBattleEnv()
+    env.reset(seed=0)
+    bc = env.bc
+    # 直接摆手牌：Strike / Twin Strike / Bash+（同费同类型可辨性核心）
+    insts = []
+    for card, upg in ((STRIKE, False), (TWIN_STRIKE, False), (BASH, True)):
+        i = bc.cards.instantiate(card)
+        i.upgraded = upg
+        insts.append(i)
+    bc.cards.hand[:] = insts
+    obs = env._get_obs()
+    seen = []
+    for i in range(3):
+        b = O_HAND_SLOT + i * _N_SLOT_FEAT
+        seg = obs[b + _S_ONEHOT : b + _S_ONEHOT + CARD_VOCAB_SIZE]
+        nz = np.flatnonzero(seg)
+        assert len(nz) == 1  # 每槽恰一个词表位
+        seen.append(int(nz[0]))
+    # 槽 0/1 不同牌 → 不同词表位；槽 2 Bash 升级位 = 基础位 + 1
+    assert seen[0] != seen[1]
+    assert seen[2] == card_vocab_index(BASH) + 1
+    # 空槽（若手牌 < N_HAND_SLOTS）one-hot 整段为零
+    for i in range(3, 10):
+        b = O_HAND_SLOT + i * _N_SLOT_FEAT
+        assert obs[b + _S_ONEHOT : b + _S_ONEHOT + CARD_VOCAB_SIZE].sum() == 0

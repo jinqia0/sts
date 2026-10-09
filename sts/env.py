@@ -29,7 +29,9 @@ open_card_select 挂起 → env 把候选按稳定卡 ID 排序进 10 槽窗口
     O_PSTAT               68      玩家状态层数（PlayerStatus 全量固定序，可负）
     O_STANCE              4       姿态 one-hot（观者）
     O_ORB                 27      充能球 5 槽×(占用+4类型) + 槽位上限 + 暗球存层
-    O_HAND_SLOT           80      手牌槽×(占用,类型×3,费,需目标,升级,不可打出)
+    O_HAND_SLOT           7360    手牌槽×(736 词表one-hot + 8 特征)——槽级
+                                  卡牌身份（2026-10-09 修复：原仅聚合特征，
+                                  同费同类型牌在槽间不可辨）
     O_HAND_COUNT          736     手牌构成计数（词表位 2k=基础版、2k+1=升级版）
     O_ENEMY               620     敌人槽×(hp,max_hp,block,存活,意图×5,
                                   意图数值,状态42,种类one-hot×72)
@@ -171,8 +173,15 @@ INPUT_STATE_ORDER = (
 _N_MODE = len(INPUT_STATE_ORDER)  # 4
 _N_PRESENT_FEAT = 6  # 展示窗口槽：(占用, Attack, Skill, Power, 费用, 升级)
 
-# 手牌槽内偏移
-_S_OCC, _S_ATTACK, _S_SKILL, _S_POWER, _S_COST, _S_TARGET, _S_UPGRADED, _S_UNPLAYABLE = range(8)
+# 手牌槽内偏移：词表 one-hot（736）在前，聚合特征在后——身份修复
+# 2026-10-09：原槽特征不含卡牌身份，同费同类型不同牌（Strike vs
+# Twin Strike）槽间逐位相同，精细出牌选择无从谈起。身份 one-hot
+# 与构成计数/选卡窗口同口径（2k 基础 / 2k+1 升级）；空槽整段置零。
+_N_SLOT_FEAT = CARD_VOCAB_SIZE + 8
+_S_ONEHOT = 0
+_S_OCC, _S_ATTACK, _S_SKILL, _S_POWER, _S_COST, _S_TARGET, _S_UPGRADED, _S_UNPLAYABLE = range(
+    CARD_VOCAB_SIZE, CARD_VOCAB_SIZE + 8
+)
 # 展示窗口槽内偏移（偏移复用手牌槽语义）
 _PS_OCC, _PS_ATTACK, _PS_SKILL, _PS_POWER, _PS_COST, _PS_UPGRADED = range(6)
 # 敌人槽内偏移
@@ -223,6 +232,7 @@ def _build_maximums() -> list[int]:
         caps += [1, 1, 1, 1, 1]  # 占用 + 4 类型 one-hot
     caps += [CAP_STATUS, CAP_STATUS]  # 槽位上限, 暗球存层
     for _ in range(N_HAND_SLOTS):
+        caps += [1] * CARD_VOCAB_SIZE  # 槽级身份 one-hot
         caps += [1, 1, 1, 1, CAP_ENERGY, 1, 1, 1]
     caps += [CAP_CARD_COUNT] * CARD_VOCAB_SIZE  # 手牌构成
     for _ in range(N_TARGET_SLOTS):
@@ -670,11 +680,14 @@ class StsBattleEnv(gym.Env):
         obs[b] = min(p.orb_slots, CAP_STATUS)
         obs[b + 1] = min(p.dark_stacks, CAP_STATUS)
 
-        # 手牌：槽特征给「第 i 张是什么类型的牌、能不能打」，构成计数
-        # 给精确卡名（含升级位）。手牌顺序对玩家可见（UI 顺序），编码
-        # 顺序合法；四堆（下段）则只允许无序计数。
+        # 手牌：槽级身份 one-hot（2k 基础 / 2k+1 升级）+ 聚合特征
+        # （类型/费/可打性），构成计数给全手牌概览。手牌顺序对玩家
+        # 可见（UI 顺序），编码顺序合法；四堆（下段）则只允许无序计数。
         for i, inst in enumerate(bc.cards.hand[:N_HAND_SLOTS]):
             b = O_HAND_SLOT + i * _N_SLOT_FEAT
+            idx = card_vocab_index(inst.card)
+            if idx is not None:
+                obs[b + _S_ONEHOT + idx + (1 if inst.upgraded else 0)] = 1
             obs[b + _S_OCC] = 1
             ctype = {"Attack": _S_ATTACK, "Skill": _S_SKILL, "Power": _S_POWER}.get(inst.card.ctype)
             if ctype is not None:
