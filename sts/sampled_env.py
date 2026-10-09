@@ -24,9 +24,12 @@
 - 新增卡从铁甲奖励池（20 common / 36 uncommon / 17 rare）按 3/37/60
   + 保底计数器 roll——run_env 的 _card_reward 同款口径
 
-奖励（按场结算，用户决策）：胜 = 实际HP/80 × 难度权重；败 = −入场
-HP/80 × 权重；截断 = 负信用同败（拖延防护沿用 v2 终版结论）。单场
-episode 无跨场项，γ=0.99 短视野即够。
+奖励（2026-10-09 用户决策，纯战损口径）：胜 = −战损 × 难度权重
+（终局HP − 入场HP，每点血恒定计价，与验收阈值同口径——旧 HP/80 口径
+内含入场 HP 加分项，战损敏感度被淹没）；败/截断 = −(入场HP + 怪物
+剩余总血量) × 权重——剩余血量 ≥1 保证任何胜局严格优于任何败局，
+濒死败局与惨胜在胜负边界连续，且败局侧有梯度（差 1 点血输 vs
+开局暴毙）。单场 episode 无跨场项，γ=0.99 短视野即够。
 """
 
 from __future__ import annotations
@@ -36,7 +39,6 @@ import numpy as np
 from gymnasium import spaces
 
 from sts.combat.relics import RelicId
-from sts.combat.types import Outcome
 from sts.env import (
     N_ACTIONS,
     OBSERVATION_MAXIMUMS,
@@ -82,6 +84,29 @@ DIFFICULTY_SPECS: dict[str, dict] = {
         "pool": BOSSES, "weight": 2.0, "hp": (25, 70), "potion_p": 70,
         "extra_cards": (3, 8), "removes": (0, 2), "relics": (0, 3),
     },
+}
+
+# Boss 专训冷启动变体（2026-10-08 用户决策）：难度名 "boss1000"——
+# 参数同 boss 但 HP 恒 1000。破「全输局 value 无方差」死锁：高血量
+# Boss 战可赢 → value 有信号 → 策略先学会打 Boss 的输出/格挡节奏，
+# 后续退火回正常血量区间。
+DIFFICULTY_SPECS["boss1000"] = dict(DIFFICULTY_SPECS["boss"], hp=(1000, 1000))
+
+# ---- 随机预训练档（2026-10-09 用户决策）----
+# 「认牌」预训练：实测旧卡组构成（基础 10 张打底 + 新增 ≤8 张）下
+# 非基础卡曝光密度过低，模型不认识绝大多数卡。random 档把变量收拢
+# 到「卡牌 × 怪物」本身：全池均匀 20~30 张卡组（30% 升级位）、遭遇
+# 从全部 21 场（含 Boss）均匀抽、移除药水/遗物/随机 HP（固定 80 满
+# 血入场）。收敛后接回真实分布卡组的分档微调。
+RANDOM_DECK_SIZE = (20, 30)
+UNIFORM_DECK_EXCLUDE = {"Burn", "Dazed", "Wound"}  # 状态牌是战斗内动态牌，不进初始卡组（与本体一致）
+_UNIFORM_DECK_POOL: list | None = None  # 懒构建：全池均匀牌池（75 张可玩铁甲牌）
+
+DIFFICULTY_SPECS["random"] = {
+    "pool": WEAK_POOL + STRONG_POOL + ELITES + BOSSES,
+    "weight": 1.0, "hp": (80, 80), "potion_p": 0,
+    "extra_cards": (0, 0), "removes": (0, 0), "relics": (0, 0),
+    "uniform_deck": True,
 }
 
 UPGRADE_CHANCE = 30  # 每张新增卡 30% 升级版（用户设定，四难度同）
@@ -149,6 +174,8 @@ class StsSampledEnv(gym.Env):
         )
         self._battle.reset(seed=battle_seed)
         bc = self._battle.bc
+        if self.entry_hp > 80:  # 冷启动变体（boss1000）：上限同步抬升
+            bc.player.max_hp = self.entry_hp
         bc.player.hp = self.entry_hp
         self._current_encounter = encounter
         return self._get_obs(), self._get_info()
@@ -160,13 +187,19 @@ class StsSampledEnv(gym.Env):
         weight = DIFFICULTY_SPECS[self.difficulty]["weight"]
         if not (terminated or truncated):
             reward = 0.0
-        elif bc.won:
-            reward = bc.player.hp / 80 * weight
-        elif bc.outcome == Outcome.PLAYER_LOSS:
-            reward = -self.entry_hp / 80 * weight
-        else:  # 截断：负信用同败（拖延防护，v2 终版结论沿用）
-            reward = -self.entry_hp / 80 * weight
+        else:
+            reward = self._terminal_reward(bc, weight)
         return obs, reward, terminated, truncated, self._get_info()
+
+    def _terminal_reward(self, bc, weight: float) -> float:
+        """纯战损奖励（2026-10-09 用户决策，模块头）。抽出成方法供
+        测试直接构造终局态验证公式。"""
+        if bc.won:
+            return (bc.player.hp - self.entry_hp) * weight
+        # 败/截断：入场 HP + 存活怪物剩余总血量（截断同败级定价，
+        # 拖延防护沿用 v2 终版结论；剩余血量让拖延的代价只增不减）
+        remaining = sum(m.hp for m in bc.monsters.monsters if m.hp > 0)
+        return -(self.entry_hp + remaining) * weight
 
     def action_masks(self) -> np.ndarray:
         return self._battle.action_masks()
@@ -174,8 +207,11 @@ class StsSampledEnv(gym.Env):
     # ---- 采样器 ----
 
     def _sample_deck(self, spec: dict) -> list:
-        """初始 10 张 − 随机删（打/防）+ 随机增（奖励池 + 30% 升级）。
-        痛击不动（唯一非基础起始牌）。"""
+        """random 档走全池均匀采样；其余档 = 初始 10 张 − 随机删
+        （打/防）+ 随机增（奖励池 + 30% 升级位）。痛击不动（唯一
+        非基础起始牌）。"""
+        if spec.get("uniform_deck"):
+            return self._sample_uniform_deck()
         from sts.content.cards.ironclad import BASH, DEFEND, STRIKE
 
         rng = self.rngs.misc
@@ -200,8 +236,37 @@ class StsSampledEnv(gym.Env):
                 rar = "common"
                 pity = max(CARD_PITY_FLOOR, pity - CARD_PITY_GROWTH)
             pool = CARD_POOLS[rar]
-            deck.append(pool[rng.int_inclusive(0, len(pool) - 1)])
+            card = pool[rng.int_inclusive(0, len(pool) - 1)]
+            deck.append(self._maybe_upgrade(card))
         return deck
+
+    def _sample_uniform_deck(self) -> list:
+        """随机预训练档卡组：全池均匀 20~30 张，含基础打/防/痛击，
+        排除 Burn/Dazed/Wound 状态牌，30% 升级位（(CardDef, True)
+        元组——create_deck_card_in_draw_pile 的升级形式）。"""
+        global _UNIFORM_DECK_POOL
+        if _UNIFORM_DECK_POOL is None:
+            from sts.content.cards._base import CardDef
+            import sts.content.cards.ironclad as _ic
+
+            _UNIFORM_DECK_POOL = [
+                c for c in vars(_ic).values()
+                if isinstance(c, CardDef) and c.name not in UNIFORM_DECK_EXCLUDE
+            ]
+        rng = self.rngs.misc
+        lo, hi = RANDOM_DECK_SIZE
+        deck = []
+        for _ in range(rng.int_inclusive(lo, hi)):
+            card = _UNIFORM_DECK_POOL[rng.int_inclusive(0, len(_UNIFORM_DECK_POOL) - 1)]
+            deck.append(self._maybe_upgrade(card))
+        return deck
+
+    def _maybe_upgrade(self, card):
+        """30% 升级位（UPGRADE_CHANCE）。bug 修复（2026-10-09）：常量
+        自 5c 起声明了「30% 升级版」但从未接入采样——旧档训练的卡组里
+        升级版词表维度长期为 0。升级走 (CardDef, True) 元组形式。"""
+        upgraded = self.rngs.misc.int_inclusive(0, 99) < UPGRADE_CHANCE
+        return (card, True) if upgraded else card
 
     def _sample_relics(self, spec: dict) -> list[RelicId]:
         rng = self.rngs.misc

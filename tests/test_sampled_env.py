@@ -27,13 +27,15 @@ def test_difficulty_spec_table():
 
 def test_reset_samples_within_bounds():
     """40 局采样：HP/卡组/药水/遗物全部落在参数表区间。"""
-    for diff in DIFFICULTY_SPECS:
+    # 冷启动变体（boss1000 等）不在此测——HP 与难度解耦，参数表语义不同
+    for diff in ("weak", "strong", "elite", "boss"):
         spec = DIFFICULTY_SPECS[diff]
         env = StsSampledEnv(diff)
         for s in range(40):
             obs, info = env.reset(seed=s)
             assert spec["hp"][0] <= info["entry_hp"] <= spec["hp"][1]
             bc = env.bc
+            # reset 时刻（未 step）三堆计数 = 卡组规模（无临时牌生成）
             n_cards = len(bc.cards.draw_pile) + len(bc.cards.hand) + len(bc.cards.discard_pile)
             # 卡组 = 10 - 删除(≤2) + 新增（弱怪可为纯初始 10）
             lo = 10 - spec["removes"][1] + spec["extra_cards"][0]
@@ -60,25 +62,35 @@ def test_potion_rate_matches_spec():
 
 
 def test_reward_weights():
-    """奖励 = HP/80 × 难度权重（胜）；败 = −入场HP/80 × 权重。"""
+    """纯战损奖励（2026-10-09）：胜 = (终局HP − 入场HP) × 权重；
+    败/截断 = −(入场HP + 存活怪物剩余血量) × 权重。构造终局态直接
+    验证公式（battle.step 在 over 后拒绝，走 _terminal_reward）。"""
     from sts.combat.types import Outcome
 
-    for diff, w in (("weak", 0.3), ("strong", 0.5), ("elite", 1.0), ("boss", 2.0)):
+    for diff, w in (("weak", 0.3), ("strong", 0.5), ("elite", 1.0), ("boss", 2.0), ("random", 1.0)):
         env = StsSampledEnv(diff)
         env.reset(seed=0)
         bc = env.bc
+        entry = env.entry_hp
+        # 胜局：终局 40 血 → 奖励 = (40 − entry) × w（战损恒定计价）
         bc.player.hp = 40
-        for m in bc.monsters.monsters:
-            if m.alive:
-                m.die(bc)
-        # 结算走 step 的 reward 公式（over 后 battle.step 拒绝——用
-        # action_masks 触发的路径不可达，改为直接公式验证）
-        expected = bc.player.hp / 80 * w
-        assert abs(expected - 40 / 80 * w) < 1e-9
+        bc.outcome = Outcome.PLAYER_VICTORY
+        assert abs(env._terminal_reward(bc, w) - (40 - entry) * w) < 1e-9
+        # 败局：怪物剩余 12 + 7 血 → −(entry + 19) × w
+        bc.outcome = Outcome.PLAYER_LOSS
+        ms = [m for m in bc.monsters.monsters]
+        for i, hp in enumerate((12, 7)):
+            if i < len(ms):
+                ms[i].hp = hp
+        for m in ms[2:]:
+            m.hp = 0
+        remaining = sum(m.hp for m in ms if m.hp > 0)
+        assert abs(env._terminal_reward(bc, w) - (-(entry + remaining) * w)) < 1e-9
 
 
 def test_truncation_negative_like_loss():
-    """截断与败局同价（拖延防护沿用 v2 终版结论）。"""
+    """截断与败局同价（拖延防护沿用 v2 终版结论）：−(入场HP +
+    怪物剩余血量) × 权重——拖延时怪物满血，代价不低于正常败局。"""
     from sts.env import ACTION_END_TURN
 
     env = StsSampledEnv("weak")
@@ -87,7 +99,34 @@ def test_truncation_negative_like_loss():
     env.bc.turn = TURN_LIMIT + 1
     obs, r, term, trunc, info = env.step(ACTION_END_TURN)
     assert term or trunc
-    assert abs(r - (-entry / 80 * 0.3)) < 0.05  # 战损项含敌方回合掉血，容差放宽
+    remaining = sum(m.hp for m in env.bc.monsters.monsters if m.hp > 0)
+    assert abs(r - (-(entry + remaining) * 0.3)) < 1e-9
+
+
+def test_random_spec():
+    """随机预训练档（2026-10-09 用户决策）：全池均匀 20~30 张卡组、
+    30% 升级位、固定 80 入场、无药水无遗物、遭遇覆盖全部 21 场。"""
+    env = StsSampledEnv("random")
+    seen = set()
+    n_upgrade = 0
+    n_cards = 0
+    for s in range(200):
+        obs, info = env.reset(seed=s)
+        assert info["entry_hp"] == 80  # 固定满血，无随机 HP
+        seen.add(info["encounter"])
+        deck = env._battle.deck
+        assert 20 <= len(deck) <= 30
+        n_cards += len(deck)
+        n_upgrade += sum(1 for c in deck if isinstance(c, tuple) and c[1] is True)
+        # 无药水无遗物
+        assert not env.bc.relics.relics
+        assert all(p is None for p in env.bc.player.potions)
+        assert env.observation_space.contains(obs)
+    assert len(seen) == 21  # 9 弱 + 7 强 + 2 精英 + 3 Boss
+    # 升级位 ~30%（200 局 ~5000 张，3σ 容差）
+    share = n_upgrade / n_cards
+    sigma = (0.3 * 0.7 / n_cards) ** 0.5
+    assert abs(share - 0.3) < 4 * sigma, f"升级率 {share:.2%}"
 
 
 def test_mixed_difficulty_sampling():
